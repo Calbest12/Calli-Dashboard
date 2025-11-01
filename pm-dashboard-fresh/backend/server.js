@@ -1,93 +1,198 @@
-// backend/server.js - FIXED VERSION WITH DATABASE INTEGRATION
-
 const express = require('express');
 const cors = require('cors');
-const { errorHandler } = require('./src/middleware/errorHandler');
-require('dotenv').config();
+const path = require('path');
+const config = require('./src/config/config');
+const { query } = require('./src/config/database');
+
+// Import routes
+const apiRoutes = require('./src/routes/index'); // Main API router
+const authRoutes = require('./src/routes/auth');
+const projectRoutes = require('./src/routes/projects');
+const userRoutes = require('./src/routes/users');
+const careerRoutes = require('./src/routes/career');
+const teamRoutes = require('./src/routes/team');
+const teamManagementRoutes = require('./src/routes/teamManagement');
+const leadershipRoutes = require('./src/routes/leadership');
+const aiRoutes = require('./src/routes/ai');
+
+// Import middleware - FIXED TYPO AND DESTRUCTURING
+const { errorHandler } = require('./src/middleware/errorHandler'); // Fixed: destructure errorHandler
+const asyncHandler = require('./src/middleware/asyncHandler');     // Fixed: typo in middleware
+
+// Rate limiting setup
+let rateLimiter;
+try {
+  const rateLimit = require('express-rate-limit');
+  rateLimiter = rateLimit({
+    windowMs: config.rateLimit?.windowMs || 15 * 60 * 1000, // 15 minutes
+    max: config.rateLimit?.max || 100, // limit each IP to 100 requests per windowMs
+    message: {
+      success: false,
+      error: 'Too many requests from this IP, please try again later.'
+    },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // Only apply rate limiting in production
+    skip: (req) => config.nodeEnv === 'development'
+  });
+} catch (error) {
+  console.log('⚠️ Rate limiter not available, using fallback');
+  rateLimiter = (req, res, next) => next();
+}
 
 const app = express();
-const PORT = process.env.PORT || 5001;
 
-console.log('🚀 Starting Server on port', PORT);
+// Trust proxy settings (needed for rate limiting and proper IP detection)
+if (config.nodeEnv === 'production') {
+  app.set('trust proxy', 1); // Trust first proxy
+} else {
+  app.set('trust proxy', true); // Trust all proxies in development
+}
 
-// Basic middleware
+// CORS configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true
+  origin: config.corsOrigin,
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
+// Security middleware
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.url}`);
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'DENY');
+  res.header('X-XSS-Protection', '1; mode=block');
   next();
 });
 
-// Health check
+// Apply rate limiting
+app.use(rateLimiter);
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// Load routes from src directory - DATABASE CONNECTED ROUTES
+// API routes - ADD ERROR HANDLING FOR EACH ROUTE
 try {
-  const authRoutes = require('./src/routes/auth');
-  app.use('/api/auth', authRoutes);
-  console.log('✅ Auth routes loaded from src/routes/auth (DATABASE)');
-} catch (error) {
-  console.error('❌ Auth routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (apiRoutes && typeof apiRoutes === 'function') {
+    app.use('/api', apiRoutes);
+    console.log('✅ API routes loaded');
+  } else {
+    console.log('❌ API routes invalid:', typeof apiRoutes);
+  }
+} catch (e) {
+  console.log('❌ API routes error:', e.message);
 }
 
 try {
-  const projectRoutes = require('./src/routes/projects');
-  app.use('/api/projects', projectRoutes);
-  console.log('✅ Project routes loaded from src/routes/projects (DATABASE)');
-} catch (error) {
-  console.error('❌ Project routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (authRoutes && typeof authRoutes === 'function') {
+    app.use('/api/auth', authRoutes);
+    console.log('✅ Auth routes loaded');
+  } else {
+    console.log('❌ Auth routes invalid:', typeof authRoutes);
+  }
+} catch (e) {
+  console.log('❌ Auth routes error:', e.message);
 }
 
 try {
-  const userRoutes = require('./src/routes/users');
-  app.use('/api/users', userRoutes);
-  console.log('✅ User routes loaded from src/routes/users (DATABASE)');
-} catch (error) {
-  console.error('❌ User routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (projectRoutes && typeof projectRoutes === 'function') {
+    app.use('/api/projects', projectRoutes);
+    console.log('✅ Project routes loaded');
+  } else {
+    console.log('❌ Project routes invalid:', typeof projectRoutes);
+  }
+} catch (e) {
+  console.log('❌ Project routes error:', e.message);
 }
 
 try {
-  // FIXED: Changed from './routes/team' to './src/routes/team'
-  const teamRoutes = require('./src/routes/team');
-  app.use('/api/projects', teamRoutes);
-  console.log('✅ Team routes loaded from src/routes/team (DATABASE)');
-} catch (error) {
-  console.error('❌ Team routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (userRoutes && typeof userRoutes === 'function') {
+    app.use('/api/users', userRoutes);
+    console.log('✅ User routes loaded');
+  } else {
+    console.log('❌ User routes invalid:', typeof userRoutes);
+  }
+} catch (e) {
+  console.log('❌ User routes error:', e.message);
 }
 
 try {
-  const aiRoutes = require('./src/routes/ai');
-  app.use('/api/ai', aiRoutes);
-  console.log('✅ AI routes loaded from src/routes/ai (DATABASE)');
-} catch (error) {
-  console.error('❌ AI routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (careerRoutes && typeof careerRoutes === 'function') {
+    app.use('/api/career', careerRoutes);
+    console.log('✅ Career routes loaded');
+  } else {
+    console.log('❌ Career routes invalid:', typeof careerRoutes);
+  }
+} catch (e) {
+  console.log('❌ Career routes error:', e.message);
 }
 
 try {
-  const careerRoutes = require('./src/routes/career');
-  app.use('/api/career', careerRoutes);
-  console.log('✅ Career routes loaded from src/routes/career (DATABASE)');
-} catch (error) {
-  console.error('❌ Career routes failed to load:', error.message);
-  console.error('Stack:', error.stack);
+  if (teamRoutes && typeof teamRoutes === 'function') {
+    app.use('/api/team', teamRoutes);
+    console.log('✅ Team routes loaded');
+  } else {
+    console.log('❌ Team routes invalid:', typeof teamRoutes);
+  }
+} catch (e) {
+  console.log('❌ Team routes error:', e.message);
+}
+
+try {
+  if (teamManagementRoutes && typeof teamManagementRoutes === 'function') {
+    app.use('/api/team-management', teamManagementRoutes);
+    console.log('✅ Team management routes loaded');
+  } else {
+    console.log('❌ Team management routes invalid:', typeof teamManagementRoutes);
+  }
+} catch (e) {
+  console.log('❌ Team management routes error:', e.message);
+}
+
+try {
+  if (leadershipRoutes && typeof leadershipRoutes === 'function') {
+    app.use('/api/leadership', leadershipRoutes);
+    console.log('✅ Leadership routes loaded');
+  } else {
+    console.log('❌ Leadership routes invalid:', typeof leadershipRoutes);
+  }
+} catch (e) {
+  console.log('❌ Leadership routes error:', e.message);
+}
+
+try {
+  if (aiRoutes && typeof aiRoutes === 'function') {
+    app.use('/api/ai', aiRoutes);
+    console.log('✅ AI routes loaded');
+  } else {
+    console.log('❌ AI routes invalid:', typeof aiRoutes);
+  }
+} catch (e) {
+  console.log('❌ AI routes error:', e.message);
+}
+
+// Serve static files in production
+if (config.nodeEnv === 'production') {
+  app.use(express.static(path.join(__dirname, 'build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  });
 }
 
 // 404 handler
@@ -99,65 +204,67 @@ app.use('*', (req, res) => {
   });
 });
 
-// Error handler
-app.use(errorHandler);
+// Error handling middleware (must be last)
+if (errorHandler && typeof errorHandler === 'function') {
+  app.use(errorHandler);
+  console.log('✅ Error handler loaded');
+} else {
+  console.log('❌ Error handler invalid, using fallback');
+  app.use((err, req, res, next) => {
+    console.error('Error:', err.message);
+    res.status(500).json({ success: false, error: 'Server Error' });
+  });
+}
 
-// Test database connection and verify tables
-const testDatabase = async () => {
+// Database connection test
+const testDatabaseConnection = async () => {
   try {
-    const { query } = require('./src/config/database');
-    
-    // Test connection
-    const result = await query('SELECT NOW() as time');
-    console.log('✅ Database connected:', result.rows[0].time);
-    
-    // Verify project_manager database tables exist
-    const tables = await query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-      ORDER BY table_name
-    `);
-    
-    console.log('📊 Available database tables:', tables.rows.map(row => row.table_name));
-    
-    // Check if main tables exist
-    const tableNames = tables.rows.map(row => row.table_name);
-    const requiredTables = ['users', 'projects', 'project_team_members', 'project_history'];
-    
-    requiredTables.forEach(table => {
-      if (tableNames.includes(table)) {
-        console.log(`✅ Table '${table}' exists`);
-      } else {
-        console.warn(`⚠️ Table '${table}' not found`);
-      }
-    });
-    
-    return true;
+    const result = await query('SELECT NOW() as current_time');
+    console.log('✅ Database connected successfully at:', result.rows[0].current_time);
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
-    console.log('🚫 Server cannot start without database connection');
-    process.exit(1); // Exit if database is not available
+    process.exit(1);
   }
 };
 
 // Start server
-app.listen(PORT, async () => {
-  console.log('');
-  console.log('🎉 SERVER STARTING...');
-  console.log(`🌐 URL: http://localhost:${PORT}`);
-  console.log(`💚 Health: http://localhost:${PORT}/health`);
-  console.log(`🔑 Auth: http://localhost:${PORT}/api/auth/login`);
-  console.log('');
-  
-  // Test database connection - REQUIRED
-  console.log('🔍 Testing connection to project_manager database...');
-  await testDatabase();
-  
-  console.log('');
-  console.log('✅ SERVER RUNNING WITH DATABASE CONNECTION');
-  console.log('🔍 All data will be stored in project_manager database');
-  console.log('✅ Ready for requests!');
-});
+const startServer = async () => {
+  try {
+    await testDatabaseConnection();
+    
+    const server = app.listen(config.port, () => {
+      console.log(`🚀 Server running on port ${config.port}`);
+      console.log(`📊 Environment: ${config.nodeEnv}`);
+      console.log(`🌐 CORS origin: ${config.corsOrigin}`);
+      console.log(`💾 Database: ${config.database.host}:${config.database.port}/${config.database.name}`);
+      console.log(`📡 Health check: http://localhost:${config.port}/health`);
+      console.log(`🔗 API base: http://localhost:${config.port}/api`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.log('SIGINT received');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 module.exports = app;

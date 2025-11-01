@@ -1,12 +1,9 @@
-// backend/debug-routes.js - Run this to check if your routes are loading
-
 console.log('🔍 BACKEND ROUTE DEBUGGER');
 console.log('🔍 =====================');
 
 console.log('📁 Current working directory:', process.cwd());
 console.log('📁 __dirname:', __dirname);
 
-// Test 1: Check if route files exist
 console.log('\n🔍 TEST 1: Checking if route files exist...');
 
 const fs = require('fs');
@@ -32,7 +29,6 @@ routeFiles.forEach(file => {
   }
 });
 
-// Test 2: Try to require each route file
 console.log('\n🔍 TEST 2: Trying to require route files...');
 
 routeFiles.forEach(file => {
@@ -41,7 +37,6 @@ routeFiles.forEach(file => {
     const routeModule = require(file);
     console.log(`✅ ${file} loaded successfully, type:`, typeof routeModule);
     
-    // Check if it's a valid Express router
     if (routeModule && typeof routeModule === 'function') {
       console.log(`✅ ${file} appears to be a valid Express router`);
     } else {
@@ -53,7 +48,6 @@ routeFiles.forEach(file => {
   }
 });
 
-// Test 3: Check if authController exists
 console.log('\n🔍 TEST 3: Checking controller files...');
 
 const controllerFiles = [
@@ -77,7 +71,6 @@ controllerFiles.forEach(file => {
   }
 });
 
-// Test 4: Check middleware files
 console.log('\n🔍 TEST 4: Checking middleware files...');
 
 const middlewareFiles = [
@@ -91,7 +84,6 @@ middlewareFiles.forEach(file => {
     if (fs.existsSync(fullPath)) {
       console.log(`✅ ${file} exists`);
       
-      // Try to require it
       const middleware = require(file);
       console.log(`✅ ${file} exports:`, Object.keys(middleware));
     } else {
@@ -102,7 +94,6 @@ middlewareFiles.forEach(file => {
   }
 });
 
-// Test 5: Create a minimal working auth route
 console.log('\n🔍 TEST 5: Creating minimal test server...');
 
 try {
@@ -111,22 +102,18 @@ try {
   
   app.use(express.json());
   
-  // Add a simple test auth route
   app.post('/api/auth/test', (req, res) => {
     res.json({ success: true, message: 'Test auth route works!' });
   });
   
-  // Add health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
   });
   
-  // Test the setup by starting server briefly
   const server = app.listen(5002, () => {
     console.log('✅ Test server started on port 5002');
     console.log('✅ You can test with: curl http://localhost:5002/api/health');
     
-    // Close after 2 seconds
     setTimeout(() => {
       server.close(() => {
         console.log('✅ Test server closed');

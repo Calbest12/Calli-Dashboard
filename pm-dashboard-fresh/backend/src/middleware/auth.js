@@ -1,85 +1,82 @@
-// src/middleware/auth.js
-// Database-connected auth middleware
-
 const { query } = require('../config/database');
 
 const auth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('⚠️ No auth header, looking for Calli Best specifically...');
+    console.log('ðŸ” Auth middleware - Headers:', {
+      authorization: authHeader ? 'Present' : 'Missing',
+      userAgent: req.headers['user-agent']?.substring(0, 50)
+    });
+    
+    let user = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7); 
+      console.log('ðŸ” Auth token received:', token?.substring(0, 10) + '...');
       
-      // Look for Calli Best specifically
+      if (!isNaN(token)) {
+        const result = await query('SELECT id, name, email, role FROM users WHERE id = $1', [parseInt(token)]);
+        user = result.rows[0];
+        console.log('ðŸ” User lookup by ID:', parseInt(token), 'â†’', user ? user.name : 'not found');
+      } else if (token.includes('@')) {
+        const result = await query('SELECT id, name, email, role FROM users WHERE email = $1', [token]);
+        user = result.rows[0];
+        console.log('ðŸ” User lookup by email:', token, 'â†’', user ? user.name : 'not found');
+      } else {
+        const result = await query('SELECT id, name, email, role FROM users WHERE name = $1', [token]);
+        user = result.rows[0];
+        console.log('ðŸ” User lookup by name:', token, 'â†’', user ? user.name : 'not found');
+      }
+    }
+    
+    if (!user) {
+      console.log('ðŸ” No user found from token, trying Calli Best fallback...');
+      
       const result = await query(
         'SELECT id, name, email, role FROM users WHERE name = $1 OR email = $2', 
         ['Calli Best', 'bcalli@umich.edu']
       );
       
       if (result.rows.length > 0) {
-        req.user = result.rows[0];
-        console.log('🔑 Found Calli Best for AI - ID:', req.user.id, 'Name:', req.user.name);
-        return next();
+        user = result.rows[0];
+        console.log('âœ… Found Calli Best fallback - ID:', user.id, 'Name:', user.name);
       } else {
-        return res.status(401).json({
-          success: false,
-          error: 'User Calli Best not found in database'
-        });
+        console.log('âŒ Calli Best not found in database');
+        
+        const allUsersResult = await query('SELECT id, name, email FROM users ORDER BY id');
+        console.log('ðŸ“‹ Available users in database:', 
+          allUsersResult.rows.map(u => `${u.id}: ${u.name} (${u.email})`).join(', ')
+        );
       }
-    }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    console.log('🔍 Auth token received:', token);
-    
-    // Try to find user by ID first (if token is numeric)
-    let user;
-    if (!isNaN(token)) {
-      const result = await query('SELECT id, name, email, role FROM users WHERE id = $1', [parseInt(token)]);
-      user = result.rows[0];
-      console.log('🔍 User lookup by ID', parseInt(token), ':', user ? user.name : 'not found');
-    }
-    
-    // If not found by ID, try by email
-    if (!user) {
-      const result = await query('SELECT id, name, email, role FROM users WHERE email = $1', [token]);
-      user = result.rows[0];
-      console.log('🔍 User lookup by email', token, ':', user ? user.name : 'not found');
-    }
-    
-    // If still not found and the localStorage has user ID 15, try that
-    if (!user && token === '15') {
-      const result = await query('SELECT id, name, email, role FROM users WHERE id = 15');
-      user = result.rows[0];
-      console.log('🔍 Direct lookup for ID 15:', user ? user.name : 'not found');
-    }
-    
-    // Final fallback: look for Calli Best
-    if (!user) {
-      console.log('🔍 Token lookup failed, trying Calli Best fallback...');
-      const result = await query(
-        'SELECT id, name, email, role FROM users WHERE name = $1 OR email = $2', 
-        ['Calli Best', 'bcalli@umich.edu']
-      );
-      user = result.rows[0];
-      console.log('🔍 Calli Best fallback result:', user ? `${user.name} (ID: ${user.id})` : 'not found');
     }
     
     if (!user) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid token - user not found. Please log in again.'
+        error: 'Authentication failed - no valid user found. Please ensure Calli Best exists in the database.',
+        debug: {
+          authHeaderPresent: !!authHeader,
+          tokenReceived: authHeader ? 'Yes' : 'No'
+        }
       });
     }
     
-    console.log('🔑 Final authenticated user for AI:', user.name, user.email, 'ID:', user.id);
+    console.log('âœ… Final authenticated user:', {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+    
     req.user = user;
     next();
     
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('âŒ Auth middleware error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Authentication failed'
+      error: 'Authentication system error: ' + error.message
     });
   }
 };

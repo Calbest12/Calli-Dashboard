@@ -2,14 +2,185 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { 
   TrendingUp, Award, Target, Calendar, Plus, Edit2, Trash2, 
   CheckCircle, Activity, BookOpen, ExternalLink, Loader, 
-  BarChart3, Trophy, ArrowRight, FileText, StickyNote
+  BarChart3, Trophy, ArrowRight, FileText, StickyNote,
+  AlertCircle, RefreshCw
 } from 'lucide-react';
 import './CareerDevelopmentTab.css';
 import CareerCategoryGraph from './CareerCategoryGraph';
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
+const cleanInsightMessage = (message) => {
+    if (!message) return 'Career analysis completed';
+  
+    return message
+      .replace(/\b\w+\.(js|jsx|ts|tsx|json|md|txt|csv)\b/gi, '')
+      .replace(/\/api\/[a-zA-Z\/\-_]+/gi, '')
+      .replace(/\b(apiService|database|query|response|endpoint)\b/gi, '')
+      .replace(/\b(function|method|console|error|log)\b/gi, '')
+      .replace(/\b(training materials?|knowledge base|document)\b/gi, 'professional expertise')
+      .replace(/\b(based on the training materials)\b/gi, 'based on best practices')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*,\s*,/g, ',')
+      .trim();
+  };
+
+const parseAIInsights = (responseText) => {
+  try {
+    console.log('Parsing AI response (first 300 chars):', responseText.substring(0, 300));
+    
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      console.log('Found JSON in response');
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.insights && Array.isArray(parsed.insights)) {
+        return parsed.insights.slice(0, 3).map(insight => ({
+          type: insight.type || 'info',
+          message: cleanInsightMessage(insight.message || 'AI analysis completed')
+        }));
+      }
+    }
+    
+    const lines = responseText.split('\n')
+      .filter(line => line.trim() && !line.includes('{') && !line.includes('}'))
+      .filter(line => line.length > 10)
+      .slice(0, 3);
+    
+    return lines.map(line => ({
+      type: line.includes('warning') || line.includes('critical') || line.includes('urgent') ? 'warning' :
+            line.includes('success') || line.includes('opportunity') || line.includes('excellent') ? 'success' : 'info',
+        message: cleanInsightMessage(line.replace(/^[-•*]\s*/, '').trim().substring(0, 150))
+    }));
+    
+  } catch (error) {
+    console.error('Error parsing AI response:', error);
+    return [];
+  }
+};
+
+const generateCareerInsights = (goals, completedGoals) => {
+  const insights = [];
+  
+  const allGoals = [...goals, ...completedGoals];
+  const activeGoals = goals.filter(goal => goal.status !== 'completed');
+  const totalActive = activeGoals.length;
+  const totalCompleted = completedGoals.length;
+  
+  if (allGoals.length === 0) {
+    insights.push({
+      type: 'info',
+      message: 'Start your career development journey by creating 2-3 specific, measurable goals in your priority skill areas.'
+    });
+    return insights;
+  }
+
+  const categories = {};
+  allGoals.forEach(goal => {
+    const category = goal.category || 'uncategorized';
+    if (!categories[category]) {
+      categories[category] = {
+        active: 0,
+        completed: 0,
+        totalProgress: 0,
+        count: 0,
+        hasRecentActivity: false
+      };
+    }
+    
+    if (goal.status === 'completed') {
+      categories[category].completed += 1;
+    } else {
+      categories[category].active += 1;
+      const progress = goal.current_progress || goal.progress || 0;
+      categories[category].totalProgress += progress;
+    }
+    
+    categories[category].count += 1;
+    
+    if (goal.updated_at) {
+      const lastUpdate = new Date(goal.updated_at);
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      if (lastUpdate > weekAgo) {
+        categories[category].hasRecentActivity = true;
+      }
+    }
+  });
+
+  Object.keys(categories).forEach(category => {
+    const cat = categories[category];
+    cat.avgProgress = cat.active > 0 ? Math.round(cat.totalProgress / cat.active) : 0;
+  });
+
+  if (totalActive === 0) {
+    insights.push({
+      type: 'info',
+      message: `Great job completing ${totalCompleted} goals! Consider setting new challenges to continue your growth momentum.`
+    });
+  } else if (totalActive > 12) {
+    insights.push({
+      type: 'warning',
+      message: `${totalActive} active goals may reduce focus effectiveness. Solution: Choose your top 5 priorities and move others to a "future focus" list.`
+    });
+  } else {
+    const strugglingCategories = Object.entries(categories)
+      .filter(([_, cat]) => cat.active > 0 && cat.avgProgress < 30)
+      .sort((a, b) => a[1].avgProgress - b[1].avgProgress);
+    
+    if (strugglingCategories.length > 0) {
+      const [categoryName, categoryData] = strugglingCategories[0];
+      insights.push({
+        type: 'warning',
+        message: `${categoryName} goals need attention at ${categoryData.avgProgress}% average progress. Solution: Break goals into smaller weekly milestones and set up progress reminders.`
+      });
+    } else {
+      const avgProgress = Math.round(activeGoals.reduce((sum, goal) => sum + (goal.current_progress || goal.progress || 0), 0) / totalActive);
+      insights.push({
+        type: 'success',
+        message: `Strong portfolio performance with ${avgProgress}% average progress across ${totalActive} active goals. Keep up the excellent momentum!`
+      });
+    }
+  }
+
+  const performingCategories = Object.entries(categories)
+    .filter(([_, cat]) => cat.active > 0 && cat.avgProgress > 60)
+    .sort((a, b) => b[1].avgProgress - a[1].avgProgress);
+
+  if (performingCategories.length > 0) {
+    const [categoryName, categoryData] = performingCategories[0];
+    insights.push({
+      type: 'success',
+      message: `${categoryName} is excelling at ${categoryData.avgProgress}% progress. Strategy: Document your successful approach here and apply it to other skill areas.`
+    });
+  } else if (totalCompleted > 0) {
+    insights.push({
+      type: 'success',
+      message: `${totalCompleted} completed goals show your ability to deliver results. Strategy: Analyze what worked and replicate those patterns in current goals.`
+    });
+  }
+
+  const inactiveCategories = Object.entries(categories)
+    .filter(([_, cat]) => cat.active > 0 && !cat.hasRecentActivity);
+
+  if (inactiveCategories.length > 0) {
+    insights.push({
+      type: 'info',
+      message: `${inactiveCategories.length} skill areas haven't been updated recently. Strategy: Schedule weekly 15-minute review sessions to maintain momentum across all goals.`
+    });
+  } else if (totalActive > 0) {
+    const completionRate = totalCompleted > 0 ? Math.round((totalCompleted / allGoals.length) * 100) : 0;
+    if (completionRate < 30) {
+      insights.push({
+        type: 'info',
+        message: `${completionRate}% completion rate suggests ambitious goals. Strategy: Consider reducing scope or breaking goals into smaller milestones to build momentum.`
+      });
+    } else {
+      insights.push({
+        type: 'info',
+        message: `Consistent tracking shows discipline. Strategy: Schedule monthly goal review sessions to adjust priorities and celebrate achievements.`
+      });
+    }
+  }
+
+  return insights.slice(0, 3);
+};
 
 const getResourcesArray = (resources) => {
   if (!resources) return [];
@@ -54,10 +225,6 @@ const validateGoalForm = (formData) => {
   return { isValid: true };
 };
 
-// ============================================================================
-// INITIAL FORM STATE
-// ============================================================================
-
 const initialFormState = {
   title: '',
   description: '',
@@ -70,15 +237,10 @@ const initialFormState = {
   resources: []
 };
 
-// ============================================================================
-// PROGRESS HISTORY PROCESSING
-// ============================================================================
-
 const processProgressHistory = (rawHistory) => {
   if (!Array.isArray(rawHistory)) return [];
   
   const processedEntries = rawHistory.map((entry, index) => {
-    // Determine if this is an initial note
     const isInitial = entry.isInitialNote || entry.is_initial_note || false;
     
     const processed = {
@@ -94,17 +256,12 @@ const processProgressHistory = (rawHistory) => {
     return processed;
   });
   
-  // Sort by creation date (newest first for display)
   return processedEntries.sort((a, b) => {
     const dateA = new Date(a.createdAt);
     const dateB = new Date(b.createdAt);
     return dateB - dateA;
   });
 };
-
-// ============================================================================
-// GOAL CARD COMPONENT
-// ============================================================================
 
 const GoalCard = React.memo(({ goal, onEdit, onDelete, onUpdateProgress, onViewNotes }) => {
   const progress = goal.progress || goal.current_progress || 0;
@@ -133,7 +290,7 @@ const GoalCard = React.memo(({ goal, onEdit, onDelete, onUpdateProgress, onViewN
                 color: 'white', 
                 border: 'none'
               }}>
-                ✅ Completed
+                âœ… Completed
               </span>
             )}
           </div>
@@ -243,10 +400,6 @@ const GoalCard = React.memo(({ goal, onEdit, onDelete, onUpdateProgress, onViewN
   );
 });
 
-// ============================================================================
-// COMPLETED GOAL CARD COMPONENT
-// ============================================================================
-
 const CompletedGoalCard = React.memo(({ goal, onViewDetails }) => {
   const handleClick = useCallback(() => {
     onViewDetails(goal);
@@ -285,10 +438,6 @@ const CompletedGoalCard = React.memo(({ goal, onViewDetails }) => {
   );
 });
 
-// ============================================================================
-// PROGRESS NOTES TIMELINE COMPONENT
-// ============================================================================
-
 const ProgressNotesTimeline = React.memo(({ entries }) => {
   if (!entries || entries.length === 0) {
     return (
@@ -300,7 +449,6 @@ const ProgressNotesTimeline = React.memo(({ entries }) => {
     );
   }
 
-  // Calculate progress update numbers (chronological order)
   const progressUpdates = entries.filter(entry => entry.type === 'progress');
   
   return (
@@ -309,7 +457,6 @@ const ProgressNotesTimeline = React.memo(({ entries }) => {
         const isInitial = entry.type === 'initial';
         const isCompletion = entry.newProgress >= 100;
         
-        // Calculate progress update number (reverse index for newest first display)
         let updateNumber = null;
         if (!isInitial) {
           const entryIndex = progressUpdates.findIndex(p => p.id === entry.id);
@@ -363,10 +510,6 @@ const ProgressNotesTimeline = React.memo(({ entries }) => {
   );
 });
 
-// ============================================================================
-// NOTES HISTORY MODAL
-// ============================================================================
-
 const NotesHistoryModal = React.memo(({ goal, isOpen, onClose, apiService }) => {
   const [progressHistory, setProgressHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -410,7 +553,7 @@ const NotesHistoryModal = React.memo(({ goal, isOpen, onClose, apiService }) => 
       <div className="modal-content notes-modal">
         <div className="modal-header-section">
           <h3 className="modal-header">Progress Notes History</h3>
-          <button onClick={onClose} className="modal-close-btn" title="Close">×</button>
+          <button onClick={onClose} className="modal-close-btn" title="Close">X</button>
         </div>
         
         <div className="notes-goal-info">
@@ -447,10 +590,6 @@ const NotesHistoryModal = React.memo(({ goal, isOpen, onClose, apiService }) => 
   );
 });
 
-// ============================================================================
-// COMPLETED GOAL DETAILS MODAL
-// ============================================================================
-
 const CompletedGoalDetailsModal = React.memo(({ 
   goal, 
   isOpen, 
@@ -474,19 +613,17 @@ const CompletedGoalDetailsModal = React.memo(({
       setLoading(true);
       setError(null);
       
-      console.log('🏆 Loading completed goal data for:', goal.title);
-      console.log('🔍 Completed goal object:', goal);
+      console.log('Loading completed goal data for:', goal.title);
+      console.log('Completed goal object:', goal);
       
-      // TEMPORARY FIX: For completed goals without goal_id, find the correct goal by title
       let goalId = goal.goal_id;
       
       if (!goalId) {
-        console.log('⚠️ No goal_id found, searching for goal by title...');
+        console.log('No goal_id found, searching for goal by title...');
         try {
           const goalsResponse = await apiService.getCareerGoals();
           const allGoals = goalsResponse.data || [];
           
-          // Try to find the goal by matching the title (remove "Completed: " prefix)
           const goalTitle = goal.title.replace('Completed: ', '');
           const matchingGoal = allGoals.find(g => 
             g.title === goalTitle || 
@@ -495,11 +632,10 @@ const CompletedGoalDetailsModal = React.memo(({
           
           if (matchingGoal) {
             goalId = matchingGoal.id;
-            console.log('✅ Found matching goal by title:', goalTitle, '-> Goal ID:', goalId);
+            console.log('Found matching goal by title:', goalTitle, '-> Goal ID:', goalId);
           } else {
-            console.log('🔍 Available goals:', allGoals.map(g => ({ id: g.id, title: g.title })));
+            console.log('Available goals:', allGoals.map(g => ({ id: g.id, title: g.title })));
             
-            // Fallback: find the most recent completed goal with matching category
             const completedGoals = allGoals.filter(g => 
               g.status === 'completed' && 
               g.category === goal.skillCategory
@@ -507,21 +643,20 @@ const CompletedGoalDetailsModal = React.memo(({
             
             if (completedGoals.length > 0) {
               goalId = completedGoals[0].id;
-              console.log('🎯 Using most recent completed goal with matching category:', goalId);
+              console.log('Using most recent completed goal with matching category:', goalId);
             } else {
-              goalId = goal.id; // Final fallback
-              console.log('⚠️ No matching goal found, using goal ID as fallback:', goalId);
+              goalId = goal.id; 
+              console.log('No matching goal found, using goal ID as fallback:', goalId);
             }
           }
         } catch (goalSearchError) {
-          console.error('❌ Error searching for matching goal:', goalSearchError);
-          goalId = goal.id; // Fallback to goal ID
+          console.error('Error searching for matching goal:', goalSearchError);
+          goalId = goal.id;
         }
       }
       
-      console.log('🎯 Final goal ID to use:', goalId);
+      console.log('Final goal ID to use:', goalId);
 
-      // Load progress history
       try {
         const historyResponse = await apiService.getGoalProgressHistory(goalId);
         
@@ -534,16 +669,15 @@ const CompletedGoalDetailsModal = React.memo(({
           historyData = historyResponse;
         }
         
-        console.log('📊 Raw progress history for goal', goalId, ':', historyData);
+        console.log('Raw progress history for goal', goalId, ':', historyData);
         const processedHistory = processProgressHistory(historyData);
         setProgressHistory(processedHistory);
         
       } catch (historyError) {
-        console.error('❌ Error loading progress history:', historyError);
+        console.error('Error loading progress history:', historyError);
         setProgressHistory([]);
       }
 
-      // Try to load goal details
       try {
         const goalsResponse = await apiService.getCareerGoals();
         const allGoals = goalsResponse.data || [];
@@ -551,7 +685,6 @@ const CompletedGoalDetailsModal = React.memo(({
         let goalDetail = allGoals.find(g => g.id === goalId);
         
         if (!goalDetail) {
-          // Create fallback goal data from completed goal
           goalDetail = {
             id: goalId,
             title: goal.title.replace('Completed: ', ''),
@@ -569,12 +702,12 @@ const CompletedGoalDetailsModal = React.memo(({
         setGoalDetails(goalDetail);
         
       } catch (goalError) {
-        console.error('❌ Error loading goal details:', goalError);
+        console.error('Error loading goal details:', goalError);
         setGoalDetails(null);
       }
 
     } catch (err) {
-      console.error('❌ Error loading completed goal data:', err);
+      console.error('Error loading completed goal data:', err);
       setError('Failed to load completed goal details: ' + err.message);
     } finally {
       setLoading(false);
@@ -594,7 +727,7 @@ const CompletedGoalDetailsModal = React.memo(({
       <div className="modal-content completed-goal-details-modal">
         <div className="modal-header-section">
           <h3 className="modal-header">Completed Goal Details</h3>
-          <button onClick={onClose} className="modal-close-btn" title="Close">×</button>
+          <button onClick={onClose} className="modal-close-btn" title="Close">X</button>
         </div>
 
         <div className="completed-goal-info">
@@ -700,10 +833,6 @@ const CompletedGoalDetailsModal = React.memo(({
   );
 });
 
-// ============================================================================
-// PROGRESS UPDATE MODAL
-// ============================================================================
-
 const ProgressUpdateModal = React.memo(({ goal, isOpen, onClose, onUpdate }) => {
   const [progress, setProgress] = useState(0);
   const [notes, setNotes] = useState('');
@@ -779,7 +908,7 @@ const ProgressUpdateModal = React.memo(({ goal, isOpen, onClose, onUpdate }) => 
             <div className="completion-notice">
               <p>
                 <CheckCircle />
-                🎉 Congratulations! This goal will be marked as completed!
+                Congratulations! This goal will be marked as completed!
               </p>
             </div>
           )}
@@ -812,10 +941,6 @@ const ProgressUpdateModal = React.memo(({ goal, isOpen, onClose, onUpdate }) => 
     </div>
   );
 });
-
-// ============================================================================
-// GOAL FORM MODAL
-// ============================================================================
 
 const GoalFormModal = React.memo(({ 
   isOpen, 
@@ -871,29 +996,27 @@ const GoalFormModal = React.memo(({
             />
           </div>
 
-          // FIXED Category Dropdown - Replace this section in your GoalFormModal
-
-            <div className="form-group">
+          <div className="form-group">
             <label className="form-label">
-                Category <span className="form-required">*</span>
+              Category <span className="form-required">*</span>
             </label>
             <select 
-                value={formData.category}
-                onChange={(e) => setFormData(prev => ({...prev, category: e.target.value}))}
-                className="form-select"
+              value={formData.category}
+              onChange={(e) => setFormData(prev => ({...prev, category: e.target.value}))}
+              className="form-select"
             >
-                <option value="">Select a category...</option>
-                <option value="technical">Technical Skills</option>
-                <option value="management">Management</option>
-                <option value="communication">Communication</option>
-                <option value="design">Design</option>
-                <option value="analytics">Data Analytics</option>
-                <option value="leadership">Leadership</option>
-                <option value="business strategy">Business Strategy</option>
-                <option value="team building">Team Building</option>
-                <option value="innovation">Innovation</option>
+              <option value="">Select a category...</option>
+              <option value="technical">Technical Skills</option>
+              <option value="management">Management</option>
+              <option value="communication">Communication</option>
+              <option value="design">Design</option>
+              <option value="analytics">Data Analytics</option>
+              <option value="leadership">Leadership</option>
+              <option value="business strategy">Business Strategy</option>
+              <option value="team building">Team Building</option>
+              <option value="innovation">Innovation</option>
             </select>
-            </div>
+          </div>
 
           <div className="form-grid form-grid-2">
             <div className="form-group">
@@ -1057,18 +1180,12 @@ const GoalFormModal = React.memo(({
   );
 });
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
 const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
-  // State management
   const [activeTab, setActiveTab] = useState('overview');
   const [careerGoals, setCareerGoals] = useState([]);
   const [careerStats, setCareerStats] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
@@ -1078,19 +1195,237 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
   const [selectedGoalForNotes, setSelectedGoalForNotes] = useState(null);
   const [selectedCompletedGoal, setSelectedCompletedGoal] = useState(null);
   
-  // Form state
   const [formData, setFormData] = useState(initialFormState);
   const [newResource, setNewResource] = useState({ name: '', url: '' });
 
-  // ============================================================================
-  // DATA LOADING
-  // ============================================================================
+  const [insights, setInsights] = useState([]);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [aiInsightsError, setAiInsightsError] = useState(null);
+
+  const generateAIInsights = useCallback(async () => {
+    if (!apiService) {
+      console.log('No apiService provided, using fallback insights');
+      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
+      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
+      const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+      setInsights(fallbackInsights);
+      return;
+    }
+
+    try {
+      setAiInsightsError(null);
+      
+      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
+      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
+      
+      if (careerGoals.length === 0) {
+        console.log('No goals found');
+        setInsights([{
+          type: 'info',
+          message: 'Start your career development journey by creating 2-3 specific, measurable goals in your priority skill areas.'
+        }]);
+        return;
+      }
+
+      console.log('Generating AI career insights for', activeGoals.length, 'active goals and', completedGoals.length, 'completed goals');
+
+      const allGoals = [...careerGoals];
+      
+      const analysisData = {
+        totalGoals: allGoals.length,
+        activeGoals: activeGoals.length,
+        completedGoals: completedGoals.length,
+        completionRate: allGoals.length > 0 ? Math.round((completedGoals.length / allGoals.length) * 100) : 0,
+        avgProgress: activeGoals.length > 0 ? Math.round(activeGoals.reduce((sum, goal) => sum + (goal.current_progress || goal.progress || 0), 0) / activeGoals.length) : 0,
+        
+        categories: (() => {
+          const categoryMap = {};
+          allGoals.forEach(goal => {
+            const category = goal.category || 'uncategorized';
+            if (!categoryMap[category]) {
+              categoryMap[category] = { active: 0, completed: 0, totalProgress: 0, activeCount: 0 };
+            }
+            
+            if (goal.status === 'completed') {
+              categoryMap[category].completed += 1;
+            } else {
+              categoryMap[category].active += 1;
+              categoryMap[category].totalProgress += (goal.current_progress || goal.progress || 0);
+              categoryMap[category].activeCount += 1;
+            }
+          });
+          
+          return Object.entries(categoryMap).map(([name, data]) => ({
+            name,
+            active: data.active,
+            completed: data.completed,
+            avgProgress: data.activeCount > 0 ? Math.round(data.totalProgress / data.activeCount) : 0
+          }));
+        })(),
+        
+        goals: allGoals.map(goal => ({
+          title: goal.title,
+          category: goal.category,
+          progress: goal.current_progress || goal.progress || 0,
+          status: goal.status,
+          priority: goal.priority,
+          updated_at: goal.updated_at
+        }))
+      };
+
+      console.log('Analysis data prepared:', analysisData);
+
+      const prompt = `You are an expert career development coach analyzing real career progress data. Provide exactly 3 strategic insights based on this actual data:
+
+CAREER PORTFOLIO ANALYSIS:
+- ${analysisData.totalGoals} total career goals: ${analysisData.activeGoals} active, ${analysisData.completedGoals} completed
+- ${analysisData.completionRate}% completion rate, ${analysisData.avgProgress}% average progress across active goals
+
+CATEGORY BREAKDOWN:
+${analysisData.categories.map(cat => 
+  `${cat.name}: ${cat.active} active, ${cat.completed} completed, ${cat.avgProgress}% avg progress`
+).join('\n')}
+
+GOAL DETAILS:
+${analysisData.goals.slice(0, 10).map(g => `"${g.title}" (${g.category}): ${g.progress}% - ${g.status} - ${g.priority} priority`).join('\n')}
+
+Provide specific, data-driven insights in JSON format:
+{
+  "insights": [
+    {"type": "warning", "message": "[specific issue with solution] - Solution: [actionable recommendation]"},
+    {"type": "success", "message": "[specific success pattern] - Strategy: [growth recommendation]"},
+    {"type": "info", "message": "[strategic recommendation with specific next steps]"}
+  ]
+}
+
+Requirements:
+- Reference actual category names, goal titles, and metrics from the data
+- Include "Solution:" or "Strategy:" with actionable recommendations
+- Focus on the most critical issues and biggest opportunities
+- Use natural, professional language
+- Keep under 120 characters per insight to include solutions`;
+
+      console.log('Sending career analysis prompt to AI...');
+
+      try {
+        const authToken = localStorage.getItem('authToken') || localStorage.getItem('token');
+        
+        console.log('Auth token found:', !!authToken);
+        console.log('Sending request to /api/ai/chat...');
+        
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': authToken ? `Bearer ${authToken}` : '',
+            'X-Context-Type': 'career-insights'
+          },
+          body: JSON.stringify({
+            message: prompt,
+            context: {
+              type: 'career_insights',
+              source: 'career_development_analysis',
+              data: analysisData,
+              analysisLevel: 'comprehensive',
+              dataType: 'career'
+            }
+          })
+        });
+
+        console.log('Career analysis response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('AI service error details:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorText: errorText,
+            headers: Object.fromEntries(response.headers.entries())
+          });
+          throw new Error(`AI service error: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+
+        const result = await response.json();
+        console.log('AI career analysis response received:', result);
+        console.log('Full AI response structure:', {
+          hasResponse: !!result.response,
+          hasContent: !!result.content,
+          hasMessage: !!result.message,
+          keys: Object.keys(result)
+        });
+
+        const responseText = result.response || result.content || result.message || result.data || '';
+        console.log('Response text length:', responseText.length);
+        console.log('Response text preview:', responseText.substring(0, 500));
+        
+        if (!responseText) {
+          console.warn('Empty AI response, using fallback');
+          throw new Error('Empty response from AI service');
+        }
+        
+        const parsedInsights = parseAIInsights(responseText);
+        console.log('Parsed insights:', parsedInsights);
+        
+        if (parsedInsights.length > 0) {
+          setInsights(parsedInsights);
+          console.log('Career AI insights successfully generated:', parsedInsights.length, parsedInsights);
+        } else {
+          console.warn('AI analysis returned empty insights, using fallback');
+          const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+          setInsights(fallbackInsights);
+          console.log('Fallback insights generated:', fallbackInsights.length);
+        }
+
+      } catch (aiError) {
+        console.error('AI service failed with error:', {
+          name: aiError.name,
+          message: aiError.message,
+          stack: aiError.stack
+        });
+        console.log('Using fallback insights due to AI failure...');
+        
+        const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+        setInsights(fallbackInsights);
+        console.log('Fallback insights generated after AI failure:', fallbackInsights.length);
+      }
+
+    } catch (error) {
+      console.error('Failed to generate career insights:', error);
+      setAiInsightsError('Unable to generate insights at this time');
+      
+      try {
+        const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
+        const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
+        const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+        setInsights(fallbackInsights);
+      } catch (fallbackError) {
+        console.error('Even fallback insights failed:', fallbackError);
+        setInsights([]);
+      }
+    }
+  }, [careerGoals, apiService]);
+
+  const handleRefreshInsights = useCallback(async () => {
+    console.log('Manual career insights refresh triggered');
+    setInsightsLoading(true);
+    setAiInsightsError(null);
+    
+    try {
+      await generateAIInsights();
+      console.log('Career insights refresh completed successfully');
+    } catch (error) {
+      console.error('Failed to refresh career insights:', error);
+      setAiInsightsError('Failed to refresh insights - please try again');
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [generateAIInsights]);
 
   const loadCareerData = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Add cache-busting parameter to force fresh data
       const timestamp = Date.now();
       
       const [goalsResponse, statsResponse] = await Promise.all([
@@ -1100,7 +1435,7 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
         }))
       ]);
       
-      console.log('🔄 Fresh goals loaded:', goalsResponse.data?.length, 'goals');
+      console.log('Fresh goals loaded:', goalsResponse.data?.length, 'goals');
       
       setCareerGoals(goalsResponse.data || []);
       setCareerStats(statsResponse.data || { totalGoals: 0, completedGoals: 0, activeGoals: 0 });
@@ -1112,7 +1447,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
     }
   }, [apiService]);
 
-  // Data change tracking
   const dataHash = useMemo(() => {
     return JSON.stringify({
       goalCount: careerGoals.length,
@@ -1132,9 +1466,52 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
     loadCareerData();
   }, [loadCareerData]);
 
-  // ============================================================================
-  // EVENT HANDLERS
-  // ============================================================================
+  useEffect(() => {
+  const shouldGenerateInsights = () => {
+    if (careerGoals.length === 0 && insights.length === 0) {
+      console.log('First load - generating default insights');
+      return true;
+    }
+    
+    if (careerGoals.length > 0) {
+      console.log('Career goals loaded - generating insights');
+      return true;
+    }
+    
+    return false;
+  };
+
+  const timer = setTimeout(() => {
+    if (shouldGenerateInsights()) {
+      console.log('Auto-generating career insights...');
+      setInsightsLoading(true);
+      generateAIInsights().finally(() => {
+        setInsightsLoading(false);
+      });
+    } else {
+      console.log('Setting default insight for empty state');
+      setInsights([{
+        type: 'info',
+        message: 'Create your first career goal to start getting AI insights and personalized recommendations.'
+      }]);
+    }
+  }, 1000); 
+
+  return () => clearTimeout(timer);
+}, [careerGoals.length, generateAIInsights]); 
+useEffect(() => {
+    if (activeTab === 'overview' && careerGoals.length > 0 && insights.length === 0) {
+      console.log('Switched to overview tab - auto-generating insights');
+      const timer = setTimeout(() => {
+        setInsightsLoading(true);
+        generateAIInsights().finally(() => {
+          setInsightsLoading(false);
+        });
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, careerGoals.length, insights.length, generateAIInsights]);
 
   const resetForm = useCallback(() => {
     setFormData(initialFormState);
@@ -1199,8 +1576,7 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
   }, []);
 
   const handleDeleteGoal = useCallback(async (goalId, goalTitle) => {
-    // eslint-disable-next-line no-restricted-globals
-    if (!confirm(`Are you sure you want to delete "${goalTitle}"?`)) {
+    if (window.confirm(`Are you sure you want to delete "${goalTitle}"?`)) {
       return;
     }
 
@@ -1226,7 +1602,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
       const response = await apiService.updateGoalProgress(goalId, newProgress, notes);
       
       if (response.success) {
-        // Add a small delay to ensure database is updated
         await new Promise(resolve => setTimeout(resolve, 500));
         
         await loadCareerData();
@@ -1234,7 +1609,7 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
         setSelectedGoalForProgress(null);
         
         if (newProgress >= 100) {
-          alert('🎉 Congratulations! Goal completed!');
+          alert('Congratulations! Goal completed!');
         }
       }
     } catch (error) {
@@ -1264,7 +1639,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
     setShowCompletedModal(true);
   }, []);
 
-  // Modal handlers
   const handleShowAddModal = useCallback(() => setShowAddModal(true), []);
   const handleCloseAddModal = useCallback(() => {
     setShowAddModal(false);
@@ -1286,7 +1660,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
     setSelectedCompletedGoal(null);
   }, []);
 
-  // Handle progress modal opening
   useEffect(() => {
     if (selectedGoalForProgress) {
       setShowProgressModal(true);
@@ -1294,10 +1667,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
       setShowProgressModal(false);
     }
   }, [selectedGoalForProgress]);
-
-  // ============================================================================
-  // COMPUTED VALUES
-  // ============================================================================
 
   const { activeGoals, completedGoals } = useMemo(() => ({
     activeGoals: careerGoals.filter(goal => goal.status !== 'completed'),
@@ -1310,7 +1679,7 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
     { id: 'completed', label: 'Completed', icon: Award }
   ], []);
 
-  // Loading state
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -1319,10 +1688,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
       </div>
     );
   }
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
 
   return (
     <div className="career-development-container">
@@ -1337,8 +1702,6 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
           <span>Add Goal</span>
         </button>
       </div>
-
-
 
       {/* Tabs */}
       <div className="tab-navigation">
@@ -1430,11 +1793,120 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
               </div>
             </div>
 
+            {/* Career Category Graph */}
             <div style={{ marginBottom: '2rem' }}>
-                <CareerCategoryGraph 
+              <CareerCategoryGraph 
                 goals={careerGoals} 
                 completedGoals={completedGoals}
-                />
+              />
+            </div>
+
+            {/* AI Career Insights Section */}
+            <div style={{
+              background: 'linear-gradient(to right, #eff6ff, #eef2ff)',
+              borderRadius: '0.75rem',
+              border: '1px solid #dbeafe',
+              padding: '1.5rem',
+              marginBottom: '2rem'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '1rem'
+              }}>
+                <h3 style={{
+                  fontSize: '1.125rem',
+                  fontWeight: '700',
+                  color: '#1e40af',
+                  margin: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  <Activity size={20} />
+                  AI Career Intelligence
+                </h3>
+                <button
+                  onClick={handleRefreshInsights}
+                  disabled={insightsLoading}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: 'rgba(37, 99, 235, 0.1)',
+                    border: '1px solid rgba(37, 99, 235, 0.2)',
+                    borderRadius: '0.5rem',
+                    color: '#1e40af',
+                    cursor: insightsLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    opacity: insightsLoading ? 0.6 : 1
+                  }}
+                >
+                  {insightsLoading ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={16} />}
+                  {insightsLoading ? 'Analyzing...' : 'Refresh Insights'}
+                </button>
+              </div>
+              
+              {insightsLoading ? (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  padding: '2rem',
+                  color: '#1e40af'
+                }}>
+                  <Loader size={24} style={{ animation: 'spin 1s linear infinite' }} />
+                  <span style={{ marginLeft: '0.5rem' }}>Analyzing your career progress...</span>
+                </div>
+              ) : aiInsightsError ? (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem',
+                  padding: '1rem',
+                  color: '#dc2626',
+                  backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                  borderRadius: '0.5rem'
+                }}>
+                  <AlertCircle size={16} />
+                  <span style={{ fontSize: '0.875rem' }}>{aiInsightsError}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {insights.map((insight, index) => {
+                    const getIcon = (type) => {
+                      switch(type) {
+                        case 'warning': return <AlertCircle size={16} style={{ color: '#f59e0b', marginTop: '0.125rem' }} />;
+                        case 'success': return <Target size={16} style={{ color: '#10b981', marginTop: '0.125rem' }} />;
+                        case 'info': return <TrendingUp size={16} style={{ color: '#2563eb', marginTop: '0.125rem' }} />;
+                        default: return <Activity size={16} style={{ color: '#2563eb', marginTop: '0.125rem' }} />;
+                      }
+                    };
+                    
+                    return (
+                      <div key={index} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        {getIcon(insight.type)}
+                        <p style={{ 
+                          fontSize: '0.875rem', 
+                          color: '#1e40af', 
+                          margin: 0,
+                          lineHeight: '1.4'
+                        }}>
+                          {insight.message}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {insights.length === 0 && !insightsLoading && (
+                    <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0, fontStyle: 'italic' }}>
+                      No insights available. Create some career goals to get started!
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

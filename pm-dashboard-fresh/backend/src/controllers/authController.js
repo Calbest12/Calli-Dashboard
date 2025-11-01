@@ -1,212 +1,174 @@
-// backend/controllers/authController.js - CORRECTED VERSION
-
+// backend/src/controllers/authController.js
 const { query } = require('../config/database');
-const { ApiError } = require('../middleware/errorHandler');
+const bcrypt = require('bcryptjs'); // Make sure you have this installed
 
+// Add this missing register function!
 const register = async (req, res) => {
-  const { name, email, password, role } = req.body;
-  
-  console.log('🔑 Registration attempt for:', email);
-  console.log('🔑 Request body:', { name, email, role, passwordLength: password?.length });
-  
-  // Validation
-  if (!name || !email || !password) {
-    throw new ApiError('Name, email, and password are required', 400);
-  }
-  
-  if (password.length < 6) {
-    throw new ApiError('Password must be at least 6 characters', 400);
-  }
-  
   try {
-    // Check if user already exists
-    console.log('🔍 Checking if user exists...');
-    const existsQuery = 'SELECT id FROM users WHERE email = $1';
-    const existsResult = await query(existsQuery, [email.toLowerCase()]);
+    console.log('ðŸ” Registration attempt for:', req.body.email);
+    const { name, email, password, role } = req.body;
     
-    if (existsResult.rows.length > 0) {
-      console.log('❌ User already exists:', email);
-      throw new ApiError('User with this email already exists', 400);
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, email, and password are required'
+      });
     }
     
-    console.log('✅ User does not exist, proceeding with registration');
+    // Validate role - only allow Team Member or Executive Leader during registration
+    const allowedRoles = ['Team Member', 'Executive Leader'];
+    const userRole = role && allowedRoles.includes(role) ? role : 'Team Member';
     
-    // Create new user
-    const insertQuery = `
-      INSERT INTO users (name, email, role, avatar, created_at)
-      VALUES ($1, $2, $3, $4, NOW())
+    // Check if user already exists
+    const existingUser = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+    
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User with this email already exists'
+      });
+    }
+    
+    // Hash password properly
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    
+    // Create user with proper password hashing
+    const createUserQuery = `
+      INSERT INTO users (name, email, password, role, avatar, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING id, name, email, role, avatar, created_at
     `;
     
-    const avatar = name.split(' ').map(n => n[0]).join('').toUpperCase();
-    const userRole = role || 'Team Member';
+    const avatar = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     
-    console.log('💾 Inserting user with values:', [name.trim(), email.toLowerCase(), userRole, avatar]);
-    
-    const result = await query(insertQuery, [
+    const result = await query(createUserQuery, [
       name.trim(),
       email.toLowerCase(),
+      hashedPassword, // Use hashed password
       userRole,
       avatar
     ]);
     
-    if (result.rows.length === 0) {
-      console.error('❌ User creation failed - no rows returned');
-      throw new ApiError('Failed to create user', 500);
-    }
-    
     const newUser = result.rows[0];
-    console.log('✅ User created successfully:', { id: newUser.id, name: newUser.name, email: newUser.email });
     
-    // Return user data (excluding sensitive info)
-    const userData = {
-      id: newUser.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      avatar: newUser.avatar,
-      createdAt: newUser.created_at
-    };
+    console.log('âœ… Registration successful for:', newUser.name, 'as', newUser.role);
     
     res.status(201).json({
       success: true,
-      data: userData,
-      message: 'User registered successfully'
+      message: 'User registered successfully',
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        avatar: newUser.avatar,
+        created_at: newUser.created_at
+      }
     });
     
   } catch (error) {
-    console.error('❌ Registration error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
+    console.error('âŒ Registration error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed'
     });
-    
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    
-    // Handle database-specific errors
-    if (error.code === '23505') { // PostgreSQL unique violation
-      throw new ApiError('User with this email already exists', 400);
-    }
-    
-    throw new ApiError(`Registration failed: ${error.message}`, 500);
   }
 };
 
 const login = async (req, res) => {
-  const { email, password } = req.body;
-  
-  console.log('🔑 Login attempt for:', email);
-  console.log('🔑 Request body:', { email, passwordLength: password?.length });
-  
-  // Validation
-  if (!email || !password) {
-    throw new ApiError('Email and password are required', 400);
-  }
-  
   try {
-    console.log('🔍 Searching for user in database...');
+    console.log('ðŸ” Login attempt for:', req.body.email);
+    const { email, password } = req.body;
+    
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
     
     // Find user by email
-    const userQuery = 'SELECT * FROM users WHERE email = $1';
+    const userQuery = `
+      SELECT id, name, email, password, role, avatar, created_at
+      FROM users 
+      WHERE email = $1
+    `;
+    
     const result = await query(userQuery, [email.toLowerCase()]);
     
-    console.log('🔍 Database query result:', {
-      rowCount: result.rows.length,
-      foundUser: result.rows[0] ? {
-        id: result.rows[0].id,
-        name: result.rows[0].name,
-        email: result.rows[0].email
-      } : null
-    });
-    
     if (result.rows.length === 0) {
-      console.log('❌ User not found in database');
-      throw new ApiError('Invalid email or password', 401);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
     }
     
     const user = result.rows[0];
-    console.log('✅ User found in database:', { id: user.id, name: user.name, email: user.email });
     
-    // For demo purposes, we'll use simple password checking
-    // In production, you'd use bcrypt to compare hashed passwords
-    const demoPasswords = {
-      'sarah@company.com': 'demo123',
-      'john@company.com': 'demo123', 
-      'alice@company.com': 'demo123',
-      'mike@company.com': 'demo123'
-    };
+    // Check password (handle both hashed and plain text for backward compatibility)
+    let isValidPassword = false;
     
-    // Accept 'demo123' for any registered user, or specific demo passwords
-    const expectedPassword = demoPasswords[email.toLowerCase()] || 'demo123';
-    
-    console.log('🔍 Password check:', {
-      provided: password,
-      expected: expectedPassword,
-      match: password === expectedPassword
-    });
-    
-    if (password !== expectedPassword) {
-      console.log('❌ Password mismatch for:', email);
-      throw new ApiError('Invalid email or password', 401);
+    if (user.password.startsWith('$2')) {
+      // It's a bcrypt hash
+      isValidPassword = await bcrypt.compare(password, user.password);
+    } else {
+      // Plain text password (for existing demo users)
+      isValidPassword = password === user.password;
     }
     
-    // Successful login - return user data (excluding sensitive info)
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password'
+      });
+    }
+    
+    // Prepare user data for response
     const userData = {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role || 'Team Member',
       avatar: user.avatar || user.name?.split(' ').map(n => n[0]).join('') || 'U',
-      createdAt: user.created_at
+      created_at: user.created_at
     };
     
-    console.log('✅ Login successful for:', userData.name);
+    console.log('âœ… Login successful for:', userData.name, 'Role:', userData.role);
     
     res.json({
       success: true,
-      data: userData,
+      user: userData, // Make sure this matches your frontend expectation
       message: 'Login successful'
     });
     
   } catch (error) {
-    console.error('❌ Login error details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
+    console.error('âŒ Login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed'
     });
-    
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    
-    throw new ApiError(`Login failed: ${error.message}`, 500);
   }
 };
 
 const logout = async (req, res) => {
-  console.log('👋 Logout request received');
+  console.log('ðŸ‘‹ Logout request received');
   
-  // For demo purposes, logout is just a success response
-  // In production with JWT tokens, you might blacklist the token
   res.json({
     success: true,
     message: 'Logout successful'
   });
 };
 
-// Get current user info
 const getCurrentUser = async (req, res) => {
-  // This would typically use the user ID from a JWT token
-  // For demo, we'll just return a placeholder
   res.status(501).json({ 
     success: false,
     message: 'Get current user - Coming soon (requires JWT implementation)' 
   });
 };
 
-// Placeholder functions for future implementation
 const refreshToken = async (req, res) => {
   res.status(501).json({ 
     success: false,
@@ -236,7 +198,7 @@ const resetPassword = async (req, res) => {
 };
 
 module.exports = {
-  register,
+  register, // â† This was missing!
   login,
   logout,
   getCurrentUser,

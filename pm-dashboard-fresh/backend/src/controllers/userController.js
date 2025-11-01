@@ -1,28 +1,71 @@
 const { query } = require('../config/database');
 const { ApiError } = require('../middleware/errorHandler');
 
-// Get all users
 const getAllUsers = async (req, res) => {
   try {
-    const result = await query(`
-      SELECT 
-        id, name, email, role, avatar, title, department, 
-        skills, phone, location, bio, status, created_at 
-      FROM users 
-      ORDER BY name
-    `);
+    console.log('Getting users for team selection...');
+    
+    const currentUserId = req.user?.id;
+    const currentUserRole = req.user?.role;
+    
+    let query_str;
+    let queryParams = [];
+    
+    if (currentUserRole === 'Executive Leader') {
+      // Executive Leaders see their team members + unassigned Team Members
+      query_str = `
+        SELECT DISTINCT u.id, u.name, u.email, u.role, u.avatar, u.created_at, u.updated_at
+        FROM users u
+        LEFT JOIN team_members tm ON u.id = tm.user_id AND tm.executive_id = $1
+        WHERE (
+          -- Users in this executive's team
+          tm.user_id IS NOT NULL
+          OR
+          -- Unassigned Team Members (not in any team)
+          (u.role = 'Team Member' AND u.id NOT IN (
+            SELECT tm2.user_id FROM team_members tm2 WHERE tm2.status = 'active'
+          ))
+        )
+        AND u.id != $1  -- Exclude the executive themselves
+        ORDER BY u.name ASC
+      `;
+      queryParams = [currentUserId];
+      
+    } else {
+      // Project Managers and Team Members see only users in their team
+      query_str = `
+        SELECT DISTINCT u.id, u.name, u.email, u.role, u.avatar, u.created_at, u.updated_at
+        FROM users u
+        INNER JOIN team_members tm1 ON u.id = tm1.user_id
+        INNER JOIN team_members tm2 ON tm1.executive_id = tm2.executive_id
+        WHERE tm2.user_id = $1
+        AND tm1.status = 'active'
+        AND tm2.status = 'active'
+        ORDER BY u.name ASC
+      `;
+      queryParams = [currentUserId];
+    }
+    
+    const result = await query(query_str, queryParams);
+    
+    console.log(`Found ${result.rows.length} team users for role: ${currentUserRole}`);
     
     res.json({
       success: true,
       data: result.rows,
-      count: result.rows.length
+      message: `Retrieved ${result.rows.length} team members`
     });
+    
   } catch (error) {
-    throw new ApiError('Failed to fetch users', 500);
+    console.error('Error getting team users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve team users',
+      error: error.message
+    });
   }
 };
 
-// Get single user
 const getUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -52,7 +95,6 @@ const getUser = async (req, res) => {
   }
 };
 
-// Create user
 const createUser = async (req, res) => {
   try {
     const { 
@@ -60,7 +102,6 @@ const createUser = async (req, res) => {
       location, bio, skills = [], avatar 
     } = req.body;
     
-    // Check if user already exists
     const existingUser = await query('SELECT id FROM users WHERE email = $1', [email]);
     if (existingUser.rows.length > 0) {
       throw new ApiError('User with this email already exists', 400);
@@ -92,7 +133,6 @@ const createUser = async (req, res) => {
   }
 };
 
-// Update user
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -130,7 +170,6 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Delete user
 const deleteUser = async (req, res) => {
   try {
     const { id } = req.params;
@@ -153,7 +192,6 @@ const deleteUser = async (req, res) => {
   }
 };
 
-// Get user profile
 const getUserProfile = async (req, res) => {
   try {
     const { id } = req.params;
@@ -183,7 +221,6 @@ const getUserProfile = async (req, res) => {
   }
 };
 
-// Update user profile
 const updateUserProfile = async (req, res) => {
   try {
     const { id } = req.params;
@@ -221,15 +258,12 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
-// Change password (placeholder - implement with proper password hashing)
 const changePassword = async (req, res) => {
   try {
     const { id } = req.params;
     const { currentPassword, newPassword } = req.body;
     
-    // TODO: Implement proper password verification and hashing
-    // For now, just return success
-    console.log('🔒 Password change requested for user:', id);
+    console.log('ðŸ”’ Password change requested for user:', id);
     
     res.json({
       success: true,
@@ -240,7 +274,6 @@ const changePassword = async (req, res) => {
   }
 };
 
-// Update user preferences
 const updateUserPreferences = async (req, res) => {
   try {
     const { id } = req.params;
@@ -270,7 +303,6 @@ const updateUserPreferences = async (req, res) => {
   }
 };
 
-// Get user skills
 const getUserSkills = async (req, res) => {
   try {
     const { id } = req.params;
@@ -293,13 +325,11 @@ const getUserSkills = async (req, res) => {
   }
 };
 
-// Add user skill
 const addUserSkill = async (req, res) => {
   try {
     const { id } = req.params;
     const { skillName } = req.body;
     
-    // Get current skills
     const userResult = await query('SELECT skills FROM users WHERE id = $1', [id]);
     
     if (userResult.rows.length === 0) {
@@ -308,7 +338,6 @@ const addUserSkill = async (req, res) => {
     
     const currentSkills = userResult.rows[0].skills || [];
     
-    // Add new skill if it doesn't exist
     if (!currentSkills.includes(skillName)) {
       const updatedSkills = [...currentSkills, skillName];
       
@@ -331,15 +360,12 @@ const addUserSkill = async (req, res) => {
   }
 };
 
-// Remove user skill
 const removeUserSkill = async (req, res) => {
   try {
     const { id, skillId } = req.params;
     
-    // For JSON skills, skillId is actually the skill name
     const skillName = skillId;
     
-    // Get current skills
     const userResult = await query('SELECT skills FROM users WHERE id = $1', [id]);
     
     if (userResult.rows.length === 0) {
@@ -367,6 +393,47 @@ const removeUserSkill = async (req, res) => {
   }
 };
 
+// Search users by name or email
+const searchUsers = async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Search query must be at least 2 characters'
+      });
+    }
+    
+    console.log('Searching users with query:', q);
+    
+    const result = await query(`
+      SELECT id, name, email, role, avatar, created_at, updated_at
+      FROM users 
+      WHERE (LOWER(name) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1))
+        AND role IS NOT NULL
+      ORDER BY name ASC
+      LIMIT 20
+    `, [`%${q}%`]);
+    
+    console.log(`Found ${result.rows.length} users matching "${q}"`);
+    
+    res.json({
+      success: true,
+      data: result.rows,
+      message: `Found ${result.rows.length} users matching "${q}"`
+    });
+    
+  } catch (error) {
+    console.error('Error searching users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to search users',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUser,
@@ -379,5 +446,6 @@ module.exports = {
   updateUserPreferences,
   getUserSkills,
   addUserSkill,
-  removeUserSkill
+  removeUserSkill,
+  searchUsers
 };

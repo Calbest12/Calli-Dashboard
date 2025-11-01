@@ -18,7 +18,7 @@ const TeamMemberModal = ({
     role: '',
     status: 'active',
     skills: [],
-    contribution: 0, // FIXED: Default to 0, not 85
+    contribution: 0,
     tasksCompleted: 0,
     joinedDate: new Date().toISOString().split('T')[0],
     avatar: ''
@@ -29,7 +29,6 @@ const TeamMemberModal = ({
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
 
-  // Predefined roles
   const predefinedRoles = [
     'Project Manager',
     'Team Lead',
@@ -47,7 +46,6 @@ const TeamMemberModal = ({
     'Scrum Master'
   ];
 
-  // Common skills
   const commonSkills = [
     'JavaScript', 'React', 'Node.js', 'Python', 'Java', 'C#', 'PHP',
     'HTML/CSS', 'TypeScript', 'Vue.js', 'Angular', 'SQL', 'MongoDB',
@@ -56,12 +54,10 @@ const TeamMemberModal = ({
     'Adobe Creative Suite', 'Testing', 'QA', 'DevOps', 'AWS', 'Docker'
   ];
 
-  // Reset form when modal opens/closes or member changes
   useEffect(() => {
     if (isOpen) {
       if (member) {
-        // Editing existing member - use actual values from database
-        console.log('🔄 Editing member, loading data:', {
+        console.log('ðŸ”„ Editing member, loading data:', {
           contribution: member.contribution,
           tasksCompleted: member.tasksCompleted,
           skills: member.skills
@@ -74,15 +70,14 @@ const TeamMemberModal = ({
           role: member.role || '',
           status: member.status || 'active',
           skills: Array.isArray(member.skills) ? member.skills : [],
-          contribution: member.contribution ?? 0, // Use actual value or 0
-          tasksCompleted: member.tasksCompleted ?? 0, // Use actual value or 0
+          contribution: member.contribution ?? 0,
+          tasksCompleted: member.tasksCompleted ?? 0,
           joinedDate: member.joinedDate || new Date().toISOString().split('T')[0],
           avatar: member.avatar || ''
         });
         setSearchUser(member.name || '');
       } else {
-        // Adding new member - start with 0% contribution
-        console.log('🆕 Adding new member, using defaults');
+        console.log('ðŸ†• Adding new member, using defaults');
         setFormData({
           id: '',
           name: '',
@@ -90,7 +85,7 @@ const TeamMemberModal = ({
           role: '',
           status: 'active',
           skills: [],
-          contribution: 0, // FIXED: Start new members at 0%
+          contribution: 0,
           tasksCompleted: 0,
           joinedDate: new Date().toISOString().split('T')[0],
           avatar: ''
@@ -103,26 +98,22 @@ const TeamMemberModal = ({
     }
   }, [isOpen, member]);
 
-  // Filter available users (exclude current team members)
   const availableUsers = allUsers.filter(user => 
     !currentTeamMembers.some(teamMember => teamMember.email === user.email) ||
-    (member && user.email === member.email) // Allow current member when editing
+    (member && user.email === member.email) 
   );
 
-  // Filter users based on search
   const filteredUsers = availableUsers.filter(user =>
     user.name.toLowerCase().includes(searchUser.toLowerCase()) ||
     user.email.toLowerCase().includes(searchUser.toLowerCase())
   );
 
   const handleInputChange = (field, value) => {
-    console.log(`🔄 Field ${field} changed to:`, value);
+    console.log(`ðŸ”„ Field ${field} changed to:`, value);
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
-    // Clear submit error when user starts typing
     if (submitError) {
       setSubmitError('');
     }
@@ -138,7 +129,7 @@ const TeamMemberModal = ({
     }));
     setSearchUser(user.name);
     setShowUserDropdown(false);
-    // Clear errors when user selects someone
+
     setErrors({});
     setSubmitError('');
   };
@@ -166,7 +157,6 @@ const TeamMemberModal = ({
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Invalid email format';
     } else {
-      // Check for duplicate email (only when adding new member)
       if (!member) {
         const emailExists = currentTeamMembers.some(teamMember => 
           teamMember.email.toLowerCase() === formData.email.toLowerCase()
@@ -202,14 +192,13 @@ const TeamMemberModal = ({
 
     try {
       setSubmitError('');
-      
-      // Generate avatar if not provided
+
       const finalData = {
         ...formData,
         avatar: formData.avatar || formData.name.split(' ').map(n => n[0]).join('').toUpperCase()
       };
 
-      console.log('📤 Submitting team member data:', {
+      console.log('ðŸ“¤ Submitting team member data:', {
         name: finalData.name,
         contribution: finalData.contribution,
         tasksCompleted: finalData.tasksCompleted,
@@ -219,7 +208,7 @@ const TeamMemberModal = ({
       await onSubmit(finalData);
       
     } catch (error) {
-      console.error('❌ Team member submission error:', error);
+      console.error('âŒ Team member submission error:', error);
       setSubmitError(error.message || 'Failed to save team member. Please try again.');
     }
   };
@@ -767,7 +756,7 @@ const TeamMemberModal = ({
                           opacity: loading ? 0.6 : 1
                         }}
                       >
-                        ×
+                        Ã—
                       </button>
                     </span>
                   ))}

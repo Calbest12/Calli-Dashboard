@@ -1,7 +1,5 @@
-// historyController.js - Complete implementation for project history
-const ProjectHistory = require('../models/ProjectHistory'); // Adjust path as needed
-const Project = require('../models/Project'); // Adjust path as needed
-
+const ProjectHistory = require('../models/ProjectHistory'); 
+const Project = require('../models/Project'); 
 /**
  * Get project history by project ID
  * @route GET /api/projects/:id/history
@@ -9,9 +7,8 @@ const Project = require('../models/Project'); // Adjust path as needed
 const getProjectHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('📊 Getting history for project ID:', id);
+    console.log('ðŸ“Š Getting history for project ID:', id);
 
-    // Validate project ID format (adjust based on your ID format)
     if (!id || (typeof id === 'string' && id.trim() === '')) {
       return res.status(400).json({
         success: false,
@@ -19,15 +16,11 @@ const getProjectHistory = async (req, res) => {
       });
     }
 
-    // Check if project exists first - this prevents the 404 error
     let project;
     try {
-      // Adjust this query based on your ORM/database setup
       project = await Project.findById(id);
-      // OR if using raw SQL: project = await db.query('SELECT * FROM projects WHERE id = ?', [id]);
-      // OR if using Sequelize: project = await Project.findByPk(id);
     } catch (dbError) {
-      console.error('❌ Database error finding project:', dbError);
+      console.error('âŒ Database error finding project:', dbError);
       return res.status(500).json({
         success: false,
         error: 'Database error while finding project'
@@ -35,48 +28,30 @@ const getProjectHistory = async (req, res) => {
     }
 
     if (!project) {
-      console.log('⚠️ Project not found with ID:', id);
+      console.log('âš ï¸ Project not found with ID:', id);
       return res.status(404).json({
         success: false,
         error: 'Project not found'
       });
     }
 
-    console.log('✅ Project found:', project.name || project.title || `ID: ${project.id}`);
+    console.log('âœ… Project found:', project.name || project.title || `ID: ${project.id}`);
 
-    // Get history records for this project
     let history;
     try {
-      // Adjust based on your database schema
       history = await ProjectHistory.find({ projectId: id })
-        .sort({ timestamp: -1 }) // Most recent first
-        .limit(50); // Limit to prevent huge responses
+        .sort({ timestamp: -1 }) 
+        .limit(50); 
 
-      // OR if using raw SQL:
-      // history = await db.query(`
-      //   SELECT * FROM project_history 
-      //   WHERE project_id = ? 
-      //   ORDER BY timestamp DESC 
-      //   LIMIT 50
-      // `, [id]);
-
-      // OR if using Sequelize:
-      // history = await ProjectHistory.findAll({
-      //   where: { projectId: id },
-      //   order: [['timestamp', 'DESC']],
-      //   limit: 50
-      // });
-
-      console.log(`✅ Found ${history.length} history entries for project ${id}`);
+      console.log(`âœ… Found ${history.length} history entries for project ${id}`);
     } catch (historyError) {
-      console.error('❌ Error fetching project history:', historyError);
+      console.error('âŒ Error fetching project history:', historyError);
       return res.status(500).json({
         success: false,
         error: 'Error fetching project history'
       });
     }
 
-    // Format the response data
     const formattedHistory = history.map(entry => ({
       id: entry.id || entry._id,
       action: entry.action,
@@ -96,7 +71,7 @@ const getProjectHistory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Unexpected error in getProjectHistory:', error);
+    console.error('âŒ Unexpected error in getProjectHistory:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -114,9 +89,8 @@ const addProjectHistory = async (req, res) => {
     const { id } = req.params;
     const { action, description, type, user, details } = req.body;
 
-    console.log('📝 Adding history entry for project:', id);
+    console.log('ðŸ“ Adding history entry for project:', id);
 
-    // Validate required fields
     if (!action || !type || !user) {
       return res.status(400).json({
         success: false,
@@ -124,7 +98,6 @@ const addProjectHistory = async (req, res) => {
       });
     }
 
-    // Check if project exists
     const project = await Project.findById(id);
     if (!project) {
       return res.status(404).json({
@@ -133,7 +106,6 @@ const addProjectHistory = async (req, res) => {
       });
     }
 
-    // Create new history entry
     const historyEntry = await ProjectHistory.create({
       projectId: id,
       action,
@@ -144,7 +116,7 @@ const addProjectHistory = async (req, res) => {
       timestamp: new Date()
     });
 
-    console.log('✅ History entry created:', historyEntry.id);
+    console.log('âœ… History entry created:', historyEntry.id);
 
     res.status(201).json({
       success: true,
@@ -152,7 +124,7 @@ const addProjectHistory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error adding project history:', error);
+    console.error('âŒ Error adding project history:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to add history entry'
@@ -176,7 +148,6 @@ const getFilteredProjectHistory = async (req, res) => {
       endDate 
     } = req.query;
 
-    // Check if project exists
     const project = await Project.findById(id);
     if (!project) {
       return res.status(404).json({
@@ -185,7 +156,6 @@ const getFilteredProjectHistory = async (req, res) => {
       });
     }
 
-    // Build query filters
     const filters = { projectId: id };
     
     if (type) filters.type = type;
@@ -197,7 +167,6 @@ const getFilteredProjectHistory = async (req, res) => {
       };
     }
 
-    // Get filtered history
     const history = await ProjectHistory.find(filters)
       .sort({ timestamp: -1 })
       .limit(parseInt(limit))
@@ -217,7 +186,7 @@ const getFilteredProjectHistory = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error getting filtered history:', error);
+    console.error('âŒ Error getting filtered history:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get filtered history'

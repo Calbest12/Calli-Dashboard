@@ -1,19 +1,16 @@
 import React from 'react';
 import { ArrowRight, Plus, Minus, Edit, Users as UsersIcon } from 'lucide-react';
-import apiService from '../services/apiService'; // Add this import
+import apiService from '../services/apiService';
 
 const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon, getActionColor, historyLoading }) => {
   
-  // Helper function to render detailed changes
   const renderDetailedChanges = (details, actionType) => {
     if (!details || typeof details !== 'object') return null;
     
     const changes = [];
     
-    // Handle different types of changes
     Object.entries(details).forEach(([key, value]) => {
       if (key === 'team' && value) {
-        // Special handling for team changes
         if (value.added && value.added.length > 0) {
           changes.push(
             <div key={`${key}-added`} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -31,19 +28,16 @@ const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon,
           );
         }
       } else if (value && typeof value === 'object' && value.from !== undefined && value.to !== undefined) {
-        // Handle from/to changes
         const fieldName = key.replace('_', ' ').replace('progress ', '');
         
         let fromValue = value.from;
         let toValue = value.to;
-        
-        // Format dates nicely
+
         if (key === 'deadline') {
           fromValue = value.from ? new Date(value.from).toLocaleDateString() : 'Not set';
           toValue = new Date(value.to).toLocaleDateString();
         }
         
-        // Format progress values
         if (key.startsWith('progress_')) {
           fromValue = `${value.from}/7`;
           toValue = `${value.to}/7`;
@@ -99,7 +93,6 @@ const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon,
     ) : null;
   };
 
-  // Helper function to get enhanced description based on action type
   const getEnhancedDescription = (item) => {
     switch (item.type) {
       case 'created':
@@ -146,48 +139,46 @@ const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon,
         <button 
           onClick={async () => {
             try {
-              console.log('🔄 Finding available projects...');
+              console.log('ðŸ”„ Finding available projects...');
               
-              // First, let's see what projects exist
               const projectsResponse = await fetch(`http://localhost:5001/api/projects`);
               const projectsData = await projectsResponse.json();
-              console.log('📊 Available projects:', projectsData.data);
+              console.log('ðŸ“Š Available projects:', projectsData.data);
               
               if (!projectsData.data || projectsData.data.length === 0) {
                 alert('No projects found in database. Create a project first!');
                 return;
               }
               
-              // Use the first available project
               const firstProject = projectsData.data[0];
               const projectId = firstProject.id;
-              console.log('🔍 Using project ID:', projectId, 'Name:', firstProject.name);
+              console.log('ðŸ” Using project ID:', projectId, 'Name:', firstProject.name);
               
-              console.log('🔍 Fetch URL:', `http://localhost:5001/api/projects/${projectId}/history`);
+              console.log('ðŸ” Fetch URL:', `http://localhost:5001/api/projects/${projectId}/history`);
               
               const response = await fetch(`http://localhost:5001/api/projects/${projectId}/history`);
-              console.log('📊 Response status:', response.status);
-              console.log('📊 Response ok:', response.ok);
+              console.log('ðŸ“Š Response status:', response.status);
+              console.log('ðŸ“Š Response ok:', response.ok);
               
               const responseText = await response.text();
-              console.log('📊 Raw response text:', responseText);
+              console.log('ðŸ“Š Raw response text:', responseText);
               
               let data;
               try {
                 data = JSON.parse(responseText);
-                console.log('📊 Parsed JSON:', data);
+                console.log('ðŸ“Š Parsed JSON:', data);
               } catch (parseError) {
-                console.error('❌ JSON parse error:', parseError);
+                console.error('âŒ JSON parse error:', parseError);
                 alert(`JSON Parse Error: ${parseError.message}`);
                 return;
               }
               
-              console.log('📊 Data success:', data.success);
-              console.log('📊 Data length:', data.data?.length);
+              console.log('ðŸ“Š Data success:', data.success);
+              console.log('ðŸ“Š Data length:', data.data?.length);
               
               alert(`History fetch test: ${data.success ? 'Success' : 'Failed'} - Project: ${firstProject.name} - Length: ${data.data?.length || 0}`);
             } catch (error) {
-              console.error('❌ Manual fetch error:', error);
+              console.error('âŒ Manual fetch error:', error);
               alert('Manual fetch failed: ' + error.message);
             }
           }}
@@ -207,11 +198,11 @@ const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon,
         
         <button 
           onClick={() => {
-            console.log('🔍 Current projectHistory state:', projectHistory);
-            console.log('🔍 projectHistory type:', typeof projectHistory);
-            console.log('🔍 projectHistory isArray:', Array.isArray(projectHistory));
+            console.log('ðŸ” Current projectHistory state:', projectHistory);
+            console.log('ðŸ” projectHistory type:', typeof projectHistory);
+            console.log('ðŸ” projectHistory isArray:', Array.isArray(projectHistory));
             if (Array.isArray(projectHistory)) {
-              console.log('🔍 First few items:', projectHistory.slice(0, 3));
+              console.log('ðŸ” First few items:', projectHistory.slice(0, 3));
             }
             alert(`State debug logged to console. Array length: ${projectHistory?.length || 0}`);
           }}
@@ -232,27 +223,25 @@ const ProjectHistorySection = ({ projectHistory, formatTimestamp, getActionIcon,
         <button 
           onClick={async () => {
             try {
-              console.log('🔄 Testing apiService.getProjectHistory directly...');
-              
-              // Now we can use the imported apiService directly
-              console.log('🔍 apiService imported:', !!apiService);
-              console.log('🔍 getProjectHistory method:', !!apiService.getProjectHistory);
+              console.log('ðŸ”„ Testing apiService.getProjectHistory directly...');
+
+              console.log('ðŸ” apiService imported:', !!apiService);
+              console.log('ðŸ” getProjectHistory method:', !!apiService.getProjectHistory);
               
               if (!apiService.getProjectHistory) {
                 throw new Error('getProjectHistory method not found on apiService');
               }
-              
-              // Get project ID from URL or use default
+   
               const projectId = window.location.pathname.includes('project') ? 
                 window.location.pathname.split('/').pop() : '8';
-              console.log('🔍 Using project ID:', projectId);
+              console.log('ðŸ” Using project ID:', projectId);
               
               const response = await apiService.getProjectHistory(projectId);
-              console.log('📊 apiService result:', response);
+              console.log('ðŸ“Š apiService result:', response);
               alert(`apiService test: ${response?.success ? 'Success' : 'Failed'} - Length: ${response?.data?.length || 0}`);
             } catch (error) {
-              console.error('❌ apiService error:', error);
-              console.error('❌ Error details:', {
+              console.error('âŒ apiService error:', error);
+              console.error('âŒ Error details:', {
                 name: error.name,
                 message: error.message,
                 stack: error.stack

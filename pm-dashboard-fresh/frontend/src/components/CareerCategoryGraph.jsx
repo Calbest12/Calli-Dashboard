@@ -1,33 +1,89 @@
-import React, { useState, useMemo } from 'react';
-import { TrendingUp, Target, AlertCircle, Activity } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { TrendingUp, Activity } from 'lucide-react';
+
+// Helper function to create darker colors for better text contrast on checkboxes only
+const getDarkerColor = (color) => {
+  const colorMap = {
+    '#488ffa': '#1d3fd8', // blue
+    '#8b5cf6': '#52269e', // purple  
+    '#10b981': '#047853', // green
+    '#ff6d05': '#9c4303', // Orange
+    '#00ffff': '#0891b2', // cyan
+    '#e8e800': '#999903', // Yellow
+    '#9eff2f': '#559906', // lime - much darker for readability
+    '#ff0400': '#9c0402', // red
+    '#ff03c4': '#9c0278'  // pink
+  };
+  return colorMap[color] || color;
+};
 
 /**
- * Career Category Graph - Fixed Version with Consistent Time Filtering
+ * Career Category Graph - Career Goals Progress Visualization
+ * ONLY works with career_development_goals data from the database
  */
 const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
+  console.log('ðŸŽ¯ CareerCategoryGraph received data:');
+  console.log('ðŸ“š Goals:', goals.length, goals);
+  console.log('âœ… Completed Goals:', completedGoals.length, completedGoals);
+
   const [timeFilter, setTimeFilter] = useState('1month');
   const [tooltip, setTooltip] = useState({ show: false, x: 0, y: 0, content: '' });
   const [selectedCategories, setSelectedCategories] = useState(new Set());
 
+  useEffect(() => {
+    const allGoals = [...goals, ...completedGoals];
+    const projectFields = ['pm_progress', 'leadership_progress', 'project_id', 'sprint_id', 'milestone_id'];
+    const careerFields = ['category', 'title', 'current_progress', 'target_level', 'current_level'];
+    
+    let hasProjectData = false;
+    let missingCareerFields = 0;
+    
+    allGoals.forEach(goal => {
+      if (projectFields.some(field => goal[field] !== undefined)) {
+        console.error('âŒ CRITICAL: Receiving PROJECT data instead of CAREER data!');
+        console.error('âŒ Goal contains project fields:', goal);
+        hasProjectData = true;
+      }
+      
+      const missingFields = careerFields.filter(field => !goal[field] && field !== 'current_progress');
+      if (missingFields.length > 2) { 
+        console.warn('âš ï¸ Goal missing required career fields:', missingFields, goal);
+        missingCareerFields++;
+      }
+    });
+    
+    if (hasProjectData) {
+      console.error('Error: Project data detected - this component expects career development goals only');
+      return;
+    }
+    
+    if (missingCareerFields > allGoals.length * 0.5) {
+      console.warn('Warning: Many goals missing career-specific fields - data quality may be compromised');
+    }
+    
+    console.log('âœ… Expected career goal fields: title, category, current_progress, status, target_level, current_level');
+    if (allGoals.length > 0) {
+      console.log('ðŸ“‹ Sample goal structure:', Object.keys(allGoals[0]));
+      console.log('ðŸ“Š Total career goals processed:', allGoals.length);
+    }
+  }, [goals, completedGoals]);
+
   // Category configuration
   const categoryConfig = {
-    'technical': { name: 'Technical Skills', color: '#3b82f6' },
+    'technical': { name: 'Technical Skills', color: '#488ffa' },
     'management': { name: 'Management', color: '#8b5cf6' },
     'communication': { name: 'Communication', color: '#10b981' },
-    'design': { name: 'Design', color: '#00ffff' },
-    'analytics': { name: 'Data Analytics', color: '#06b6d4' },
-    'leadership': { name: 'Leadership', color: '#ff7f50' },
-    'business strategy': { name: 'Business Strategy', color: '#adff2f' },
-    'team building': { name: 'Team Building', color: '#20b2aa' },
-    'innovation': { name: 'Innovation', color: '#ff4500' },
+    'design': { name: 'Design', color: '#ff6d05' },
+    'analytics': { name: 'Data Analytics', color: '#00ffff' },
+    'leadership': { name: 'Leadership', color: '#e8e800' },
+    'business strategy': { name: 'Business Strategy', color: '#9eff2f' },
+    'team building': { name: 'Team Building', color: '#ff0400' },
+    'innovation': { name: 'Innovation', color: '#ff03c4' },
   };
 
-  // Fixed history normalizer
-  const normalizeHistory = (goal) => {
+  // Data processing function
+  const normalizeHistory = useCallback((goal) => {
     const events = [];
-
-    console.log(`\n🔍 RAW DEBUG for goal: ${goal.title}`);
-    console.log('Raw goal_progress_history:', goal.goal_progress_history);
 
     if (goal.goal_progress_history) {
       let historyArray = goal.goal_progress_history;
@@ -41,18 +97,12 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       }
       
       if (Array.isArray(historyArray)) {
-        console.log('Processing history array:', historyArray);
         for (const event of historyArray) {
-          console.log('Raw event:', event);
           const progress = typeof event?.new_progress === 'number' ? event.new_progress : null;
           const dateStr = event?.created_at;
           
-          console.log(`Event progress: ${progress}, dateStr: "${dateStr}"`);
-          
           if (progress !== null && dateStr) {
             const date = new Date(dateStr);
-            console.log(`Parsed date: ${date.toLocaleString()}, Timestamp: ${date.getTime()}`);
-            
             if (!isNaN(date)) {
               events.push({ value: Math.max(0, Math.min(100, progress)), date: date });
             }
@@ -80,7 +130,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
           
           if (progress !== null && dateStr) {
             const date = new Date(dateStr);
-            
             if (!isNaN(date)) {
               events.push({ value: Math.max(0, Math.min(100, progress)), date: date });
             }
@@ -89,19 +138,15 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       }
     }
 
-    // Add completion event if goal is completed
     if (goal.completed_date && goal.status === 'completed') {
       let completedDate = new Date(goal.completed_date);
-      
       if (!isNaN(completedDate)) {
         events.push({ value: 100, date: completedDate });
       }
     }
 
-    // Sort by date
     events.sort((a, b) => a.date - b.date);
 
-    // Fallback to current_progress if no history exists
     if (events.length === 0) {
       const currentProgress = typeof goal.current_progress === 'number' ? goal.current_progress : 
                             typeof goal.progress === 'number' ? goal.progress : null;
@@ -109,7 +154,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       
       if (currentProgress !== null && currentProgress >= 0 && timestamp) {
         const date = new Date(timestamp);
-        
         if (!isNaN(date)) {
           events.push({ value: Math.max(0, Math.min(100, currentProgress)), date: date });
         }
@@ -117,13 +161,11 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
     }
 
     return events;
-  };
+  }, []);
 
-  // Process data
   const processedData = useMemo(() => {
     const stats = {};
     
-    // Initialize categories
     Object.keys(categoryConfig).forEach(key => {
       stats[key] = {
         name: categoryConfig[key].name,
@@ -139,7 +181,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       };
     });
     
-    // Combine all goals
     const allGoals = [...goals];
     (completedGoals || []).forEach(cGoal => {
       if (!allGoals.find(g => g.id === cGoal.id)) {
@@ -147,74 +188,117 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       }
     });
     
-    // Process each goal
+    console.log('ðŸ“Š Processing career goals:', allGoals.length, 'total goals');
+    
     for (const goal of allGoals) {
       const category = (goal.category || '').toLowerCase().trim();
       
-      console.log(`\n🎯 Processing goal "${goal.title}":`)
-      console.log(`  Raw category: "${goal.category}"`)
-      console.log(`  Processed category: "${category}"`)
-      console.log(`  Category exists in config: ${!!categoryConfig[category]}`)
-      
       if (!stats[category]) {
-        console.log(`  ❌ Category "${category}" not found in categoryConfig`);
-        console.log(`  Available categories:`, Object.keys(categoryConfig));
+        console.warn('âš ï¸ Unknown career category:', category, 'for goal:', goal.title);
         continue;
       }
 
       const history = normalizeHistory(goal);
       const status = (goal.status || '').toLowerCase();
 
-      console.log(`  ✅ Adding to ${category} category`)
-      console.log(`  History events: ${history.length}`)
-      console.log(`  Status: ${status}`)
-
       const goalWithHistory = { ...goal, __history: history };
       stats[category].goals.push(goalWithHistory);
       stats[category].total += 1;
       stats[category].hasGoals = true;
 
-      // Count by status
       if (status === 'completed') {
         stats[category].completed += 1;
-      } else if (status === 'paused') {
+      } else if (status === 'paused' || status === 'inactive') {
         stats[category].paused += 1;
       } else {
-        stats[category].active += 1;
+        stats[category].active += 1; 
       }
 
-      // Calculate progress for average
       let progressValue = 0;
       let hasProgressData = false;
 
       if (history.length > 0) {
         progressValue = history[history.length - 1].value;
         hasProgressData = true;
-      } else if (typeof goal.current_progress === 'number') {
-        progressValue = goal.current_progress;
-        hasProgressData = true;
-      } else if (typeof goal.progress === 'number') {
-        progressValue = goal.progress;
-        hasProgressData = true;
+      } else {
+        const progressFields = [
+          'current_progress', 
+          'progress', 
+          'completion_percentage',
+          'skill_progress'
+        ];
+        
+        for (const field of progressFields) {
+          if (typeof goal[field] === 'number' && goal[field] >= 0) {
+            progressValue = goal[field];
+            hasProgressData = true;
+            break;
+          }
+        }
       }
 
       if (hasProgressData) {
-        stats[category].totalProgressForAvg += progressValue;
+        stats[category].totalProgressForAvg += Math.min(100, Math.max(0, progressValue));
         stats[category].goalsWithProgress += 1;
       }
     }
 
-    // Calculate averages
     Object.entries(stats).forEach(([key, cat]) => {
       cat.avgProgress = cat.goalsWithProgress > 0 
         ? Math.round(cat.totalProgressForAvg / cat.goalsWithProgress) 
         : 0;
+      
+      cat.hasRecentActivity = cat.goals.some(goal => {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        
+        if (goal.__history && goal.__history.some(event => event.date > sevenDaysAgo)) {
+          return true;
+        }
+        
+        if (goal.updated_at) {
+          const updatedDate = new Date(goal.updated_at);
+          return updatedDate > sevenDaysAgo;
+        }
+        
+        return false;
+      });
+    });
+
+    console.log('âœ… Career data processed:', {
+      categoriesWithGoals: Object.values(stats).filter(c => c.hasGoals).length,
+      totalGoals: Object.values(stats).reduce((sum, c) => sum + c.total, 0),
+      activeGoals: Object.values(stats).reduce((sum, c) => sum + c.active, 0)
     });
 
     return stats;
-  }, [goals, completedGoals]);
+  }, [goals, completedGoals, normalizeHistory]);
 
-  // FIXED: Consistent time axis generation
+  const toggleCategory = useCallback((categoryKey) => {
+    setSelectedCategories(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(categoryKey)) {
+        newSelected.delete(categoryKey);
+      } else {
+        newSelected.add(categoryKey);
+      }
+      return newSelected;
+    });
+  }, []);
+
+  const toggleAllCategories = useCallback(() => {
+    const categoriesWithGoals = Object.entries(processedData)
+      .filter(([_, cat]) => cat.hasGoals)
+      .map(([key, _]) => key);
+    
+    setSelectedCategories(prev => {
+      if (prev.size === categoriesWithGoals.length) {
+        return new Set();
+      } else {
+        return new Set(categoriesWithGoals);
+      }
+    });
+  }, [processedData]);
+
   const timeAxisConfig = useMemo(() => {
     const now = new Date();
     
@@ -233,7 +317,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             const h12 = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
             return `${h12}:${min.toString().padStart(2, '0')}${hr >= 12 ? 'pm' : 'am'}`;
           },
-          periodDuration: 5 * 60 * 1000 // 5 minutes in milliseconds
+          periodDuration: 5 * 60 * 1000
         };
       case '24hours':
         return {
@@ -248,7 +332,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             const h12 = hr === 0 ? 12 : hr > 12 ? hr - 12 : hr;
             return `${h12}${hr >= 12 ? 'pm' : 'am'}`;
           },
-          periodDuration: 60 * 60 * 1000 // 1 hour in milliseconds
+          periodDuration: 60 * 60 * 1000
         };
       case '1week':
         return {
@@ -260,7 +344,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             return d;
           },
           formatLabel: (d) => d.toLocaleDateString('en-US', { weekday: 'short' }),
-          periodDuration: 24 * 60 * 60 * 1000 // 1 day in milliseconds
+          periodDuration: 24 * 60 * 60 * 1000
         };
       case '1month':
         return {
@@ -272,7 +356,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             return d;
           },
           formatLabel: (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          periodDuration: 24 * 60 * 60 * 1000 // 1 day in milliseconds
+          periodDuration: 24 * 60 * 60 * 1000
         };
       case '12months':
       default:
@@ -285,7 +369,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             return d;
           },
           formatLabel: (d) => d.toLocaleDateString('en-US', { month: 'short' }),
-          periodDuration: 30 * 24 * 60 * 60 * 1000 // Approximately 1 month in milliseconds
+          periodDuration: 30 * 24 * 60 * 60 * 1000
         };
     }
   }, [timeFilter]);
@@ -303,7 +387,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
     return points;
   }, [timeAxisConfig]);
 
-  // FIXED: Consistent progress events generation
   const progressEvents = useMemo(() => {
     const categoryTimeline = {};
 
@@ -311,22 +394,15 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
       categoryTimeline[catKey] = [];
       
       if (!cat.hasGoals) {
-        console.log(`❌ Skipping ${catKey} - no goals`);
         return;
       }
 
-      console.log(`\n📊 PROGRESS EVENTS DEBUG for ${cat.name} (${catKey}):`);
-      console.log(`Goals in category: ${cat.goals.length}`);
-
-      // Collect ALL progress events from ALL goals in this category
       const allEvents = [];
       for (const goal of cat.goals) {
         const history = goal.__history;
-        console.log(`Goal "${goal.title}" history:`, history?.length || 0, 'events');
         if (!history || history.length === 0) continue;
 
         history.forEach(event => {
-          console.log(`Adding event: ${event.value}% at ${event.date.toLocaleString()} (${event.date.getTime()})`);
           allEvents.push({
             date: event.date,
             value: event.value,
@@ -336,55 +412,36 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
         });
       }
 
-      console.log(`Total events collected for ${cat.name}: ${allEvents.length}`);
-      
       if (allEvents.length === 0) {
-        console.log(`❌ No events found for ${cat.name} - category will not appear on chart`);
         return;
       }
       
-      // FIXED: Use consistent time periods for all filters
-      const timeRangeStart = timeAxis[0].date;
-      const timeRangeEnd = timeAxis[timeAxis.length - 1].date;
-      
-      console.log(`Sampling ${cat.name} for time range: ${timeRangeStart.toLocaleString()} to ${timeRangeEnd.toLocaleString()}`);
-
-      // Sample at each time axis point
-      timeAxis.forEach((axisPoint, index) => {
+      timeAxis.forEach((axisPoint) => {
         const periodStart = axisPoint.date;
         const periodEnd = new Date(periodStart.getTime() + timeAxisConfig.periodDuration);
 
-        // Find events that occurred during this period
         const eventsInPeriod = allEvents.filter(event => 
           event.date >= periodStart && event.date < periodEnd
         );
 
-        // Only create a point if there was activity during this period
         if (eventsInPeriod.length === 0) {
-          console.log(`No activity in ${cat.name} during period ${periodStart.toLocaleString()} to ${periodEnd.toLocaleString()}`);
           return;
         }
 
-        // Find all events that happened up to the end of this period
         const eventsUpToPeriod = allEvents.filter(event => event.date <= periodEnd);
         
         if (eventsUpToPeriod.length === 0) return;
 
-        // Group by goal to get the latest progress for each goal
         const goalProgresses = {};
         eventsUpToPeriod.forEach(event => {
           goalProgresses[event.goalId] = event.value;
         });
 
-        // Calculate category average
         const progressValues = Object.values(goalProgresses);
         if (progressValues.length === 0) return;
         
         const avgProgress = progressValues.reduce((sum, val) => sum + val, 0) / progressValues.length;
-        
-        console.log(`✅ Activity in ${cat.name} during period ${periodStart.toLocaleString()} to ${periodEnd.toLocaleString()}: ${eventsInPeriod.length} updates, avg = ${Math.round(avgProgress)}%`);
 
-        // Use the period start time for consistency across all filters
         categoryTimeline[catKey].push({
           date: axisPoint.date,
           value: Math.round(avgProgress),
@@ -396,94 +453,24 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
         });
       });
 
-      // Sort by date
       categoryTimeline[catKey].sort((a, b) => a.date - b.date);
     });
 
     return categoryTimeline;
   }, [processedData, timeAxis, timeAxisConfig]);
 
-  // Time series data for chart
   const timeSeriesData = useMemo(() => {
     return timeAxis.map((point, i) => ({ ...point, index: i }));
   }, [timeAxis]);
 
-  // Insights calculation
-  const insights = useMemo(() => {
-    const results = [];
-    const cats = Object.values(processedData).filter(c => c.hasGoals);
-    if (cats.length === 0) return results;
-
-    const totalActive = cats.reduce((s, c) => s + c.active, 0);
-    const totalCompleted = cats.reduce((s, c) => s + c.completed, 0);
-
-    // Find categories needing attention
-    const lowProgress = cats.filter(c => c.active > 0 && c.avgProgress < 30).sort((a, b) => a.avgProgress - b.avgProgress);
-    if (lowProgress.length > 0) {
-      const weakest = lowProgress[0];
-      results.push({
-        type: 'warning',
-        message: `${weakest.name} needs focus (${weakest.avgProgress}%)`
-      });
-    }
-
-    // High performers
-    const highProgress = cats.filter(c => c.avgProgress > 70);
-    if (highProgress.length > 0) {
-      const best = highProgress.reduce((p, c) => (c.avgProgress > p.avgProgress ? c : p));
-      if (best.completed > 0) {
-        results.push({ type: 'success', message: `${best.name} excelling at ${best.avgProgress}% with ${best.completed} completed!` });
-      } else {
-        results.push({ type: 'success', message: `${best.name} leading at ${best.avgProgress}% - close to first completion!` });
-      }
-    }
-
-    // Workload management
-    if (totalActive > 10) {
-      results.push({ type: 'warning', message: `${totalActive} active goals is ambitious - focus on fewer for impact` });
-    } else {
-      const completionRate = (totalActive + totalCompleted) > 0
-        ? Math.round((totalCompleted / (totalActive + totalCompleted)) * 100)
-        : 0;
-      results.push({ type: 'info', message: `${completionRate}% completion rate, ${totalActive} goals in progress` });
-    }
-
-    return results.slice(0, 4);
-  }, [processedData]);
-
-  // Initialize selected categories
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedCategories.size === 0) {
       const categoriesWithGoals = Object.entries(processedData)
         .filter(([_, cat]) => cat.hasGoals)
         .map(([key, _]) => key);
       setSelectedCategories(new Set(categoriesWithGoals));
     }
-  }, [processedData]);
-
-  // Toggle category selection
-  const toggleCategory = (categoryKey) => {
-    const newSelected = new Set(selectedCategories);
-    if (newSelected.has(categoryKey)) {
-      newSelected.delete(categoryKey);
-    } else {
-      newSelected.add(categoryKey);
-    }
-    setSelectedCategories(newSelected);
-  };
-
-  // Select/Deselect all categories
-  const toggleAllCategories = () => {
-    const categoriesWithGoals = Object.entries(processedData)
-      .filter(([_, cat]) => cat.hasGoals)
-      .map(([key, _]) => key);
-    
-    if (selectedCategories.size === categoriesWithGoals.length) {
-      setSelectedCategories(new Set());
-    } else {
-      setSelectedCategories(new Set(categoriesWithGoals));
-    }
-  };
+  }, [processedData, selectedCategories.size]);
 
   const hasAnyGoals = Object.values(processedData).some(cat => cat.hasGoals);
   
@@ -590,6 +577,8 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             .filter(([_, cat]) => cat.hasGoals)
             .map(([catKey, category]) => {
               const isSelected = selectedCategories.has(catKey);
+              const checkboxBgColor = isSelected ? getDarkerColor(category.color) : '#ffffff';
+              
               return (
                 <label
                   key={catKey}
@@ -600,13 +589,14 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
                     padding: '0.5rem 0.75rem',
                     borderRadius: '0.5rem',
                     fontSize: '0.875rem',
-                    fontWeight: '500',
-                    border: '2px solid #e5e7eb',
+                    fontWeight: '600',
+                    border: `2px solid ${isSelected ? getDarkerColor(category.color) : '#d1d5db'}`,
                     cursor: 'pointer',
-                    backgroundColor: isSelected ? category.color : '#f9fafb',
-                    color: isSelected ? 'white' : '#374151',
+                    backgroundColor: checkboxBgColor,
+                    color: isSelected ? '#ffffff' : '#374151',
                     transition: 'all 0.2s',
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    boxShadow: isSelected ? `0 2px 4px ${category.color}40` : '0 1px 2px #0000000d'
                   }}
                 >
                   <input
@@ -616,7 +606,7 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
                     style={{
                       width: '16px',
                       height: '16px',
-                      accentColor: isSelected ? 'white' : category.color,
+                      accentColor: isSelected ? '#ffffff' : getDarkerColor(category.color),
                       cursor: 'pointer'
                     }}
                   />
@@ -625,8 +615,8 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
                   </span>
                   <span style={{ 
                     fontSize: '0.75rem', 
-                    opacity: 0.8,
-                    fontWeight: '400'
+                    opacity: isSelected ? 0.9 : 0.7,
+                    fontWeight: '500'
                   }}>
                     ({category.total})
                   </span>
@@ -718,11 +708,9 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
             
             if (categoryEvents.length === 0) return null;
 
-            // Convert to chart coordinates based on time axis
             const chartPoints = categoryEvents.map(event => {
-              // Find the corresponding time axis index
               const axisIndex = timeAxis.findIndex(axis => 
-                Math.abs(axis.date.getTime() - event.date.getTime()) < 1000 // within 1 second
+                Math.abs(axis.date.getTime() - event.date.getTime()) < 1000
               );
               
               if (axisIndex === -1) return null;
@@ -735,7 +723,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
 
             if (chartPoints.length === 0) return null;
 
-            // Create path for lines
             let pathData = '';
             if (chartPoints.length >= 2) {
               pathData = chartPoints.map((point, idx) => 
@@ -937,44 +924,6 @@ const CareerCategoryGraph = ({ goals = [], completedGoals = [] }) => {
           </div>
         </div>
       </div>
-
-      {/* Insights */}
-      {insights.length > 0 && (
-        <div style={{
-          padding: '1rem',
-          background: '#f9fafb',
-          borderRadius: '0.5rem',
-          border: '1px solid #e5e7eb'
-        }}>
-          <h4 style={{
-            fontSize: '0.875rem',
-            fontWeight: '600',
-            color: '#374151',
-            marginBottom: '0.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.375rem'
-          }}>
-            <Activity size={14} />
-            Key Insights
-          </h4>
-          {insights.map((insight, index) => (
-            <div key={index} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              marginBottom: index < insights.length - 1 ? '0.375rem' : 0
-            }}>
-              {insight.type === 'warning' && <AlertCircle size={14} style={{ color: '#f59e0b' }} />}
-              {insight.type === 'success' && <Target size={14} style={{ color: '#10b981' }} />}
-              {insight.type === 'info' && <TrendingUp size={14} style={{ color: '#3b82f6' }} />}
-              <span style={{ fontSize: '0.75rem', color: '#4b5563' }}>
-                {insight.message}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 };

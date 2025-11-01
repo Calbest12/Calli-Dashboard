@@ -72,7 +72,6 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
 
   const handleProfileChange = (field, value) => {
     setProfileData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -80,7 +79,6 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
 
   const handlePasswordChange = (field, value) => {
     setPasswordData(prev => ({ ...prev, [field]: value }));
-    // Clear error for this field
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -148,12 +146,11 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
 
     try {
       setLoading(true);
-      console.log('💾 Updating user profile:', profileData.name);
+      console.log('ðŸ’¾ Updating user profile:', profileData.name);
 
       const response = await apiService.updateUserProfile(currentUser.id, profileData);
       
       if (response && response.success) {
-        // Update parent component with new user data
         if (onUserUpdate) {
           onUserUpdate(response.data);
         }
@@ -162,7 +159,7 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
       }
 
     } catch (error) {
-      console.error('❌ Failed to update profile:', error);
+      console.error('âŒ Failed to update profile:', error);
       alert(`Failed to update profile: ${error.message}`);
     } finally {
       setLoading(false);
@@ -174,14 +171,13 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
 
     try {
       setLoading(true);
-      console.log('🔒 Changing user password');
+      console.log('ðŸ”’ Changing user password');
 
       await apiService.changePassword(currentUser.id, {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
       });
-
-      // Reset password form
+      
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -191,7 +187,7 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
       alert('Password changed successfully!');
 
     } catch (error) {
-      console.error('❌ Failed to change password:', error);
+      console.error('âŒ Failed to change password:', error);
       alert(`Failed to change password: ${error.message}`);
     } finally {
       setLoading(false);
@@ -201,14 +197,14 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
   const handleSavePreferences = async () => {
     try {
       setLoading(true);
-      console.log('⚙️ Updating user preferences');
+      console.log('âš™ï¸ Updating user preferences');
 
       await apiService.updateUserPreferences(currentUser.id, preferencesData);
       
       alert('Preferences updated successfully!');
 
     } catch (error) {
-      console.error('❌ Failed to update preferences:', error);
+      console.error('âŒ Failed to update preferences:', error);
       alert(`Failed to update preferences: ${error.message}`);
     } finally {
       setLoading(false);
@@ -562,7 +558,7 @@ const AccountPage = ({ currentUser, onBack, onUserUpdate }) => {
                   fontWeight: 'bold'
                 }}
               >
-                ×
+                Ã—
               </button>
             </span>
           ))}

@@ -1,16 +1,16 @@
-// backend/src/routes/auth.js - SIMPLE PASSWORD FIX
 const express = require('express');
 const asyncHandler = require('../middleware/asyncHandler');
 const { query } = require('../config/database');
+
 const router = express.Router();
 
-console.log('🔍 Auth routes file loaded successfully');
 
-// Auth controller with simple password storage
+console.log('ðŸ” Auth routes file loaded successfully');
+
 const authController = {
   register: async (req, res) => {
     try {
-      console.log('📝 Registration attempt');
+      console.log('ðŸ“ Registration attempt');
       const { name, email, password, role } = req.body;
       
       if (!name || !email || !password) {
@@ -27,7 +27,6 @@ const authController = {
         });
       }
       
-      // Check if user already exists
       const existingUser = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
       if (existingUser.rows.length > 0) {
         return res.status(400).json({
@@ -36,7 +35,6 @@ const authController = {
         });
       }
       
-      // Create user in database with the actual password they entered
       const result = await query(
         `INSERT INTO users (name, email, password, role, avatar, created_at, updated_at) 
          VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
@@ -44,14 +42,14 @@ const authController = {
         [
           name.trim(),
           email.toLowerCase(),
-          password, // Store the actual password they entered
+          password, 
           role || 'Team Member',
           name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2)
         ]
       );
       
       const newUser = result.rows[0];
-      console.log('✅ Registration successful:', newUser.name);
+      console.log('âœ… Registration successful:', newUser.name);
       
       res.status(201).json({
         success: true,
@@ -60,7 +58,7 @@ const authController = {
       });
       
     } catch (error) {
-      console.error('❌ Registration error:', error);
+      console.error('âŒ Registration error:', error);
       res.status(500).json({
         success: false,
         error: 'Registration failed'
@@ -70,7 +68,7 @@ const authController = {
   
   login: async (req, res) => {
     try {
-      console.log('🔑 Login attempt');
+      console.log('ðŸ”‘ Login attempt');
       const { email, password } = req.body;
       
       if (!email || !password) {
@@ -80,7 +78,6 @@ const authController = {
         });
       }
       
-      // Find user by email and check their actual password
       const result = await query(
         'SELECT id, name, email, role, avatar, password FROM users WHERE email = $1',
         [email.toLowerCase()]
@@ -95,7 +92,6 @@ const authController = {
       
       const user = result.rows[0];
       
-      // Check if the password they entered matches what's in the database
       if (user.password !== password) {
         return res.status(401).json({
           success: false,
@@ -103,10 +99,9 @@ const authController = {
         });
       }
       
-      // Remove password from response
       const { password: userPassword, ...userResponse } = user;
       
-      console.log('✅ Login successful:', user.name);
+      console.log('âœ… Login successful:', user.name);
       
       res.json({
         success: true,
@@ -115,7 +110,7 @@ const authController = {
       });
       
     } catch (error) {
-      console.error('❌ Login error:', error);
+      console.error('âŒ Login error:', error);
       res.status(500).json({
         success: false,
         error: 'Login failed'
@@ -124,7 +119,7 @@ const authController = {
   },
   
   logout: async (req, res) => {
-    console.log('👋 Logout function');
+    console.log('ðŸ‘‹ Logout function');
     res.json({
       success: true,
       message: 'Logout successful'
@@ -132,17 +127,16 @@ const authController = {
   }
 };
 
-// Route definitions
-console.log('🔗 Setting up auth routes...');
+console.log('ðŸ”— Setting up auth routes...');
 
 router.post('/register', asyncHandler(authController.register));
-console.log('✅ POST /register route configured');
+console.log('âœ… POST /register route configured');
 
 router.post('/login', asyncHandler(authController.login));
-console.log('✅ POST /login route configured');
+console.log('âœ… POST /login route configured');
 
 router.post('/logout', asyncHandler(authController.logout));
-console.log('✅ POST /logout route configured');
+console.log('âœ… POST /logout route configured');
 
 router.get('/me', (req, res) => {
   res.status(501).json({ 
@@ -166,6 +160,8 @@ router.get('/test', (req, res) => {
   });
 });
 
-console.log('✅ Auth routes setup complete');
+
+
+console.log('âœ… Auth routes setup complete');
 
 module.exports = router;

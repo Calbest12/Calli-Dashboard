@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Home, Folder, BarChart3, Users, Settings, Brain, TrendingUp, Calendar, Award, RefreshCw, Loader } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Folder, BarChart3, Users, Settings, Brain, Target, TrendingUp, Calendar, Award, RefreshCw, Loader } from 'lucide-react';
 import LoginPage from './LoginPage';
 import ProjectManager from './ProjectManager';
 import apiService from '../services/apiService';
 import CareerDevelopmentTab from './CareerDevelopmentTab';
+import LeadershipTab from './LeadershipTab';
+import ExecutiveTeamTab from './ExecutiveTeamTab';
+import ValueTab from './ValueTab';
+import logo from '../assets/logo.png'; // adjust path as needed
 
 const PMDashboard = ({ onUserChange, onProjectChange }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,7 +15,6 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('overview');
   
-  // AI Insights state
   const [dashboardInsights, setDashboardInsights] = useState([]);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [projects, setProjects] = useState([]);
@@ -22,6 +25,20 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     completedGoals: [],
     stats: null
   });
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Home },
+    { id: 'projects', label: 'Projects', icon: Folder },
+    
+    // Add Team Management tab ONLY for Executive Leaders
+    ...(currentUser?.role === 'Executive Leader' ? [
+      { id: 'team', label: 'Team Management', icon: Users }
+    ] : []),
+    { id: 'value', label: 'VALUE', icon: Target },
+    { id: 'career', label: 'Career Development', icon: TrendingUp },
+    { id: 'leadership', label: 'Leadership', icon: Award },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
+  
 
   useEffect(() => {
     if (onUserChange && currentUser) {
@@ -29,7 +46,6 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     }
   }, [currentUser, onUserChange]);
 
-  // Load projects when user logs in
   useEffect(() => {
     const loadAllData = async () => {
       if (isAuthenticated && currentUser) {
@@ -42,10 +58,9 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     loadAllData();
   }, [isAuthenticated, currentUser]);
 
-  // AUTO-REFRESH insights when projects or career data change
   useEffect(() => {
     if ((projects.length > 0 || careerData.goals.length > 0) && activeSection === 'overview') {
-      console.log('🔄 Dashboard data changed, auto-refreshing insights...');
+      console.log('ðŸ”„ Dashboard data changed, auto-refreshing insights...');
       generateDashboardInsights(projects);
     }
   }, [projects.length, careerData.goals.length, careerData.completedGoals.length, activeSection]);
@@ -74,9 +89,8 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     if (!currentUser) return;
     
     try {
-      console.log('📊 Loading career data for dashboard overview...');
+      console.log('ðŸ“Š Loading career data for dashboard overview...');
       
-      // Load all career data in parallel
       const [goalsResponse, completedResponse, statsResponse] = await Promise.all([
         apiService.getCareerGoals().catch(err => {
           console.error('Failed to load goals:', err);
@@ -98,33 +112,28 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
         stats: statsResponse
       });
       
-      // Handle the response structure properly
       let goalsArray = [];
       let completedArray = [];
       let statsData = null;
       
-      // Extract goals data
       if (goalsResponse?.success && goalsResponse?.data) {
         goalsArray = Array.isArray(goalsResponse.data) ? goalsResponse.data : [];
       } else if (Array.isArray(goalsResponse)) {
         goalsArray = goalsResponse;
       }
       
-      // Extract completed goals data  
       if (completedResponse?.success && completedResponse?.data) {
         completedArray = Array.isArray(completedResponse.data) ? completedResponse.data : [];
       } else if (Array.isArray(completedResponse)) {
         completedArray = completedResponse;
       }
       
-      // Extract stats data
       if (statsResponse?.success && statsResponse?.data) {
         statsData = statsResponse.data;
       } else if (statsResponse && !statsResponse.success) {
         statsData = statsResponse;
       }
       
-      // Additional check: if completedArray is empty, try to get completed goals from goalsArray
       if (completedArray.length === 0 && goalsArray.length > 0) {
         const completedFromGoals = goalsArray.filter(g => g.status === 'completed');
         if (completedFromGoals.length > 0) {
@@ -133,14 +142,13 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
         }
       }
       
-      // Update state with the extracted data
       setCareerData({
         goals: goalsArray,
         completedGoals: completedArray,
         stats: statsData
       });
       
-      console.log('✅ Career data processed and set:', {
+      console.log('âœ… Career data processed and set:', {
         goalsCount: goalsArray.length,
         activeGoalsCount: goalsArray.filter(g => g.status === 'active').length,
         completedCount: completedArray.length,
@@ -150,23 +158,29 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
       });
       
     } catch (error) {
-      console.error('❌ Failed to load career data for dashboard:', error);
+      console.error('âŒ Failed to load career data for dashboard:', error);
       setCareerData({ goals: [], completedGoals: [], stats: null });
     }
   };
 
+  const loadUserData = async () => {
+    console.log('ðŸ”„ Loading all user data...');
+    await Promise.all([
+      loadUserProjects(),
+      loadCareerData()
+    ]);
+  };
 
-  // ENHANCED Load user's projects with proper state management
   const loadUserProjects = async (showLoading = true) => {
     try {
-      if (showLoading) console.log('📊 Loading projects for dashboard...');
+      if (showLoading) console.log('ðŸ“Š Loading projects for dashboard...');
       
       const response = await apiService.getAllProjects();
       console.log('Projects API Response:', response);
       
       if (response && response.success && response.data) {
         const newProjects = response.data;
-        console.log(`✅ Loaded ${newProjects.length} projects`);
+        console.log(`âœ… Loaded ${newProjects.length} projects`);
         console.log('Project details:', newProjects.map(p => ({
           name: p.name,
           status: p.status,
@@ -175,32 +189,29 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
           progress: p.progress
         })));
         
-        // Update projects state
         setProjects(newProjects);
         
-        // Auto-generate insights if we're on overview
         if (activeSection === 'overview') {
-          console.log('🧠 Auto-generating insights for updated projects...');
+          console.log('ðŸ§  Auto-generating insights for updated projects...');
           await generateDashboardInsights(newProjects);
         }
         
         return newProjects;
       } else {
-        console.warn('⚠️ Invalid projects response:', response);
+        console.warn('âš ï¸ Invalid projects response:', response);
         setProjects([]);
         return [];
       }
     } catch (error) {
-      console.error('❌ Failed to load projects:', error);
+      console.error('âŒ Failed to load projects:', error);
       setProjects([]);
       return [];
     }
   };
 
-  // ENHANCED Generate AI insights for the dashboard
   const generateDashboardInsights = async (userProjects = projects) => {
     if (!currentUser) {
-      console.log('⚠️ No current user for insights generation');
+      console.log('âš ï¸ No current user for insights generation');
       return;
     }
 
@@ -218,19 +229,16 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
 
     try {
       setInsightsLoading(true);
-      console.log('🧠 Generating dashboard AI insights for full dashboard context...');
+      console.log('ðŸ§  Generating dashboard AI insights for full dashboard context...');
 
-      // Try to get AI insights from backend first
       let aiGeneratedInsights = null;
       
       try {
-        console.log('🚀 Attempting to get AI insights from backend...');
+        console.log('ðŸš€ Attempting to get AI insights from backend...');
         
-        // Create a comprehensive context for AI analysis including career data
         const activeProjects = userProjects.filter(p => p.status === 'active');
         const activeGoals = careerData.goals.filter(g => g.status === 'active');
         
-        // Calculate average goal progress correctly
         const totalGoalProgress = activeGoals.reduce((sum, g) => {
           const progress = g.progress || g.current_progress || g.currentProgress || 0;
           return sum + progress;
@@ -238,7 +246,6 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
         const calculatedAvgGoalProgress = activeGoals.length > 0 ? 
           Math.round(totalGoalProgress / activeGoals.length) : 0;
         
-        // Get completed goals count from multiple possible sources
         const completedGoalsCount = careerData.stats?.completedGoals || 
                                    careerData.completedGoals?.length || 
                                    careerData.goals?.filter(g => g.status === 'completed')?.length || 
@@ -275,7 +282,7 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
           career: {
             totalGoals: careerData.goals.length,
             activeGoals: activeGoals.length,
-            completedGoals: completedGoalsCount,  // Use the calculated count
+            completedGoals: completedGoalsCount,
             avgGoalProgress: careerData.stats?.overview?.overallProgress || calculatedAvgGoalProgress,
             goalCategories: [...new Set(careerData.goals.map(g => g.category))],
             criticalGoals: careerData.goals.filter(g => g.priority === 'critical').length
@@ -327,9 +334,8 @@ Each message should be 100-120 characters with specific data points and clear re
         });
 
         if (aiResponse && aiResponse.success) {
-          console.log('✅ AI response received:', aiResponse.response.substring(0, 200) + '...');
+          console.log('âœ… AI response received:', aiResponse.response.substring(0, 200) + '...');
           
-          // Try to parse as JSON
           try {
             const parsed = JSON.parse(aiResponse.response);
             if (parsed.insights && Array.isArray(parsed.insights)) {
@@ -339,33 +345,30 @@ Each message should be 100-120 characters with specific data points and clear re
                 message: insight.message || 'AI analysis completed',
                 source: 'ai'
               }));
-              console.log('✅ AI insights parsed successfully:', aiGeneratedInsights.length);
+              console.log('âœ… AI insights parsed successfully:', aiGeneratedInsights.length);
             }
           } catch (parseError) {
-            console.log('⚠️ Could not parse AI response as JSON, extracting from text...');
+            console.log('âš ï¸ Could not parse AI response as JSON, extracting from text...');
             aiGeneratedInsights = extractInsightsFromText(aiResponse.response);
           }
         }
       } catch (aiError) {
-        console.log('⚠️ AI service error, using fallback insights:', aiError.message);
+        console.log('âš ï¸ AI service error, using fallback insights:', aiError.message);
       }
 
-      // Generate rule-based insights as fallback
       const ruleBasedInsights = generateRuleBasedDashboardInsights(userProjects);
 
-      // Use AI insights if available, otherwise use rule-based
       const finalInsights = aiGeneratedInsights && aiGeneratedInsights.length > 0 
         ? aiGeneratedInsights.slice(0, 3)
         : ruleBasedInsights.slice(0, 3);
 
       setDashboardInsights(finalInsights);
       setLastInsightsUpdate(new Date());
-      console.log('✅ Dashboard insights set:', finalInsights.length, 'insights');
+      console.log('âœ… Dashboard insights set:', finalInsights.length, 'insights');
 
     } catch (error) {
-      console.error('❌ Failed to generate dashboard insights:', error);
-      
-      // Fallback to basic insights
+      console.error('âŒ Failed to generate dashboard insights:', error);
+
       const fallbackInsights = generateRuleBasedDashboardInsights(userProjects);
       setDashboardInsights(fallbackInsights.slice(0, 3));
       setLastInsightsUpdate(new Date());
@@ -374,7 +377,6 @@ Each message should be 100-120 characters with specific data points and clear re
     }
   };
 
-  // Helper to get insight icons
   const getInsightIcon = (type) => {
     const icons = {
       'success': Award,
@@ -385,7 +387,6 @@ Each message should be 100-120 characters with specific data points and clear re
     return icons[type] || TrendingUp;
   };
 
-  // Helper to extract insights from AI text
   const extractInsightsFromText = (text) => {
     const insights = [];
     const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
@@ -397,8 +398,7 @@ Each message should be 100-120 characters with specific data points and clear re
       } else if (sentence.toLowerCase().includes('warning') || sentence.toLowerCase().includes('attention') || sentence.toLowerCase().includes('concern') || sentence.toLowerCase().includes('risk')) {
         type = 'warning';
       }
-      
-      // Allow longer messages for more detailed insights
+
       const trimmedMessage = sentence.trim();
       const finalMessage = trimmedMessage.length > 120 ? 
         trimmedMessage.substring(0, 117) + '...' : 
@@ -415,32 +415,27 @@ Each message should be 100-120 characters with specific data points and clear re
     return insights;
   };
 
-  // ENHANCED Generate rule-based dashboard insights
   const generateRuleBasedDashboardInsights = (allProjects) => {
     const insights = [];
     const activeProjects = allProjects.filter(p => p.status === 'active');
     const criticalProjects = allProjects.filter(p => p.priority === 'critical');
     const completedProjects = allProjects.filter(p => p.status === 'completed');
     
-    // Calculate project progress correctly
     const totalProjectProgress = activeProjects.reduce((sum, p) => {
       const pmProgress = p.progress?.PM || p.pm_progress || 0;
       return sum + pmProgress;
     }, 0);
     const avgProjectProgress = activeProjects.length > 0 ? totalProjectProgress / activeProjects.length : 0;
     const avgProjectPercentage = Math.round((avgProjectProgress / 7) * 100);
-    
-    // Career data calculations with null checks
+
     const activeGoals = careerData.goals?.filter(g => g.status === 'active') || [];
     const totalGoalProgress = activeGoals.reduce((sum, g) => {
-      // Check multiple possible property names for progress
       const progress = g.progress || g.current_progress || g.currentProgress || 0;
       console.log(`Goal "${g.title || g.name}" progress:`, progress);
       return sum + progress;
     }, 0);
     const avgGoalProgress = activeGoals.length > 0 ? totalGoalProgress / activeGoals.length : 0;
     
-    // Get completed goals count from multiple possible sources
     const completedGoalsCount = careerData.stats?.completedGoals || 
                                 careerData.completedGoals?.length || 
                                 careerData.goals?.filter(g => g.status === 'completed')?.length || 
@@ -453,7 +448,6 @@ Each message should be 100-120 characters with specific data points and clear re
       completedGoalsCount: completedGoalsCount
     });
     
-    // Combined portfolio and career health insight with specific metrics
     if (avgProjectProgress >= 5.5 && avgGoalProgress >= 70) {
       insights.push({
         type: 'success',
@@ -487,7 +481,6 @@ Each message should be 100-120 characters with specific data points and clear re
       });
     }
 
-    // Priority and resource balance insight with specific recommendations
     const criticalGoals = activeGoals.filter(g => g.priority === 'critical');
     const totalCritical = criticalProjects.length + criticalGoals.length;
     
@@ -501,7 +494,7 @@ Each message should be 100-120 characters with specific data points and clear re
       const criticalAvg = criticalProjects.reduce((sum, p) => sum + (p.progress?.PM || p.pm_progress || 0), 0) / criticalProjects.length;
       const criticalPercentage = Math.round((criticalAvg / 7) * 100);
       if (criticalAvg < 4) {
-        const daysToDeadline = 14; // Estimate
+        const daysToDeadline = 14; 
         insights.push({
           type: 'warning',
           icon: Calendar,
@@ -534,7 +527,6 @@ Each message should be 100-120 characters with specific data points and clear re
       });
     }
 
-    // Growth, completion and velocity insight with specific metrics
     const projectCompletionRate = allProjects.length > 0 ? 
       Math.round((completedProjects.length / allProjects.length) * 100) : 0;
     
@@ -565,7 +557,7 @@ Each message should be 100-120 characters with specific data points and clear re
       });
     } else {
       const totalActive = activeProjects.length + activeGoals.length;
-      const weeklyHoursNeeded = Math.round(totalActive * 3); // Estimate 3hrs per initiative
+      const weeklyHoursNeeded = Math.round(totalActive * 3);
       insights.push({
         type: 'info',
         icon: TrendingUp,
@@ -576,27 +568,23 @@ Each message should be 100-120 characters with specific data points and clear re
     return insights;
   };
 
-  // MANUAL refresh insights with user feedback
   const handleRefreshInsights = async () => {
-    console.log('🔄 Manual refresh requested...');
+    console.log('ðŸ”„ Manual refresh requested...');
     setInsightsLoading(true);
     
     try {
-      // First refresh projects to get latest data
       const updatedProjects = await loadUserProjects(false);
       
-      // Then generate insights with the fresh data
       await generateDashboardInsights(updatedProjects);
       
-      console.log('✅ Manual refresh complete');
+      console.log('âœ… Manual refresh complete');
     } catch (error) {
-      console.error('❌ Manual refresh failed:', error);
+      console.error('âŒ Manual refresh failed:', error);
     } finally {
       setInsightsLoading(false);
     }
   };
 
-  // Show login page if not authenticated
   if (!isAuthenticated) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -604,11 +592,16 @@ Each message should be 100-120 characters with specific data points and clear re
   const navigationItems = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'projects', label: 'Projects', icon: Folder, badge: projects.length },
-    { id: 'collective', label: 'Collective', icon: BarChart3 },
     { id: 'leadership', label: 'Leadership', icon: Award },
     { id: 'career', label: 'Career Development', icon: TrendingUp },
-    { id: 'ai-insights', label: 'AI Insights', icon: Brain },
-    { id: 'team', label: 'Team', icon: Users, roles: ['Manager', 'Executive Leader'] },
+    { id: 'value', label: 'VALUE', icon: Target },
+    { 
+      id: 'team', 
+      label: 'Team Management', 
+      icon: Users, 
+      roles: ['Executive Leader'],
+      description: 'Manage your team members and track their projects'
+    },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
@@ -618,10 +611,10 @@ Each message should be 100-120 characters with specific data points and clear re
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
-              Welcome back, {currentUser.name}! 👋
+              Welcome back, {currentUser.name}!
             </h1>
             <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>
-              Here's your project management overview for today.
+              Here's your {currentUser.role === 'Executive Leader' ? 'executive leadership' : 'project management'} overview for today.
             </p>
           </div>
           <button
@@ -660,11 +653,8 @@ Each message should be 100-120 characters with specific data points and clear re
               const activeProjects = projects.filter(p => p.status === 'active');
               if (activeProjects.length === 0) return '0% avg progress';
               
-              // Calculate total PM progress percentage for active projects
               let totalPercentage = 0;
               activeProjects.forEach(p => {
-                // The progress bar shows 71% for Team Member, so we need to use that value
-                // This might be calculated from pm_progress (5/7 = 71%)
                 const pmProgress = p.pm_progress || p.progress?.PM || 0;
                 const percentage = Math.round((pmProgress / 7) * 100);
                 totalPercentage += percentage;
@@ -683,8 +673,7 @@ Each message should be 100-120 characters with specific data points and clear re
           <p style={{ fontSize: '0.75rem', color: '#111827', marginTop: '0.25rem' }}>
             {(() => {
               if (projects.length === 0) return '0% avg progress';
-              
-              // Calculate total progress percentage for ALL projects
+
               let totalPercentage = 0;
               projects.forEach(p => {
                 const pmProgress = p.pm_progress || p.progress?.PM || 0;
@@ -701,11 +690,9 @@ Each message should be 100-120 characters with specific data points and clear re
           <h3 style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', marginBottom: '0.5rem' }}>Career Goals</h3>
           <p style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', margin: 0 }}>
             {(() => {
-              // First check if we have stats with the correct structure
               if (careerData.stats?.activeGoals !== undefined) {
                 return careerData.stats.activeGoals;
               }
-              // Fall back to counting from goals array
               if (Array.isArray(careerData.goals)) {
                 const activeCount = careerData.goals.filter(g => g.status === 'active').length;
                 return activeCount;
@@ -715,7 +702,6 @@ Each message should be 100-120 characters with specific data points and clear re
           </p>
           <p style={{ fontSize: '0.75rem', color: '#111827', marginTop: '0.25rem' }}>
             {(() => {
-              // Calculate average progress for active goals
               if (careerData.stats?.avgProgress !== undefined) {
                 return `${Math.round(careerData.stats.avgProgress)}% avg progress`;
               }
@@ -727,7 +713,6 @@ Each message should be 100-120 characters with specific data points and clear re
               if (activeGoals.length === 0) return '0% avg progress';
               
               const totalProgress = activeGoals.reduce((sum, g) => {
-                // Check multiple possible property names for progress
                 const progress = g.progress || g.current_progress || g.currentProgress || 0;
                 return sum + progress;
               }, 0);
@@ -741,7 +726,6 @@ Each message should be 100-120 characters with specific data points and clear re
           <h3 style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', marginBottom: '0.5rem' }}>Completed Goals</h3>
           <p style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', margin: 0 }}>
             {(() => {
-              // Prioritize stats, then fall back to array
               if (careerData.stats?.completedGoals !== undefined) {
                 return careerData.stats.completedGoals;
               }
@@ -753,11 +737,23 @@ Each message should be 100-120 characters with specific data points and clear re
           </p>
           
         </div>
+        {currentUser.role === 'Executive Leader' && (
+        <div style={{ backgroundColor: 'white', padding: '1.5rem', borderRadius: '0.75rem', border: '1px solid #e5e7eb' }}>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: '600', color: '#6b7280', marginBottom: '0.5rem' }}>Team Projects</h3>
+          <p style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', margin: 0 }}>
+            {projects.filter(p => p.is_team_project).length || '--'}
+          </p>
+          <p style={{ fontSize: '0.75rem', color: '#111827', marginTop: '0.25rem' }}>
+            Under your oversight
+          </p>
+        </div>
+      )}
       </div>
 
       <div style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>Quick Actions</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+          {/* Manage Projects Card */}
           <div style={{
             backgroundColor: 'white',
             padding: '1.5rem',
@@ -796,6 +792,7 @@ Each message should be 100-120 characters with specific data points and clear re
             </p>
           </div>
 
+          {/* Career Development Card */}
           <div style={{
             backgroundColor: 'white',
             padding: '1.5rem',
@@ -834,6 +831,7 @@ Each message should be 100-120 characters with specific data points and clear re
             </p>
           </div>
 
+          {/* View Analytics Card */}
           <div style={{
             backgroundColor: 'white',
             padding: '1.5rem',
@@ -870,6 +868,47 @@ Each message should be 100-120 characters with specific data points and clear re
               Get insights into team performance and project metrics
             </p>
           </div>
+
+          {/* Team Management Card - Only for Executive Leaders */}
+          {currentUser.role === 'Executive Leader' && (
+            <div style={{
+              backgroundColor: 'white',
+              padding: '1.5rem',
+              borderRadius: '0.75rem',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => setActiveSection('team')}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 10px 15px rgba(0, 0, 0, 0.1)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{
+                  width: '3rem',
+                  height: '3rem',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Users size={20} style={{ color: 'white' }} />
+                </div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0 }}>
+                  Team Management
+                </h3>
+              </div>
+              <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>
+                Manage your team members and track their project assignments
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -980,9 +1019,25 @@ Each message should be 100-120 characters with specific data points and clear re
             onProjectSelect={(project) => {
               if (onProjectChange) onProjectChange(project);
             }}
-            onProjectsChange={loadUserProjects} // Pass refresh function
+            onProjectsChange={loadUserProjects}
           />
         );
+      case 'leadership':
+        return (
+          <LeadershipTab 
+            currentUser={currentUser}
+            apiService={apiService}
+            onDataChange={loadUserData}
+          />
+        );
+      case 'value':  // ADD THIS CASE
+      return (
+        <ValueTab 
+          currentUser={currentUser}
+          apiService={apiService}
+          onDataChange={loadUserData}
+        />
+      );
       case 'career':
        return (
          <CareerDevelopmentTab 
@@ -994,6 +1049,16 @@ Each message should be 100-120 characters with specific data points and clear re
            }}
          />
        );
+       case 'team':
+        if (currentUser?.role !== 'Executive Leader') {
+          return (
+            <div style={{ padding: '2rem', textAlign: 'center' }}>
+              <h3>Access Denied</h3>
+              <p>Only Executive Leaders can access Team Management.</p>
+            </div>
+          );
+        }
+        return <ExecutiveTeamTab currentUser={currentUser} />;
       default:
         return (
           <div style={{ textAlign: 'center', padding: '4rem 2rem' }}>
@@ -1010,7 +1075,7 @@ Each message should be 100-120 characters with specific data points and clear re
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f9fafb' }}>
       {/* Sidebar */}
       <div style={{
-        width: sidebarCollapsed ? '4rem' : '16rem',
+        width: sidebarCollapsed ? '5rem' : '16rem',
         backgroundColor: 'white',
         borderRight: '1px solid #e5e7eb',
         transition: 'width 0.3s ease',
@@ -1018,10 +1083,17 @@ Each message should be 100-120 characters with specific data points and clear re
       }}>
         <div style={{ padding: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Brain size={24} style={{ color: '#2563eb' }} />
-              {!sidebarCollapsed && <span style={{ fontWeight: '700', color: '#111827' }}>PMgt Dashboard</span>}
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <img 
+              src={logo}  // Put your logo in public/ folder
+              alt="Logo" 
+              style={{ 
+                height: sidebarCollapsed ? '30px' : '100px',
+                width: 'auto',
+                transition: 'height 0.3s ease'
+              }} 
+            />
+          </div>
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               style={{
@@ -1077,7 +1149,7 @@ Each message should be 100-120 characters with specific data points and clear re
                     }
                   }}
                 >
-                  <Icon size={18} />
+                  <Icon size={sidebarCollapsed ? 24: 24} />
                   {!sidebarCollapsed && (
                     <>
                       <span>{item.label}</span>

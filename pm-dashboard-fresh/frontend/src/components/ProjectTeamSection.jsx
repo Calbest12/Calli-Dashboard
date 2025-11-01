@@ -24,23 +24,22 @@ const ProjectTeamSection = ({
   const [selectedRoles, setSelectedRoles] = useState([]);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
-  // LOAD FRESH TEAM DATA FROM API INSTEAD OF RELYING ON PROPS
   const loadTeamMembers = async () => {
     if (!project?.id) {
-      console.warn('⚠️ No project ID available for team loading');
+      console.warn('âš ï¸ No project ID available for team loading');
       return;
     }
     
     try {
-      console.log('🔄 Loading fresh team data for project:', project.id);
-      console.log('🔍 Project details:', { id: project.id, name: project.name });
+      console.log('ðŸ”„ Loading fresh team data for project:', project.id);
+      console.log('ðŸ” Project details:', { id: project.id, name: project.name });
       
       const response = await apiService.getProjectTeam(project.id);
-      console.log('📡 Team API response:', response);
+      console.log('ðŸ“¡ Team API response:', response);
       
       if (response && response.success) {
-        console.log('✅ Loaded team members from API:', response.data.length);
-        console.log('📋 Team member details:', response.data.map(m => ({
+        console.log('âœ… Loaded team members from API:', response.data.length);
+        console.log('ðŸ“‹ Team member details:', response.data.map(m => ({
           id: m.id,
           name: m.name,
           contribution: m.contribution,
@@ -49,46 +48,41 @@ const ProjectTeamSection = ({
         })));
         setTeamMembers(response.data);
       } else {
-        console.warn('⚠️ Failed to load team members:', response);
-        // Fallback to prop data if API fails
-        console.log('🔄 Using fallback prop data:', teamMembersDetailed?.length || 0);
+        console.warn('âš ï¸ Failed to load team members:', response);
+        console.log('ðŸ”„ Using fallback prop data:', teamMembersDetailed?.length || 0);
         setTeamMembers(teamMembersDetailed || []);
       }
     } catch (error) {
-      console.error('❌ Error loading team members:', error);
-      console.error('❌ Error details:', {
+      console.error('âŒ Error loading team members:', error);
+      console.error('âŒ Error details:', {
         message: error.message,
         stack: error.stack,
         projectId: project.id
       });
-      // Fallback to prop data if API fails
-      console.log('🔄 Using fallback prop data after error:', teamMembersDetailed?.length || 0);
+      console.log('ðŸ”„ Using fallback prop data after error:', teamMembersDetailed?.length || 0);
       setTeamMembers(teamMembersDetailed || []);
     }
   };
 
-  // Load fresh team data when component mounts or project changes
   useEffect(() => {
-    console.log('🔄 TeamSection useEffect triggered');
-    console.log('🔍 Project data:', { id: project?.id, name: project?.name });
-    console.log('🔍 Current team members count:', teamMembers.length);
+    console.log('ðŸ”„ TeamSection useEffect triggered');
+    console.log('ðŸ” Project data:', { id: project?.id, name: project?.name });
+    console.log('ðŸ” Current team members count:', teamMembers.length);
     
     loadTeamMembers();
-  }, [project?.id]); // Only depend on project.id
+  }, [project?.id]); 
 
-  // Also sync with props as backup (but prefer API data)
   useEffect(() => {
-    console.log('🔄 TeamSection props sync useEffect');
-    console.log('🔍 teamMembersDetailed prop:', teamMembersDetailed?.length || 0);
-    console.log('🔍 current teamMembers state:', teamMembers.length);
+    console.log('ðŸ”„ TeamSection props sync useEffect');
+    console.log('ðŸ” teamMembersDetailed prop:', teamMembersDetailed?.length || 0);
+    console.log('ðŸ” current teamMembers state:', teamMembers.length);
     
     if (teamMembersDetailed && teamMembersDetailed.length > 0 && teamMembers.length === 0) {
-      console.log('📋 Using prop team data as fallback:', teamMembersDetailed.length);
+      console.log('ðŸ“‹ Using prop team data as fallback:', teamMembersDetailed.length);
       setTeamMembers(teamMembersDetailed);
     }
-  }, [teamMembersDetailed]); // Only depend on the prop
+  }, [teamMembersDetailed]); 
 
-  // Load all users for the add member dropdown
   useEffect(() => {
     const loadAllUsers = async () => {
       try {
@@ -103,7 +97,6 @@ const ProjectTeamSection = ({
     loadAllUsers();
   }, []);
 
-  // Filter team members based on search and role filter
   const filteredMembers = teamMembers.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -111,7 +104,6 @@ const ProjectTeamSection = ({
     return matchesSearch && matchesRole;
   });
 
-  // Get unique roles for filter dropdown
   const uniqueRoles = [...new Set(teamMembers.map(member => member.role))];
 
   const handleAddMember = () => {
@@ -134,18 +126,16 @@ const ProjectTeamSection = ({
       setLoading(true);
       
       if (editingMember) {
-        // Update existing member
-        console.log('🔄 Updating team member:', memberData.name);
-        console.log('📊 Update data being sent:', {
+        console.log('ðŸ”„ Updating team member:', memberData.name);
+        console.log('ðŸ“Š Update data being sent:', {
           contribution: memberData.contribution,
           tasksCompleted: memberData.tasksCompleted,
           skills: memberData.skills
         });
         
         const response = await apiService.updateTeamMember(project.id, editingMember.id, memberData);
-        console.log('✅ Update response:', response.data);
-        
-        // Update local state - replace the edited member
+        console.log('âœ… Update response:', response.data);
+
         setTeamMembers(prev => prev.map(m => 
           m.id === editingMember.id ? response.data : m
         ));
@@ -153,41 +143,37 @@ const ProjectTeamSection = ({
         setShowEditMemberModal(false);
         
       } else {
-        // Add new member
-        console.log('🆕 Adding team member:', memberData.name);
-        console.log('🔍 Current team members before add:', teamMembers.length);
-        console.log('📊 New member data:', {
+        console.log('ðŸ†• Adding team member:', memberData.name);
+        console.log('ðŸ” Current team members before add:', teamMembers.length);
+        console.log('ðŸ“Š New member data:', {
           contribution: memberData.contribution,
           tasksCompleted: memberData.tasksCompleted,
           skills: memberData.skills
         });
-        
-        // Include the user ID in the request if available
+
         const memberDataWithId = {
           ...memberData,
-          id: memberData.id // This should come from user selection
+          id: memberData.id
         };
         
         const response = await apiService.addTeamMember(project.id, memberDataWithId);
-        console.log('✅ Add member API response:', response);
-        
-        // Update local state - ADD to existing members, don't replace
+        console.log('âœ… Add member API response:', response);
+
         setTeamMembers(prev => {
           const newTeamMembers = [...prev, response.data];
-          console.log('✅ Updated team members count:', newTeamMembers.length);
+          console.log('âœ… Updated team members count:', newTeamMembers.length);
           return newTeamMembers;
         });
         
         setShowAddMemberModal(false);
       }
       
-      // Refresh history
       await refreshHistory?.();
       
       setEditingMember(null);
       
     } catch (error) {
-      console.error('❌ Failed to save team member:', error);
+      console.error('âŒ Failed to save team member:', error);
       alert(`Failed to save team member: ${error.message}`);
     } finally {
       setLoading(false);
@@ -197,31 +183,28 @@ const ProjectTeamSection = ({
   const handleConfirmDelete = async () => {
     try {
       setLoading(true);
-      console.log('🗑️ Removing team member:', deletingMember.name);
-      console.log('🔍 Current team members before delete:', teamMembers.length);
+      console.log('ðŸ—‘ï¸ Removing team member:', deletingMember.name);
+      console.log('ðŸ” Current team members before delete:', teamMembers.length);
       
       await apiService.removeTeamMember(project.id, deletingMember.id);
-      
-      // Update local state - remove the deleted member
+
       const updatedTeamMembers = teamMembers.filter(m => m.id !== deletingMember.id);
       setTeamMembers(updatedTeamMembers);
-      console.log('✅ Updated team members count after delete:', updatedTeamMembers.length);
+      console.log('âœ… Updated team members count after delete:', updatedTeamMembers.length);
       
       setShowDeleteConfirm(false);
       setDeletingMember(null);
-      
-      // Refresh history
+
       await refreshHistory?.();
       
     } catch (error) {
-      console.error('❌ Failed to remove team member:', error);
+      console.error('âŒ Failed to remove team member:', error);
       alert(`Failed to remove team member: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // DEBUG COMPONENT - Add this function inside your component
   const DebugTeamData = () => (
     <div style={{
       backgroundColor: '#fef3c7',
@@ -232,7 +215,7 @@ const ProjectTeamSection = ({
       fontSize: '0.875rem'
     }}>
       <h4 style={{ margin: '0 0 0.5rem 0', color: '#92400e', fontWeight: '600' }}>
-        🐛 DEBUG: Team Data Analysis
+        ðŸ› DEBUG: Team Data Analysis
       </h4>
       
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -288,7 +271,7 @@ const ProjectTeamSection = ({
         <strong>API Test:</strong>
         <button
           onClick={() => {
-            console.log('🔧 Manual API test triggered');
+            console.log('ðŸ”§ Manual API test triggered');
             loadTeamMembers();
           }}
           style={{
@@ -426,7 +409,7 @@ const ProjectTeamSection = ({
                 }
               </span>
               <span style={{ transform: showRoleDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-                ▼
+                â–¼
               </span>
             </button>
             
@@ -494,7 +477,7 @@ const ProjectTeamSection = ({
                       borderColor: selectedRoles.includes(role) ? '#2563eb' : '#d1d5db'
                     }}>
                       {selectedRoles.includes(role) && (
-                        <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>✓</span>
+                        <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>âœ“</span>
                       )}
                     </div>
                     {role}
@@ -531,12 +514,11 @@ const ProjectTeamSection = ({
           gap: '1.5rem' 
         }}>
           {filteredMembers.map(member => {
-            // FIXED: Use actual data from member object, with proper fallbacks
             const actualContribution = member.contribution ?? 0;
             const actualTasksCompleted = member.tasksCompleted ?? 0;
             const actualSkills = Array.isArray(member.skills) ? member.skills : [];
             
-            console.log(`🔍 Rendering member ${member.name}:`, {
+            console.log(`ðŸ” Rendering member ${member.name}:`, {
               contribution: actualContribution,
               tasksCompleted: actualTasksCompleted,
               skills: actualSkills
@@ -730,7 +712,7 @@ const ProjectTeamSection = ({
                       style={{
                         height: '100%',
                         backgroundColor: actualContribution >= 90 ? '#10b981' : actualContribution >= 70 ? '#3b82f6' : actualContribution >= 40 ? '#f59e0b' : actualContribution > 0 ? '#f97316' : '#ef4444',
-                        width: `${Math.max(actualContribution, 2)}%`, // Minimum 2% width so it's visible even at 0%
+                        width: `${Math.max(actualContribution, 2)}%`, 
                         borderRadius: '9999px',
                         transition: 'width 0.8s ease-in-out'
                       }}

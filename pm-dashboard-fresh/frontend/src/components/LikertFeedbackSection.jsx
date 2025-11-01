@@ -1,23 +1,19 @@
 import React, { useState } from 'react';
 import { Send, Target, Award, Activity, Users, CheckCircle, RotateCcw, Info } from 'lucide-react';
 
-const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
+const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser, refreshHistory }) => {
   const [feedbackData, setFeedbackData] = useState({
-    // Project Management
     PM_Vision: 4,
     PM_Time: 4,
     PM_Quality: 4,
     PM_Cost: 4,
-    // Leadership
     Leadership_Vision: 4,
     Leadership_Reality: 4,
     Leadership_Ethics: 4,
     Leadership_Courage: 4,
-    // Change Management
     ChangeMgmt_Alignment: 4,
     ChangeMgmt_Understand: 4,
     ChangeMgmt_Enact: 4,
-    // Career Development
     CareerDev_KnowYourself: 4,
     CareerDev_KnowYourMarket: 4,
     CareerDev_TellYourStory: 4
@@ -25,6 +21,7 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSubmitted, setShowSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   const feedbackCategories = [
     {
@@ -99,32 +96,69 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
   const resetForm = () => {
     const resetData = {};
     Object.keys(feedbackData).forEach(key => {
-      resetData[key] = 4; // Reset to neutral
+      resetData[key] = 4; 
     });
     setFeedbackData(resetData);
+    setSubmitError(null);
   };
 
   const handleSubmit = async () => {
+    if (!project?.id) {
+      setSubmitError('Project ID is missing');
+      return;
+    }
+
+    if (!currentUser?.name) {
+      setSubmitError('User information is missing');
+      return;
+    }
+
     setIsSubmitting(true);
+    setSubmitError(null);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('ðŸŽ¯ Submitting feedback for project:', project.id);
+      console.log('ðŸ‘¤ User:', currentUser.name);
+      console.log('ðŸ“Š Feedback data:', feedbackData);
 
-      // Call the parent's submit function
+      // Prepare the feedback payload with proper structure
+      const feedbackPayload = {
+        userName: currentUser.name,
+        currentUser: currentUser,
+        ...feedbackData
+      };
+
+      console.log('ðŸ“¤ Sending feedback payload:', feedbackPayload);
+
+      // Call the onSubmitFeedback function passed from parent
       if (onSubmitFeedback) {
-        onSubmitFeedback(feedbackData);
+        await onSubmitFeedback(feedbackPayload);
+      } else {
+        throw new Error('onSubmitFeedback function not provided');
       }
 
+      console.log('âœ… Feedback submitted successfully');
+
+      // Show success message
       setShowSubmitted(true);
 
-      // Hide success message after 3 seconds
+      // Reset form after successful submission
+      resetForm();
+
+      // Auto-hide success message after 3 seconds
       setTimeout(() => {
         setShowSubmitted(false);
       }, 3000);
 
+      // Refresh project history if function provided
+      if (refreshHistory) {
+        console.log('ðŸ”„ Refreshing project history after feedback submission...');
+        await refreshHistory();
+      }
+
     } catch (error) {
-      console.error('Error submitting feedback:', error);
+      console.error('âŒ Error submitting feedback:', error);
+      setSubmitError(error.message || 'Failed to submit feedback. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -138,6 +172,11 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
     const values = Object.values(feedbackData);
     const average = values.reduce((sum, val) => sum + val, 0) / values.length;
     return average.toFixed(1);
+  };
+
+  const getOverallPercentage = () => {
+    const average = parseFloat(getOverallAverage());
+    return ((average / 7) * 100).toFixed(1);
   };
 
   return (
@@ -182,18 +221,69 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
             <span style={{ fontSize: '0.875rem', color: '#374151', fontWeight: '500' }}>
               Your Overall Rating
             </span>
-            <span style={{
-              fontSize: '1.25rem',
-              fontWeight: '700',
-              color: '#2563eb',
-              backgroundColor: '#eff6ff',
-              padding: '0.5rem 1rem',
-              borderRadius: '9999px'
-            }}>
-              {getOverallAverage()}/7.0
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '1.25rem',
+                fontWeight: '700',
+                color: '#2563eb',
+                backgroundColor: '#eff6ff',
+                padding: '0.5rem 1rem',
+                borderRadius: '9999px'
+              }}>
+                {getOverallAverage()}/7.0
+              </span>
+              <span style={{
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                color: '#6b7280',
+                backgroundColor: '#f3f4f6',
+                padding: '0.25rem 0.75rem',
+                borderRadius: '9999px'
+              }}>
+                {getOverallPercentage()}%
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Error Message */}
+        {submitError && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.5rem',
+            color: '#991b1b'
+          }}>
+            <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: '500' }}>
+              âŒ {submitError}
+            </p>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {showSubmitted && (
+          <div style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            backgroundColor: '#dcfce7',
+            border: '1px solid #bbf7d0',
+            borderRadius: '0.5rem',
+            color: '#166534'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontSize: '0.875rem',
+              fontWeight: '500'
+            }}>
+              <CheckCircle size={16} />
+              Feedback submitted successfully! Project scores have been updated.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Feedback Categories */}
@@ -377,9 +467,14 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              color: '#047857',
+              padding: '0.75rem 1rem',
+              backgroundColor: '#dcfce7',
+              border: '1px solid #bbf7d0',
+              borderRadius: '0.5rem',
+              color: '#166534',
               fontSize: '0.875rem',
-              fontWeight: '500'
+              fontWeight: '500',
+              animation: 'fadeIn 0.3s ease-in'
             }}>
               <CheckCircle size={16} />
               Feedback submitted successfully!
@@ -448,6 +543,7 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
               <li>Use the sliders to adjust your ratings for each component</li>
               <li>Your overall and category averages update automatically</li>
               <li>Click "Submit Feedback" when you're satisfied with your ratings</li>
+              <li>Your feedback will automatically update the project's progress scores</li>
             </ul>
           </div>
         </div>
@@ -457,6 +553,11 @@ const LikertFeedbackSection = ({ project, onSubmitFeedback, currentUser }) => {
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+
+        @keyframes fadeIn {
+          0% { opacity: 0; transform: translateX(10px); }
+          100% { opacity: 1; transform: translateX(0); }
         }
 
         input[type="range"]::-webkit-slider-thumb {

@@ -1,7 +1,5 @@
 const { query } = require('../config/database');
 
-// CLEAN getCareerGoals function - No debug logs
-
 const getCareerGoals = async (req, res) => {
     try {
       const userId = req.params.userId || req.user?.id;
@@ -69,12 +67,11 @@ const getCareerGoals = async (req, res) => {
     }
   };
 
-// Create a new career goal - FIXED to store initial notes separately
 const createCareerGoal = async (req, res) => {
     try {
       const userId = req.user?.id;
-      console.log('📝 Creating goal with data:', req.body);
-      console.log('👤 User ID:', userId);
+      console.log('ðŸ“ Creating goal with data:', req.body);
+      console.log('ðŸ‘¤ User ID:', userId);
   
       if (!userId) {
         return res.status(400).json({ 
@@ -116,7 +113,7 @@ const createCareerGoal = async (req, res) => {
         });
       }
   
-      console.log('✨ Creating career goal:', {
+      console.log('âœ¨ Creating career goal:', {
         userId,
         title,
         category,
@@ -155,23 +152,21 @@ const createCareerGoal = async (req, res) => {
         currentLevel || 'beginner',
         targetLevel || 'intermediate',
         priority || 'medium',
-        0, // initial progress
-        'active', // initial status
+        0, 
+        'active', 
         targetDate,
         notes || null,
         resources ? JSON.stringify(resources) : '[]'
       ];
   
-      console.log('📝 Insert query:', insertQuery);
-      console.log('📝 Values:', values);
+      console.log('ðŸ“ Insert query:', insertQuery);
+      console.log('ðŸ“ Values:', values);
   
       const result = await query(insertQuery, values);
       const newGoal = result.rows[0];
   
-      // FIXED: Store initial notes in progress history if they exist
       if (notes && notes.trim() !== '') {
         try {
-          // Ensure goal_progress_history table exists
           const createTableQuery = `
             CREATE TABLE IF NOT EXISTS goal_progress_history (
               id SERIAL PRIMARY KEY,
@@ -187,16 +182,14 @@ const createCareerGoal = async (req, res) => {
           `;
           await query(createTableQuery);
   
-          // Store the initial note as a special entry
           const initialNoteQuery = `
             INSERT INTO goal_progress_history (goal_id, user_id, previous_progress, new_progress, notes, is_initial_note)
             VALUES ($1, $2, 0, 0, $3, true)
           `;
           await query(initialNoteQuery, [newGoal.id, userId, notes]);
-          console.log('📝 Initial note stored in progress history');
+          console.log('ðŸ“ Initial note stored in progress history');
         } catch (historyError) {
-          console.error('⚠️ Error storing initial note:', historyError);
-          // Don't fail the goal creation if history storage fails
+          console.error('âš ï¸ Error storing initial note:', historyError);
         }
       }
   
@@ -206,7 +199,7 @@ const createCareerGoal = async (req, res) => {
       });
   
     } catch (error) {
-      console.error('❌ Error creating career goal:', error);
+      console.error('âŒ Error creating career goal:', error);
       res.status(500).json({ 
         success: false, 
         error: 'Failed to create career goal',
@@ -215,7 +208,6 @@ const createCareerGoal = async (req, res) => {
     }
   };
 
-// Update career goal
 const updateCareerGoal = async (req, res) => {
   try {
     const { id } = req.params;
@@ -229,15 +221,13 @@ const updateCareerGoal = async (req, res) => {
       });
     }
 
-    console.log('🔄 Updating career goal:', id, 'for user:', userId);
-    console.log('📝 Update data:', updateData);
+    console.log('ðŸ”„ Updating career goal:', id, 'for user:', userId);
+    console.log('ðŸ“ Update data:', updateData);
     
-    // Build dynamic update query - only update provided fields
     const setClause = [];
     const values = [];
     let paramCount = 1;
     
-    // Map frontend field names to database column names
     const fieldMapping = {
       title: 'title',
       description: 'description',
@@ -257,12 +247,10 @@ const updateCareerGoal = async (req, res) => {
       notes: 'notes'
     };
     
-    // Only add fields that are actually provided
     Object.keys(updateData).forEach(key => {
       if (updateData[key] !== undefined && fieldMapping[key]) {
         let value = updateData[key];
         
-        // Handle resources JSON conversion
         if (key === 'resources' && typeof value !== 'string') {
           value = JSON.stringify(value);
         }
@@ -280,10 +268,8 @@ const updateCareerGoal = async (req, res) => {
       });
     }
     
-    // Always update the updated_at timestamp
     setClause.push(`updated_at = CURRENT_TIMESTAMP`);
     
-    // Add user_id and goal_id as the last parameters for WHERE clause
     values.push(userId, id);
     
     const updateQuery = `
@@ -307,8 +293,8 @@ const updateCareerGoal = async (req, res) => {
         updated_at as "updatedAt"
     `;
     
-    console.log('📝 Update query:', updateQuery);
-    console.log('📝 Values:', values);
+    console.log('ðŸ“ Update query:', updateQuery);
+    console.log('ðŸ“ Values:', values);
     
     const result = await query(updateQuery, values);
     
@@ -325,7 +311,7 @@ const updateCareerGoal = async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error updating career goal:', error);
+    console.error('âŒ Error updating career goal:', error);
     res.status(500).json({ 
       success: false,
       error: error.message 
@@ -333,7 +319,6 @@ const updateCareerGoal = async (req, res) => {
   }
 };
 
-// Delete a career goal
 const deleteCareerGoal = async (req, res) => {
   try {
     const goalId = req.params.id;
@@ -346,7 +331,7 @@ const deleteCareerGoal = async (req, res) => {
       });
     }
 
-    console.log('🗑️ Deleting career goal:', goalId, 'for user:', userId);
+    console.log('ðŸ—‘ï¸ Deleting career goal:', goalId, 'for user:', userId);
 
     const deleteQuery = 'DELETE FROM career_development_goals WHERE id = $1 AND user_id = $2 RETURNING id';
     const result = await query(deleteQuery, [goalId, userId]);
@@ -364,7 +349,7 @@ const deleteCareerGoal = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error deleting career goal:', error);
+    console.error('âŒ Error deleting career goal:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to delete career goal' 
@@ -372,7 +357,6 @@ const deleteCareerGoal = async (req, res) => {
   }
 };
 
-// Update goal progress specifically
 const updateGoalProgress = async (req, res) => {
   try {
     const goalId = req.params.id;
@@ -393,9 +377,8 @@ const updateGoalProgress = async (req, res) => {
       });
     }
 
-    console.log('📈 Updating progress for goal:', goalId, 'to:', progress + '%');
+    console.log('ðŸ“ˆ Updating progress for goal:', goalId, 'to:', progress + '%');
 
-    // Check if goal belongs to user and get current data
     const checkQuery = `
       SELECT id, title, category, target_level, current_progress
       FROM career_development_goals 
@@ -415,9 +398,7 @@ const updateGoalProgress = async (req, res) => {
     const newStatus = progress === 100 ? 'completed' : 'active';
     const completedDate = progress === 100 ? new Date().toISOString().split('T')[0] : null;
 
-    // Save progress history first (create table if it doesn't exist)
     try {
-      // Check if table exists and create if not
       const createTableQuery = `
         CREATE TABLE IF NOT EXISTS goal_progress_history (
           id SERIAL PRIMARY KEY,
@@ -433,19 +414,16 @@ const updateGoalProgress = async (req, res) => {
       `;
       await query(createTableQuery);
 
-      // FIXED CODE:
       const historyQuery = `
         INSERT INTO goal_progress_history (goal_id, user_id, previous_progress, new_progress, notes, is_initial_note)
         VALUES ($1, $2, $3, $4, $5, $6)
       `;
       await query(historyQuery, [goalId, userId, previousProgress, progress, notes, false]);
-      console.log('📝 Progress history saved');
+      console.log('ðŸ“ Progress history saved');
     } catch (historyError) {
-      console.error('⚠️ Error saving progress history:', historyError);
-      // Don't fail the main update
+      console.error('âš ï¸ Error saving progress history:', historyError);
     }
 
-    // Update the goal progress
     const updateQuery = `
       UPDATE career_development_goals 
       SET 
@@ -474,10 +452,8 @@ const updateGoalProgress = async (req, res) => {
 
     const result = await query(updateQuery, [progress, newStatus, notes, completedDate, goalId, userId]);
 
-    // If goal is completed, create a milestone (if table exists)
     if (progress === 100) {
       try {
-        // Check if career_milestones table exists first
         const tableExistsQuery = `
           SELECT EXISTS (
             SELECT FROM information_schema.tables 
@@ -487,7 +463,6 @@ const updateGoalProgress = async (req, res) => {
         const tableCheck = await query(tableExistsQuery);
         
         if (tableCheck.rows[0].exists) {
-          // FIXED CODE:
           const milestoneQuery = `
             INSERT INTO career_milestones (
               user_id, goal_id, title, description, milestone_type, skill_category, date_completed
@@ -500,20 +475,19 @@ const updateGoalProgress = async (req, res) => {
 
           await query(milestoneQuery, [
             userId,
-            goalId,  // ADD THIS
+            goalId, 
             `Completed: ${goal.title}`,
             `Successfully achieved ${goal.target_level} level in ${goal.category}`,
             'skill_milestone',
             goal.category
           ]);
 
-          console.log('🏆 Milestone created for completed goal:', goal.title);
+          console.log('ðŸ† Milestone created for completed goal:', goal.title);
         } else {
-          console.log('⚠️ career_milestones table does not exist, skipping milestone creation');
+          console.log('âš ï¸ career_milestones table does not exist, skipping milestone creation');
         }
       } catch (milestoneError) {
-        console.error('⚠️ Error creating milestone:', milestoneError);
-        // Continue anyway - don't fail the progress update
+        console.error('âš ï¸ Error creating milestone:', milestoneError);
       }
     }
 
@@ -523,7 +497,7 @@ const updateGoalProgress = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error updating goal progress:', error);
+    console.error('âŒ Error updating goal progress:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update goal progress' 
@@ -531,7 +505,6 @@ const updateGoalProgress = async (req, res) => {
   }
 };
 
-// Get user completed goals (including milestones) - FIXED to prevent duplicates
 const getUserCompletedGoals = async (req, res) => {
     try {
       const userId = req.params.userId || req.user?.id;
@@ -543,9 +516,8 @@ const getUserCompletedGoals = async (req, res) => {
         });
       }
   
-      console.log('🏆 Getting completed goals for user:', userId);
+      console.log('ðŸ† Getting completed goals for user:', userId);
   
-      // Check if career_milestones table exists
       const tableExistsQuery = `
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -557,8 +529,6 @@ const getUserCompletedGoals = async (req, res) => {
       let completedGoalsQuery;
       
       if (tableCheck.rows[0].exists) {
-        // FIXED: Only get completed goals that DON'T have corresponding milestones
-        // This prevents duplicates when a goal completion creates both a completed goal and a milestone
         completedGoalsQuery = `
           SELECT 
             id,
@@ -597,7 +567,6 @@ const getUserCompletedGoals = async (req, res) => {
           ORDER BY "dateCompleted" DESC
         `;
       } else {
-        // Table doesn't exist, only get completed goals
         completedGoalsQuery = `
           SELECT 
             id,
@@ -623,7 +592,7 @@ const getUserCompletedGoals = async (req, res) => {
       });
   
     } catch (error) {
-      console.error('❌ Error getting completed goals:', error);
+      console.error('âŒ Error getting completed goals:', error);
       res.status(500).json({ 
         success: false, 
         error: 'Failed to get completed goals',
@@ -632,7 +601,6 @@ const getUserCompletedGoals = async (req, res) => {
     }
   };
 
-// Get career statistics
 const getCareerStats = async (req, res) => {
   try {
     const userId = req.params.userId || req.user?.id;
@@ -644,9 +612,8 @@ const getCareerStats = async (req, res) => {
       });
     }
 
-    console.log('📊 Getting career stats for user:', userId);
+    console.log('ðŸ“Š Getting career stats for user:', userId);
 
-    // Get goals statistics
     const goalsStatsQuery = `
       SELECT 
         COUNT(*) as total_goals,
@@ -657,7 +624,6 @@ const getCareerStats = async (req, res) => {
       WHERE user_id = $1 AND status != 'cancelled'
     `;
 
-    // Get completed goals count (check if table exists first)
     const tableExistsQuery = `
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -704,7 +670,7 @@ const getCareerStats = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error getting career stats:', error);
+    console.error('âŒ Error getting career stats:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to get career statistics',
@@ -713,7 +679,6 @@ const getCareerStats = async (req, res) => {
   }
 };
 
-// Get goal progress history - FIXED to include initial notes properly
 const getGoalProgressHistory = async (req, res) => {
     try {
       const goalId = req.params.id;
@@ -726,9 +691,8 @@ const getGoalProgressHistory = async (req, res) => {
         });
       }
   
-      console.log('📈 Getting progress history for goal:', goalId, 'user:', userId);
+      console.log('ðŸ“ˆ Getting progress history for goal:', goalId, 'user:', userId);
   
-      // Check if goal_progress_history table exists
       const tableExistsQuery = `
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -738,14 +702,12 @@ const getGoalProgressHistory = async (req, res) => {
       const tableCheck = await query(tableExistsQuery);
       
       if (!tableCheck.rows[0].exists) {
-        // Table doesn't exist, return empty array
         return res.json({
           success: true,
           data: []
         });
       }
   
-      // Get all progress history for this goal, including initial notes
       const historyQuery = `
         SELECT 
           id,
@@ -769,7 +731,7 @@ const getGoalProgressHistory = async (req, res) => {
       });
   
     } catch (error) {
-      console.error('❌ Error getting goal progress history:', error);
+      console.error('âŒ Error getting goal progress history:', error);
       res.status(500).json({ 
         success: false, 
         error: 'Failed to get progress history',
@@ -778,7 +740,6 @@ const getGoalProgressHistory = async (req, res) => {
     }
   };
 
-// Delete a completed goal
 const deleteCompletedGoal = async (req, res) => {
     try {
       const goalId = req.params.id;
@@ -791,9 +752,8 @@ const deleteCompletedGoal = async (req, res) => {
         });
       }
   
-      console.log('🗑️ Deleting completed goal:', goalId, 'for user:', userId);
+      console.log('ðŸ—‘ï¸ Deleting completed goal:', goalId, 'for user:', userId);
   
-      // Check if milestone exists in milestones table
       const milestoneDeleteQuery = `
         DELETE FROM career_milestones 
         WHERE id = $1 AND user_id = $2 
@@ -803,14 +763,12 @@ const deleteCompletedGoal = async (req, res) => {
       const milestoneResult = await query(milestoneDeleteQuery, [goalId, userId]);
       
       if (milestoneResult.rows.length > 0) {
-        // Milestone was in the milestones table
         res.json({
           success: true,
           message: 'Completed goal deleted successfully',
           deletedFrom: 'milestones'
         });
       } else {
-        // Check if it's a completed goal (completed goals from goals table)
         const goalDeleteQuery = `
           UPDATE career_development_goals 
           SET status = 'active', current_progress = 99
@@ -821,7 +779,6 @@ const deleteCompletedGoal = async (req, res) => {
         const goalResult = await query(goalDeleteQuery, [goalId, userId]);
         
         if (goalResult.rows.length > 0) {
-          // Goal completion was "deleted" by reverting completion
           res.json({
             success: true,
             message: 'Completed goal deleted (goal reverted to 99%)',
@@ -836,23 +793,22 @@ const deleteCompletedGoal = async (req, res) => {
       }
   
     } catch (error) {
-      console.error('❌ Error deleting completed goal:', error);
+      console.error('âŒ Error deleting completed goal:', error);
       res.status(500).json({ 
         success: false, 
         error: 'Failed to delete completed goal' 
       });
     }
   };
-  
-  // Export all functions
+
   module.exports = {
     getCareerGoals,
     createCareerGoal,
     updateCareerGoal,
     deleteCareerGoal,
     updateGoalProgress,
-    getUserCompletedGoals,  // Renamed from getUserAchievements
+    getUserCompletedGoals, 
     getCareerStats,
     getGoalProgressHistory,
-    deleteCompletedGoal      // Renamed from deleteAchievement
+    deleteCompletedGoal      
   };

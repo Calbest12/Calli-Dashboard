@@ -10,15 +10,13 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, projectName }) => {
     try {
       setIsDeleting(true);
       setError(null);
-      
-      // Call the parent's onConfirm function (which now handles API call)
+
       await onConfirm();
       
-      // Reset state after successful deletion
       setIsDeleting(false);
       
     } catch (error) {
-      console.error('❌ Delete confirmation error:', error);
+      console.error('âŒ Delete confirmation error:', error);
       setError(error.message || 'Failed to delete project');
       setIsDeleting(false);
     }

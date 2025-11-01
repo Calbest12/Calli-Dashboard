@@ -1,21 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const asyncHandler = require('../middleware/asyncHandler');
 
-console.log('🔄 Loading AI routes...');
+console.log('ðŸ”„ Loading AI routes...');
 
 let aiController;
 try {
   aiController = require('../controllers/aiController');
-  console.log('✅ AI controller loaded successfully from ../controllers/aiController');
+  console.log('âœ… AI controller loaded successfully from ../controllers/aiController');
 } catch (error) {
-  console.error('❌ Failed to load AI controller:', error.message);
-  console.error('❌ Error stack:', error.stack);
+  console.error('âŒ Failed to load AI controller:', error.message);
   
-  // Create a simple fallback controller
   aiController = {
     chat: async (req, res) => {
-      console.log('🔄 Using fallback AI controller');
+      console.log('ðŸ”„ Using fallback AI controller');
       res.json({
         success: true,
         response: `Hi ${req.user?.name || 'there'}! AI controller fallback is working. Your message was: "${req.body.message}"`,
@@ -32,55 +29,113 @@ try {
   };
 }
 
-// Simple rate limiting fallback if express-rate-limit isn't available
 let aiLimiter;
 try {
   const rateLimit = require('express-rate-limit');
   aiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 15 * 60 * 1000, 
     max: 100,
     message: {
       success: false,
       error: 'Too many AI requests, please try again later.'
     }
   });
-  console.log('✅ Rate limiter loaded');
+  console.log('âœ… Rate limiter loaded');
 } catch (error) {
-  console.log('⚠️ Rate limiter not available, using fallback');
+  console.log('âš ï¸ Rate limiter not available, using fallback');
   aiLimiter = (req, res, next) => next();
 }
 
-// Simple auth middleware fallback
-let auth;
-try {
-  auth = require('../middleware/auth');
-  console.log('✅ Auth middleware loaded for AI routes');
-} catch (error) {
-  console.error('❌ Auth middleware failed to load:', error.message);
-  auth = (req, res, next) => {
-    console.log('⚠️ Using fallback auth for AI route');
+const aiAuth = async (req, res, next) => {
+  try {
+    let authToken = null;
+    
+    const authHeader = req.headers.authorization;
+    console.log('ðŸ” Auth header received:', authHeader ? 'Present' : 'Missing');
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      authToken = authHeader.substring(7); 
+      console.log('ðŸ” Token from Authorization header:', authToken?.length);
+    }
+    
+    if (!authToken && req.cookies && req.cookies.authToken) {
+      authToken = req.cookies.authToken;
+      console.log('ðŸ” Token from cookies:', authToken?.length);
+    }
+    
+    if (!authToken && req.query.token) {
+      authToken = req.query.token;
+      console.log('ðŸ” Token from query params:', authToken?.length);
+    }
+    
+    if (!authToken) {
+      console.log('âŒ No authentication token found in any location');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required - no token provided'
+      });
+    }
+
+    console.log('ðŸ” Final token to use:', authToken?.substring(0, 10) + '...');
+    
+    if (authToken.length < 1) {
+      console.log('âŒ Invalid token format');
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token format'
+      });
+    }
+
+    let userId = null;
+    if (!isNaN(authToken) && parseInt(authToken) > 0) {
+      userId = parseInt(authToken);
+      console.log('ðŸ” Parsed token as user ID:', userId);
+    } else {
+      console.log('âŒ Token is not a valid user ID:', authToken);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token - must be a valid user ID'
+      });
+    }
+
+    try {
+      const { query } = require('../config/database');
+      console.log('ðŸ” Looking up user ID:', userId);
+      
+      const result = await query('SELECT id, name, email, role FROM users WHERE id = $1', [userId]);
+      console.log('ðŸ” Database lookup result:', result.rows.length, 'rows');
+      
+      if (result.rows.length > 0) {
+        req.user = result.rows[0];
+        console.log('âœ… User authenticated successfully:', req.user.name, 'ID:', req.user.id);
+        return next();
+      } else {
+        console.log('âŒ User not found in database for ID:', userId);
+        return res.status(401).json({
+          success: false,
+          error: 'User not found'
+        });
+      }
+    } catch (dbError) {
+      console.error('âŒ Database error during auth:', dbError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication service error'
+      });
+    }
+  } catch (error) {
+    console.error('âŒ Auth middleware error:', error.message);
     return res.status(500).json({
       success: false,
-      error: 'Authentication middleware not available'
+      error: 'Authentication error'
     });
-  };
-}
+  }
+};
 
-// Add logging middleware
-router.use((req, res, next) => {
-  console.log(`🤖 AI Route: ${req.method} ${req.url}`);
-  next();
-});
-
-// Apply auth and rate limiting
-router.use(auth);
-router.use(aiLimiter);
-
-// Simple validation functions to replace express-validator
 const validateChatRequest = (req, res, next) => {
-  console.log('🔍 Validating chat request:', { message: req.body.message?.substring(0, 50) });
+  console.log('ðŸ” Validating chat request:', { message: req.body.message?.substring(0, 50) });
   
-  const { message, projectId } = req.body;
+  const { message } = req.body;
   
   if (!message || typeof message !== 'string') {
     return res.status(400).json({
@@ -96,44 +151,57 @@ const validateChatRequest = (req, res, next) => {
     });
   }
   
-  if (projectId && (!Number.isInteger(Number(projectId)) || Number(projectId) < 1)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Project ID must be a positive integer'
-    });
-  }
-  
-  console.log('✅ Chat request validation passed');
+  console.log('âœ… Chat request validation passed');
   next();
 };
 
-const validateProjectId = (req, res, next) => {
-  const { projectId } = req.params;
-  
-  if (!projectId || (!Number.isInteger(Number(projectId)) || Number(projectId) < 1)) {
-    return res.status(400).json({
-      success: false,
-      error: 'Project ID must be a positive integer'
-    });
-  }
-  
+router.use((req, res, next) => {
+  console.log(`ðŸ¤– AI Route: ${req.method} ${req.url}`);
   next();
-};
+});
 
-// Routes with detailed logging
+router.use(aiAuth);
+router.use(aiLimiter);
+
 router.post('/chat', (req, res, next) => {
-  console.log('🎯 POST /chat route hit');
+  console.log('ðŸŽ¯ POST /chat route hit');
   validateChatRequest(req, res, next);
-}, asyncHandler((req, res) => {
-  console.log('🚀 Calling aiController.chat');
-  return aiController.chat(req, res);
-}));
+}, async (req, res) => {
+  try {
+    console.log('ðŸš€ Calling aiController.chat');
+    await aiController.chat(req, res);
+  } catch (error) {
+    console.error('âŒ Chat route error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
 
-router.get('/insights/:projectId', validateProjectId, asyncHandler(aiController.getProjectInsights));
+router.get('/insights/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    
+    if (!projectId || (!Number.isInteger(Number(projectId)) || Number(projectId) < 1)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Project ID must be a positive integer'
+      });
+    }
+    
+    await aiController.getProjectInsights(req, res);
+  } catch (error) {
+    console.error('âŒ Insights route error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
+  }
+});
 
-// Health check endpoint
 router.get('/health', (req, res) => {
-  console.log('💚 AI health check called');
+  console.log('ðŸ’š AI health check called');
   res.json({
     success: true,
     message: 'AI service is running',
@@ -141,6 +209,17 @@ router.get('/health', (req, res) => {
   });
 });
 
-console.log('✅ AI routes configured');
+router.use((error, req, res, next) => {
+  console.error('ðŸ’¥ AI Route Error:', error.message);
+  
+  res.status(500).json({
+    success: false,
+    error: 'AI service error',
+    details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
+});
+
+console.log('âœ… AI routes configured');
 
 module.exports = router;

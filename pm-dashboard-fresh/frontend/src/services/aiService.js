@@ -1,15 +1,14 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
 
 class AIService {
   constructor() {
     this.api = axios.create({
       baseURL: `${API_BASE_URL}/api/ai`,
-      timeout: 30000, // 30 second timeout for AI requests
+      timeout: 30000, 
     });
 
-    // Add auth token to requests
     this.api.interceptors.request.use((config) => {
       const token = localStorage.getItem('authToken');
       if (token) {

@@ -1,11 +1,9 @@
 require('dotenv').config();
 
 const config = {
-  // Server configuration
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   
-  // Database configuration
   database: {
     host: process.env.DB_HOST || 'localhost',
     port: process.env.DB_PORT || 5432,
@@ -18,34 +16,28 @@ const config = {
     connectionTimeoutMillis: 2000, // how long to wait when connecting a new client
   },
   
-  // JWT configuration
   jwt: {
     secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   
-  // CORS configuration
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   
-  // Pagination defaults
   pagination: {
     defaultLimit: 10,
     maxLimit: 100,
   },
   
-  // File upload configuration
   upload: {
     maxFileSize: 10 * 1024 * 1024, // 10MB
     allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
   },
   
-  // Rate limiting
   rateLimit: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100, 
   },
   
-  // Validation rules
   validation: {
     project: {
       nameMinLength: 1,
@@ -64,7 +56,6 @@ const config = {
   },
 };
 
-// Validate required environment variables in production
 if (config.nodeEnv === 'production') {
   const requiredEnvVars = [
     'DB_HOST',

@@ -178,10 +178,6 @@ WHERE u.name IN ('John Doe', 'Jane Smith', 'Mike Johnson')
 AND EXISTS (SELECT 1 FROM projects WHERE id = 1)
 ON CONFLICT (project_id, user_id) DO NOTHING;
 
--- ============================================================================
--- CAREER DEVELOPMENT DATABASE SCHEMA
--- ============================================================================
-
 -- Career Development Goals Table
 CREATE TABLE IF NOT EXISTS career_development_goals (
     id SERIAL PRIMARY KEY,
@@ -280,10 +276,6 @@ CREATE TABLE IF NOT EXISTS goal_progress_history (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ============================================================================
--- INDEXES FOR PERFORMANCE
--- ============================================================================
-
 -- Career Development Goals Indexes
 CREATE INDEX IF NOT EXISTS idx_career_goals_user_id ON career_development_goals(user_id);
 CREATE INDEX IF NOT EXISTS idx_career_goals_description ON career_development_goals(description);
@@ -340,3 +332,171 @@ CREATE TRIGGER update_learning_resources_updated_at BEFORE UPDATE
 
 CREATE TRIGGER update_goal_progress_history_updated_at BEFORE UPDATE
     ON goal_progress_history FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS ai_interactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    query TEXT NOT NULL,
+    response TEXT NOT NULL,
+    model_used VARCHAR(100),
+    tokens_used INTEGER DEFAULT 0,
+    context_data JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for performance
+CREATE INDEX IF NOT EXISTS idx_ai_interactions_user_id ON ai_interactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_interactions_project_id ON ai_interactions(project_id);
+CREATE INDEX IF NOT EXISTS idx_ai_interactions_created_at ON ai_interactions(created_at DESC);
+
+-- Ensure Calli Best exists in the users table
+INSERT INTO users (name, email, role, avatar) VALUES
+('Calli Best', 'bcalli@umich.edu', 'Project Manager', 'CB')
+ON CONFLICT (email) DO NOTHING;
+
+-- Database schema for document training system
+
+-- Table to store uploaded training documents
+CREATE TABLE training_documents (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    file_type VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB DEFAULT '{}',
+    chunk_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table to store document chunks with embeddings
+CREATE TABLE document_chunks (
+    id SERIAL PRIMARY KEY,
+    document_id INTEGER REFERENCES training_documents(id) ON DELETE CASCADE,
+    chunk_index INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    embedding JSONB, -- Store as JSON array, or use vector type if pgvector available
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Enhanced AI interactions table with document context
+CREATE TABLE ai_interactions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    query TEXT NOT NULL,
+    response TEXT NOT NULL,
+    model_used VARCHAR(100),
+    tokens_used INTEGER DEFAULT 0,
+    context_data JSONB DEFAULT '{}',
+    document_context JSONB DEFAULT '[]', -- Store relevant document chunks used
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for better performance
+CREATE INDEX idx_training_documents_user_id ON training_documents(user_id);
+CREATE INDEX idx_training_documents_filename ON training_documents(filename);
+CREATE INDEX idx_document_chunks_document_id ON document_chunks(document_id);
+CREATE INDEX idx_ai_interactions_user_id ON ai_interactions(user_id);
+CREATE INDEX idx_ai_interactions_project_id ON ai_interactions(project_id);
+
+-- Full-text search index for document content (PostgreSQL specific)
+CREATE INDEX idx_document_chunks_content_fulltext ON document_chunks USING gin(to_tsvector('english', content));
+
+-- Leadership Diamond Assessments Table
+CREATE TABLE IF NOT EXISTS leadership_diamond_assessments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    task_score INTEGER NOT NULL CHECK (task_score >= 1 AND task_score <= 10),
+    team_score INTEGER NOT NULL CHECK (team_score >= 1 AND team_score <= 10),
+    individual_score INTEGER NOT NULL CHECK (individual_score >= 1 AND individual_score <= 10),
+    organization_score INTEGER NOT NULL CHECK (organization_score >= 1 AND organization_score <= 10),
+    responses JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- VALUE Assessments Table
+CREATE TABLE IF NOT EXISTS value_assessments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    vision_score INTEGER NOT NULL CHECK (vision_score >= 1 AND vision_score <= 10),
+    alignment_score INTEGER NOT NULL CHECK (alignment_score >= 1 AND alignment_score <= 10),
+    understanding_score INTEGER NOT NULL CHECK (understanding_score >= 1 AND understanding_score <= 10),
+    enactment_score INTEGER NOT NULL CHECK (enactment_score >= 1 AND enactment_score <= 10),
+    responses JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_leadership_diamond_user_id ON leadership_diamond_assessments(user_id);
+CREATE INDEX IF NOT EXISTS idx_leadership_diamond_created_at ON leadership_diamond_assessments(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_value_assessments_user_id ON value_assessments(user_id);
+CREATE INDEX IF NOT EXISTS idx_value_assessments_created_at ON value_assessments(created_at DESC);
+
+CREATE TABLE leadership_diamond_assessments (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  task_score INTEGER NOT NULL,
+  team_score INTEGER NOT NULL,
+  individual_score INTEGER NOT NULL,
+  organization_score INTEGER NOT NULL,
+  responses JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE value_assessments (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  vision_score INTEGER NOT NULL,
+  alignment_score INTEGER NOT NULL,
+  understanding_score INTEGER NOT NULL,
+  enactment_score INTEGER NOT NULL,
+  responses JSONB,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create trigger function for updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create triggers for updated_at
+DROP TRIGGER IF EXISTS update_leadership_diamond_updated_at ON leadership_diamond_assessments;
+CREATE TRIGGER update_leadership_diamond_updated_at 
+    BEFORE UPDATE ON leadership_diamond_assessments 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_value_assessments_updated_at ON value_assessments;
+CREATE TRIGGER update_value_assessments_updated_at 
+    BEFORE UPDATE ON value_assessments 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Updated Users table with password field for RBAC
+CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255), -- Added password field
+    role VARCHAR(100) DEFAULT 'Team Member',
+    avatar VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add password column if it doesn't exist (for existing databases)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='users' AND column_name='password') THEN
+        ALTER TABLE users ADD COLUMN password VARCHAR(255);
+    END IF;
+END $$;

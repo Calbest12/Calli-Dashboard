@@ -1,19 +1,17 @@
-// src/middleware/errorHandler.js
-
-// Import the asyncHandler from the separate file
-const asyncHandler = require('./asyncHandler');
-
-// Custom API Error class
 class ApiError extends Error {
   constructor(message, statusCode = 500) {
     super(message);
     this.statusCode = statusCode;
     this.name = 'ApiError';
     
-    // Capture stack trace
     Error.captureStackTrace(this, this.constructor);
   }
 }
+
+// Async handler utility
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 
 // Error handling middleware
 const errorHandler = (err, req, res, next) => {

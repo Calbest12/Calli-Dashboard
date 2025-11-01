@@ -78,7 +78,6 @@ const ProgressUpdateSection = ({ project, onUpdateProgress, currentUser }) => {
   };
 
   const getOverallProgress = () => {
-    // Only use PM (Project Management) for overall project progress
     return Math.round((progressData.progress.PM / 7) * 100);
   };
 

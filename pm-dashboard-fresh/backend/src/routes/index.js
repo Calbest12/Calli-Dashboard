@@ -6,7 +6,6 @@ const careerRoutes = require('./career');
 
 const router = express.Router();
 
-// API version and info
 router.get('/', (req, res) => {
   res.json({
     message: 'Project Manager API v1.0.0',
@@ -23,7 +22,6 @@ router.get('/', (req, res) => {
   });
 });
 
-// Mount route modules
 router.use('/projects', projectRoutes);
 router.use('/users', userRoutes);
 router.use('/auth', authRoutes);

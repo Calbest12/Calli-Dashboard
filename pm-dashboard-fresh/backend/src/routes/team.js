@@ -1,19 +1,55 @@
 const express = require('express');
+const router = express.Router();
+const auth = require('../middleware/auth');
+const { requireExecutiveLeader } = require('../middleware/rbac');
 const teamController = require('../controllers/teamController');
 const { asyncHandler } = require('../middleware/errorHandler');
-const router = express.Router();
 
-// Team management routes for projects
-// GET /api/projects/:projectId/team - Get all team members for a project
-router.get('/:projectId/team', asyncHandler(teamController.getProjectTeam));
+// Apply authentication to all routes
+router.use(auth);
 
-// POST /api/projects/:projectId/team - Add a team member to a project
-router.post('/:projectId/team', asyncHandler(teamController.addTeamMember));
+// ALL TEAM MANAGEMENT ROUTES REQUIRE EXECUTIVE LEADER ROLE
 
-// PUT /api/projects/:projectId/team/:memberId - Update a team member
-router.put('/:projectId/team/:memberId', asyncHandler(teamController.updateTeamMember));
+// Get all team members - ONLY Executive Leaders
+router.get('/', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.getAllTeamMembers)
+);
 
-// DELETE /api/projects/:projectId/team/:memberId - Remove a team member from a project
-router.delete('/:projectId/team/:memberId', asyncHandler(teamController.removeTeamMember));
+// Get executive leader's team
+router.get('/my-team', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.getExecutiveTeam)
+);
+
+// Get available users to add to team
+router.get('/available', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.getAvailableTeamMembers)
+);
+
+// Add user to executive team
+router.post('/members', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.addExecutiveTeamMember)
+);
+
+// Get specific team member details
+router.get('/members/:userId', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.getExecutiveTeamMemberDetails)
+);
+
+// Update team member (notes, etc.)
+router.put('/members/:userId', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.updateExecutiveTeamMember)
+);
+
+// Remove team member from executive team
+router.delete('/members/:userId', 
+  requireExecutiveLeader(),
+  asyncHandler(teamController.removeExecutiveTeamMember)
+);
 
 module.exports = router;

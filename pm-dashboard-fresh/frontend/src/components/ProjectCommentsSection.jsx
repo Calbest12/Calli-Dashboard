@@ -6,7 +6,7 @@ const ProjectCommentsSection = ({
   project,
   currentUser,
   refreshHistory,
-  onCommentsCountChange // NEW: callback to update tab count
+  onCommentsCountChange
 }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
@@ -16,11 +16,10 @@ const ProjectCommentsSection = ({
   const [editingContent, setEditingContent] = useState('');
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(null);
-  const [openMenuId, setOpenMenuId] = useState(null); // NEW: for three-dot menu
+  const [openMenuId, setOpenMenuId] = useState(null); 
 
-  // Debug logging to see what props we're receiving
   useEffect(() => {
-    console.log('🔍 ProjectCommentsSection props:', {
+    console.log('ðŸ” ProjectCommentsSection props:', {
       project,
       projectId: project?.id,
       projectIdType: typeof project?.id,
@@ -30,37 +29,35 @@ const ProjectCommentsSection = ({
     });
   }, [project, currentUser, refreshHistory, onCommentsCountChange]);
 
-  // Update parent component when comments count changes
   useEffect(() => {
     if (onCommentsCountChange) {
       onCommentsCountChange(comments.length);
     }
   }, [comments.length, onCommentsCountChange]);
 
-  // Fetch comments when component mounts or project changes
   useEffect(() => {
     const fetchComments = async () => {
       if (!project?.id) {
-        console.log('⚠️ No project ID available for comments fetch');
+        console.log('âš ï¸ No project ID available for comments fetch');
         return;
       }
       
       try {
         setLoading(true);
-        console.log('🔄 Fetching comments for project:', project.id);
+        console.log('ðŸ”„ Fetching comments for project:', project.id);
         
         const response = await apiService.getProjectComments(project.id);
-        console.log('✅ Comments response:', response);
+        console.log('âœ… Comments response:', response);
         
         if (response && response.success && response.data) {
           setComments(response.data);
-          console.log('✅ Comments loaded:', response.data.length);
+          console.log('âœ… Comments loaded:', response.data.length);
         } else {
-          console.warn('⚠️ Invalid comments response:', response);
+          console.warn('âš ï¸ Invalid comments response:', response);
           setComments([]);
         }
       } catch (error) {
-        console.error('❌ Failed to load comments:', error);
+        console.error('âŒ Failed to load comments:', error);
         setComments([]);
       } finally {
         setLoading(false);
@@ -70,7 +67,6 @@ const ProjectCommentsSection = ({
     fetchComments();
   }, [project?.id]);
 
-  // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setOpenMenuId(null);
@@ -80,7 +76,6 @@ const ProjectCommentsSection = ({
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Format timestamp helper
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -92,39 +87,35 @@ const ProjectCommentsSection = ({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Check if current user can edit/delete a comment
   const canModifyComment = (comment) => {
-    // Allow if it's the user's own comment or if user is admin
     return comment.userId === currentUser?.id || 
            comment.author === currentUser?.name ||
            currentUser?.role === 'admin' ||
-           true; // For demo purposes, allow all users to modify
+           true; 
   };
 
-  // Toggle three-dot menu
   const handleMenuToggle = (commentId, event) => {
     event.stopPropagation();
     setOpenMenuId(openMenuId === commentId ? null : commentId);
   };
 
-  // Add comment handler
   const handleAddComment = async () => {
     if (!newComment.trim() || submitting) return;
     
     if (!project?.id) {
-      console.error('❌ Cannot add comment: No project ID available');
+      console.error('âŒ Cannot add comment: No project ID available');
       alert('Error: Project information is missing. Please refresh the page.');
       return;
     }
     
-    console.log('📝 ===== COMMENT SUBMISSION DEBUG =====');
-    console.log('📝 currentUser in comment section:', currentUser);
-    console.log('📝 currentUser.id:', currentUser?.id, 'type:', typeof currentUser?.id);
-    console.log('📝 currentUser.name:', currentUser?.name, 'type:', typeof currentUser?.name);
+    console.log('ðŸ“ ===== COMMENT SUBMISSION DEBUG =====');
+    console.log('ðŸ“ currentUser in comment section:', currentUser);
+    console.log('ðŸ“ currentUser.id:', currentUser?.id, 'type:', typeof currentUser?.id);
+    console.log('ðŸ“ currentUser.name:', currentUser?.name, 'type:', typeof currentUser?.name);
     
     try {
       setSubmitting(true);
-      console.log('📝 Adding comment:', newComment);
+      console.log('ðŸ“ Adding comment:', newComment);
       
       const commentData = {
         content: newComment.trim(),
@@ -132,68 +123,64 @@ const ProjectCommentsSection = ({
         userName: currentUser?.name || 'DEBUG: Missing Name'
       };
       
-      console.log('📝 Sending commentData to backend:', commentData);
+      console.log('ðŸ“ Sending commentData to backend:', commentData);
       
       const response = await apiService.addProjectComment(project.id, commentData);
-      console.log('✅ Comment added response:', response);
+      console.log('âœ… Comment added response:', response);
       
       if (response && response.success) {
-        console.log('✅ Comment added successfully, returned data:', response.data);
-        console.log('✅ Comment author in response:', response.data.author);
+        console.log('âœ… Comment added successfully, returned data:', response.data);
+        console.log('âœ… Comment author in response:', response.data.author);
         
         setComments(prev => [response.data, ...prev]);
         setNewComment('');
         
         if (refreshHistory) {
-          console.log('🔄 Refreshing history after comment...');
+          console.log('ðŸ”„ Refreshing history after comment...');
           refreshHistory();
         }
         
-        console.log('✅ Comment added successfully');
+        console.log('âœ… Comment added successfully');
       } else {
-        console.error('❌ Failed to add comment:', response);
+        console.error('âŒ Failed to add comment:', response);
         alert('Failed to add comment. Please try again.');
       }
     } catch (error) {
-      console.error('❌ Error adding comment:', error);
+      console.error('âŒ Error adding comment:', error);
       alert(`Failed to add comment: ${error.message || 'Please try again.'}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Start editing a comment
   const handleEditComment = (comment) => {
     setEditingCommentId(comment.id);
     setEditingContent(comment.content);
-    setOpenMenuId(null); // Close menu
+    setOpenMenuId(null); 
   };
 
-  // Cancel editing
   const handleCancelEdit = () => {
     setEditingCommentId(null);
     setEditingContent('');
   };
 
-  // Save edited comment
   const handleSaveEdit = async (commentId) => {
     if (!editingContent.trim() || updating) return;
     
     try {
       setUpdating(true);
-      console.log('📝 Updating comment:', commentId, editingContent);
-      console.log('📝 Current user for edit:', currentUser);
+      console.log('ðŸ“ Updating comment:', commentId, editingContent);
+      console.log('ðŸ“ Current user for edit:', currentUser);
       
       const response = await apiService.updateProjectComment(project.id, commentId, {
         content: editingContent.trim(),
-        userId: currentUser?.id || null, // Send actual user ID, not string
-        userName: currentUser?.name || 'Current User' // Also send name for fallback
+        userId: currentUser?.id || null, 
+        userName: currentUser?.name || 'Current User' 
       });
       
-      console.log('✅ Comment updated response:', response);
+      console.log('âœ… Comment updated response:', response);
       
       if (response && response.success) {
-        // Update the comment in the list
         setComments(prev => prev.map(comment => 
           comment.id === commentId 
             ? { ...comment, content: editingContent.trim() }
@@ -204,17 +191,17 @@ const ProjectCommentsSection = ({
         setEditingContent('');
         
         if (refreshHistory) {
-          console.log('🔄 Refreshing history after comment update...');
+          console.log('ðŸ”„ Refreshing history after comment update...');
           refreshHistory();
         }
         
-        console.log('✅ Comment updated successfully');
+        console.log('âœ… Comment updated successfully');
       } else {
-        console.error('❌ Failed to update comment:', response);
+        console.error('âŒ Failed to update comment:', response);
         alert('Failed to update comment. Please try again.');
       }
     } catch (error) {
-      console.error('❌ Error updating comment:', error);
+      console.error('âŒ Error updating comment:', error);
       alert(`Failed to update comment: ${error.message || 'Please try again.'}`);
     } finally {
       setUpdating(false);
@@ -230,7 +217,7 @@ const ProjectCommentsSection = ({
       border: '2px solid #f59e0b'
     }}>
       <h4 style={{ margin: '0 0 0.5rem 0', color: '#92400e' }}>
-        👤 Current User Debug (You are logged in as):
+        ðŸ‘¤ Current User Debug (You are logged in as):
       </h4>
       <div style={{ fontSize: '0.875rem', color: '#92400e' }}>
         <div><strong>ID:</strong> {currentUser?.id || 'Not set'}</div>
@@ -241,7 +228,6 @@ const ProjectCommentsSection = ({
     </div>
   );
 
-  // Delete comment
   const handleDeleteComment = async (commentId) => {
     if (deleting === commentId) return;
     
@@ -250,35 +236,33 @@ const ProjectCommentsSection = ({
     
     try {
       setDeleting(commentId);
-      setOpenMenuId(null); // Close menu
-      console.log('🗑️ Deleting comment:', commentId);
+      setOpenMenuId(null);
+      console.log('ðŸ—‘ï¸ Deleting comment:', commentId);
       
       const response = await apiService.deleteProjectComment(project.id, commentId);
-      console.log('✅ Comment deleted response:', response);
+      console.log('âœ… Comment deleted response:', response);
       
       if (response && response.success) {
-        // Remove the comment from the list
         setComments(prev => prev.filter(comment => comment.id !== commentId));
         
         if (refreshHistory) {
-          console.log('🔄 Refreshing history after comment deletion...');
+          console.log('ðŸ”„ Refreshing history after comment deletion...');
           refreshHistory();
         }
         
-        console.log('✅ Comment deleted successfully');
+        console.log('âœ… Comment deleted successfully');
       } else {
-        console.error('❌ Failed to delete comment:', response);
+        console.error('âŒ Failed to delete comment:', response);
         alert('Failed to delete comment. Please try again.');
       }
     } catch (error) {
-      console.error('❌ Error deleting comment:', error);
+      console.error('âŒ Error deleting comment:', error);
       alert(`Failed to delete comment: ${error.message || 'Please try again.'}`);
     } finally {
       setDeleting(null);
     }
   };
 
-  // Handle Enter key press for new comments
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -286,7 +270,6 @@ const ProjectCommentsSection = ({
     }
   };
 
-  // Handle Enter key press for editing
   const handleEditKeyPress = (e, commentId) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -296,7 +279,6 @@ const ProjectCommentsSection = ({
     }
   };
 
-  // Early return if no project data
   if (!project) {
     return (
       <div style={{
@@ -623,7 +605,7 @@ const ProjectCommentsSection = ({
                       color: '#374151', 
                       lineHeight: '1.5', 
                       margin: 0,
-                      whiteSpace: 'pre-wrap' // Preserve line breaks
+                      whiteSpace: 'pre-wrap'
                     }}>
                       {comment.content}
                     </p>

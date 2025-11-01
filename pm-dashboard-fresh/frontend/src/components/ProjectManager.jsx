@@ -6,13 +6,12 @@ import DeleteConfirmModal from './DeleteConfirmModal';
 import ProjectCard from './ProjectCard';
 import apiService from '../services/apiService';
 
-const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => { // ← Added onProjectsChange prop
+const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   
-  // DEBUG: Log the received user
   useEffect(() => {
-    console.log('👤 ProjectManager received currentUser:', currentUser);
-    console.log('👤 User ID type:', typeof currentUser?.id);
-    console.log('👤 User name:', currentUser?.name);
+    console.log('ðŸ‘¤ ProjectManager received currentUser:', currentUser);
+    console.log('ðŸ‘¤ User ID type:', typeof currentUser?.id);
+    console.log('ðŸ‘¤ User name:', currentUser?.name);
   }, [currentUser]);
 
   const [projects, setProjects] = useState([]);
@@ -25,34 +24,32 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   const [deletingProject, setDeletingProject] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
 
-  // ENHANCED: Load projects with notification to parent
   const loadProjects = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('🔄 ProjectManager: Loading projects...');
+      console.log('ðŸ“„ ProjectManager: Loading projects...');
       const response = await apiService.getAllProjects();
       
       if (response && response.success && response.data) {
-        console.log('✅ ProjectManager: Loaded', response.data.length, 'projects');
+        console.log('âœ… ProjectManager: Loaded', response.data.length, 'projects');
         setProjects(response.data);
         
-        // NOTIFY PARENT COMPONENT ABOUT PROJECT CHANGES
         if (onProjectsChange) {
-          console.log('📢 ProjectManager: Notifying parent about project changes');
+          console.log('ðŸ“¢ ProjectManager: Notifying parent about project changes');
           onProjectsChange(response.data);
         }
         
         setError(null);
       } else {
-        console.warn('⚠️ ProjectManager: Unexpected response format:', response);
+        console.warn('âš ï¸ ProjectManager: Unexpected response format:', response);
         setProjects([]);
         setError('Unexpected response format from server');
       }
       
     } catch (error) {
-      console.error('❌ ProjectManager: API Error:', error);
+      console.error('âŒ ProjectManager: API Error:', error);
       setProjects([]);
       setError(`Failed to load projects: ${error.message}`);
     } finally {
@@ -60,20 +57,17 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
     }
   };
 
-  // Initial load
   useEffect(() => {
-    console.log('🔄 ProjectManager: Initial load triggered');
+    console.log('ðŸ“„ ProjectManager: Initial load triggered');
     loadProjects();
   }, []);
 
   useEffect(() => {
-    // Cleanup function to clear project context when component unmounts
     return () => {
       if (onProjectSelect) onProjectSelect(null);
     };
   }, [onProjectSelect]);
 
-  // Show ProjectDetails if any project is selected
   const showProjectDetails = selectedProject;
 
   const handleAddProject = () => {
@@ -92,26 +86,22 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   };
 
   const handleViewProject = (project) => {
-    console.log('🔥 View Details clicked for:', project.name);
+    console.log('ðŸ”¥ View Details clicked for:', project.name);
     setSelectedProject(project);
-    // Notify parent component about project selection for chatbot context
     if (onProjectSelect) onProjectSelect(project);
   };
 
   const handleSubmitProject = async (projectData) => {
-    console.log('💾 Submitting project:', projectData.name, 'isEditing:', !!editingProject);
+    console.log('ðŸ’¾ Submitting project:', projectData.name, 'isEditing:', !!editingProject);
     
     try {
       if (editingProject) {
-        // Update existing project
-        console.log('🔄 Updating project via API...');
+        console.log('ðŸ“„ Updating project via API...');
         const response = await apiService.updateProject(editingProject.id, projectData);
         
-        // Update local state
         const updatedProjects = projects.map(p => p.id === editingProject.id ? response.data : p);
         setProjects(updatedProjects);
         
-        // NOTIFY PARENT ABOUT CHANGE
         if (onProjectsChange) {
           onProjectsChange(updatedProjects);
         }
@@ -120,49 +110,41 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
           setSelectedProject(response.data);
         }
       } else {
-        // Create new project
-        console.log('🆕 Creating new project via API...');
+        console.log('ðŸ†• Creating new project via API...');
         const response = await apiService.createProject(projectData);
-        console.log('✅ Project created:', response);
+        console.log('âœ… Project created:', response);
         
-        // Add to local state
         const updatedProjects = [...projects, response.data];
         setProjects(updatedProjects);
         
-        // NOTIFY PARENT ABOUT CHANGE
         if (onProjectsChange) {
           onProjectsChange(updatedProjects);
         }
       }
       
-      // Close modal and reset state
       setShowProjectForm(false);
       setEditingProject(null);
       
     } catch (error) {
-      console.error('❌ Failed to save project:', error);
+      console.error('âŒ Failed to save project:', error);
       alert(`Failed to save project: ${error.message}`);
     }
   };
 
   const handleConfirmDelete = async () => {
     try {
-      console.log('🗑️ Deleting project via API:', deletingProject.name);
+      console.log('ðŸ—‘ï¸ Deleting project via API:', deletingProject.name);
       
-      // Call the backend API to delete the project
       await apiService.deleteProject(deletingProject.id);
-      console.log('✅ Project deleted from backend');
+      console.log('âœ… Project deleted from backend');
       
-      // Update local state only after successful backend deletion
       const updatedProjects = projects.filter(p => p.id !== deletingProject.id);
       setProjects(updatedProjects);
       
-      // NOTIFY PARENT ABOUT CHANGE
       if (onProjectsChange) {
         onProjectsChange(updatedProjects);
       }
       
-      // Close the selected project if it was the one being deleted
       if (selectedProject && selectedProject.id === deletingProject.id) {
         setSelectedProject(null);
         if (onProjectSelect) onProjectSelect(null);
@@ -172,45 +154,37 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
       setDeletingProject(null);
       
     } catch (error) {
-      console.error('❌ Failed to delete project:', error);
+      console.error('âŒ Failed to delete project:', error);
       alert(`Failed to delete project: ${error.message}`);
-      // Don't close the modal on error so user can retry
     }
   };
 
   const handleUpdateProject = async (updatedProject) => {
     try {
-      console.log('🔄 Syncing project update to backend:', updatedProject.name);
-      
-      // Call the backend API to update the project
+      console.log('ðŸ“„ Syncing project update to backend:', updatedProject.name);
+ 
       const response = await apiService.updateProject(updatedProject.id, updatedProject);
-      console.log('✅ Project updated in backend');
+      console.log('âœ… Project updated in backend');
       
-      // Use the response from backend to ensure data consistency
       const backendProject = response.data;
       
-      // Update in projects array
       const updatedProjects = projects.map(p => p.id === backendProject.id ? backendProject : p);
       setProjects(updatedProjects);
       
-      // NOTIFY PARENT ABOUT CHANGE
       if (onProjectsChange) {
         onProjectsChange(updatedProjects);
       }
-      
-      // Update selected project if it's the same one
+
       if (selectedProject && selectedProject.id === backendProject.id) {
         setSelectedProject(backendProject);
       }
       
     } catch (error) {
-      console.error('❌ Failed to sync project update to backend:', error);
+      console.error('âŒ Failed to sync project update to backend:', error);
       
-      // Still update local state for better UX, but show a warning
       const updatedProjects = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
       setProjects(updatedProjects);
       
-      // NOTIFY PARENT EVEN IF SYNC FAILED
       if (onProjectsChange) {
         onProjectsChange(updatedProjects);
       }
@@ -219,12 +193,11 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
         setSelectedProject(updatedProject);
       }
       
-      // Show user that sync failed
-      console.warn('⚠️ Project updated locally but failed to sync with backend');
+      console.warn('âš ï¸ Project updated locally but failed to sync with backend');
     }
   };
 
-  console.log('🔧 Current state - showProjectForm:', showProjectForm, 'editingProject:', editingProject?.name);
+  console.log('ðŸ”§ Current state - showProjectForm:', showProjectForm, 'editingProject:', editingProject?.name);
 
   if (loading) {
     return (
@@ -233,6 +206,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
       </div>
     );
   }
+
   if (error) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
@@ -263,21 +237,21 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
           project={selectedProject}
           onBack={() => {
             setSelectedProject(null);
-            // Clear project context when going back
             if (onProjectSelect) onProjectSelect(null);
           }}
           onUpdateProject={handleUpdateProject}
           onEditProject={() => {
-            console.log('🔧 Edit button clicked from ProjectDetails');
+            console.log('ðŸ”§ Edit button clicked from ProjectDetails');
             setEditingProject(selectedProject);
             setShowProjectForm(true);
           }}
           currentUser={currentUser}
         />
       ) : (
-        /* Main Project Manager View */
+        /* Main Project Manager View - Clean Simple Grid */
         <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            {/* Simple Header */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -315,6 +289,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
               </button>
             </div>
 
+            {/* Simple Project Grid */}
             {projects.length === 0 ? (
               <div style={{
                 backgroundColor: 'white',
@@ -352,11 +327,11 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
         </div>
       )}
 
-      {/* Modals - Always rendered at top level, regardless of view */}
+      {/* Modals */}
       <ProjectFormModal
         isOpen={showProjectForm}
         onClose={() => {
-          console.log('🔧 Closing project form modal');
+          console.log('ðŸ”§ Closing project form modal');
           setShowProjectForm(false);
           setEditingProject(null);
         }}

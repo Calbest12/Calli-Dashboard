@@ -1,14 +1,11 @@
-// Enhanced AI Controller for PM Dashboard - Real AI Insights
 const { query } = require('../config/database');
-const { validationResult } = require('express-validator');
 
-// Try to load AI service, with fallback
 let aiService;
 try {
   aiService = require('../services/ai/aiService');
+  console.log('âœ… AI service loaded successfully');
 } catch (error) {
-  console.warn('⚠️ AI service not available:', error.message);
-  // Create fallback AI service
+  console.warn('âš ï¸ AI service not available:', error.message);
   aiService = {
     processChat: async (message, context) => {
       return {
@@ -21,24 +18,21 @@ try {
 }
 
 class AIController {
-  // AI Chat endpoint
   async chat(req, res) {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
+      const { message, context, projectId } = req.body;
+      const user = req.user; 
+
+      if (!user) {
+        return res.status(401).json({
           success: false,
-          errors: errors.array()
+          error: 'User not authenticated'
         });
       }
 
-      const { message, context, projectId } = req.body;
-      const user = req.user; // From auth middleware - real database user
+      console.log('ðŸ¤– AI Chat request from user:', user.name, 'ID:', user.id);
 
-      console.log('🔍 AI Chat - User:', user.name, 'ID:', user.id);
-
-      // Get ALL projects the user is assigned to
-      console.log('📊 Fetching user projects...');
+      console.log('ðŸ“Š Fetching user projects...');
       const userProjectsResult = await query(
         `SELECT p.id, p.name, p.description, p.status, p.priority, 
                 p.pm_progress, p.leadership_progress, p.change_mgmt_progress, p.career_dev_progress,
@@ -63,9 +57,8 @@ class AIController {
       );
 
       const userProjects = userProjectsResult.rows;
-      console.log(`📊 Found ${userProjects.length} projects for user ${user.name}`);
+      console.log(`ðŸ“Š Found ${userProjects.length} projects for user ${user.name}`);
 
-      // Get specific project details if projectId provided
       let currentProject = null;
       if (projectId) {
         const projectResult = await query(
@@ -80,38 +73,41 @@ class AIController {
           [projectId]
         );
         currentProject = projectResult.rows[0];
-        console.log('🎯 Current project:', currentProject?.name || 'Not found');
+        console.log('ðŸŽ¯ Current project:', currentProject?.name || 'Not found');
       } else if (userProjects.length > 0) {
-        // Use the highest priority active project as current project
         currentProject = userProjects.find(p => p.status === 'active') || userProjects[0];
-        console.log('🎯 Auto-selected current project:', currentProject.name);
+        console.log('ðŸŽ¯ Auto-selected current project:', currentProject.name);
       }
 
-      // Enhance context with real database data
-      const enhancedContext = {
-        ...context,
+      const cleanContext = {
         user: {
-          id: user.id,
           name: user.name,
-          email: user.email,
           role: user.role
         },
-        userProjects: userProjects,
-        currentProject: currentProject,
-        project: currentProject,
+        portfolio: {
+          totalProjects: userProjects.length,
+          activeProjects: userProjects.filter(p => p.status === 'active').length,
+          avgProgress: userProjects.length > 0 ? 
+            Math.round(userProjects.reduce((sum, p) => sum + (p.pm_progress || 0), 0) / userProjects.length) : 0
+        },
+        currentProject: currentProject ? {
+          name: currentProject.name,
+          status: currentProject.status,
+          priority: currentProject.priority,
+          teamSize: parseInt(currentProject.team_count) || 0,
+          pmProgress: currentProject.pm_progress || 0,
+          leadershipProgress: currentProject.leadership_progress || 0
+        } : null,
         timestamp: new Date().toISOString()
       };
 
-      console.log('🤖 Calling AI service with enhanced context...');
-      console.log('📊 Context summary:', {
-        user: enhancedContext.user.name,
-        projectCount: enhancedContext.userProjects.length,
-        currentProject: enhancedContext.currentProject?.name || 'None'
-      });
+      const enhancedMessage = this.createCleanPrompt(message, cleanContext);
 
-      const response = await aiService.processChat(message, enhancedContext);
+      console.log('ðŸ¤– Calling AI service with clean context...');
+      const response = await aiService.processChat(enhancedMessage, cleanContext);
 
-      // Log the interaction to database
+      const cleanedResponse = this.cleanAIResponse(response.content);
+
       try {
         await query(
           `INSERT INTO ai_interactions (user_id, project_id, query, response, model_used, tokens_used, context_data)
@@ -120,27 +116,22 @@ class AIController {
             user.id,
             currentProject?.id || null,
             message,
-            response.content,
+            cleanedResponse,
             response.model,
             response.tokensUsed || 0,
-            JSON.stringify(enhancedContext)
+            JSON.stringify(cleanContext)
           ]
         );
-        console.log('📝 AI interaction logged to database');
+        console.log('ðŸ“ AI interaction logged to database');
       } catch (logError) {
         console.warn('Failed to log AI interaction:', logError.message);
-        // Continue even if logging fails
       }
 
       res.json({
         success: true,
-        response: response.content,
+        response: cleanedResponse,
         model: response.model,
-        tokensUsed: response.tokensUsed,
-        debug: {
-          userProjects: userProjects.length,
-          currentProject: currentProject?.name || null
-        }
+        tokensUsed: response.tokensUsed
       });
 
     } catch (error) {
@@ -152,15 +143,63 @@ class AIController {
     }
   }
 
-  // ENHANCED Get AI insights for a specific project
+  createCleanPrompt(userMessage, context) {
+    const systemContext = `You are an expert project management consultant providing insights to ${context.user.name}, a ${context.user.role}. 
+
+Current Portfolio Context:
+- Total Projects: ${context.portfolio.totalProjects}
+- Active Projects: ${context.portfolio.activeProjects}
+- Average Progress: ${context.portfolio.avgProgress}/7 (${Math.round((context.portfolio.avgProgress/7)*100)}%)
+
+${context.currentProject ? `Current Project Focus: "${context.currentProject.name}"
+- Status: ${context.currentProject.status}
+- Priority: ${context.currentProject.priority}
+- Team Size: ${context.currentProject.teamSize} members
+- PM Progress: ${context.currentProject.pmProgress}/7 (${Math.round((context.currentProject.pmProgress/7)*100)}%)
+- Leadership Progress: ${context.currentProject.leadershipProgress}/7 (${Math.round((context.currentProject.leadershipProgress/7)*100)}%)` : 'No specific project selected'}
+
+Instructions:
+- Provide practical, actionable advice
+- Focus on project management best practices
+- Use specific metrics when relevant
+- Keep responses professional and concise
+- Do not mention any technical implementation details
+- Do not reference file names, code, or system internals
+- Speak directly to the user as their consultant
+
+User Question: ${userMessage}`;
+
+    return systemContext;
+  }
+
+  cleanAIResponse(responseText) {
+    if (!responseText) return 'I apologize, but I\'m unable to provide a response at this time.';
+
+    let cleaned = responseText
+      .replace(/\b\w+\.(js|jsx|ts|tsx|json|md|txt|csv)\b/gi, '')
+      .replace(/\/api\/[a-zA-Z\/\-_]+/gi, '')
+      .replace(/\b(apiService|query|response|console\.log|useState|useEffect)\b/gi, '')
+      .replace(/\berror:\s*[a-zA-Z0-9\s]+/gi, '')
+      .replace(/\b[a-zA-Z]+Controller\b/gi, '')
+      .replace(/\b[a-zA-Z]+Service\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .replace(/\s*,\s*,/g, ',')
+      .trim();
+
+    if (cleaned.length < 20) {
+      return 'Thank you for your question. I can help you with project management insights and recommendations. Could you provide more details about what specific area you\'d like guidance on?';
+    }
+
+    return cleaned;
+  }
+
   async getProjectInsights(req, res) {
     try {
       const { projectId } = req.params;
-      const user = req.user; // Real database user
+      const user = req.user;
 
-      console.log('🧠 Generating AI insights for project:', projectId, 'User:', user.name);
+      console.log('ðŸ§  Generating clean AI insights for project:', projectId, 'User:', user.name);
 
-      // Get comprehensive project details from database
       const projectResult = await query(
         `SELECT p.*, 
                 COUNT(ptm.id) as team_count,
@@ -184,113 +223,91 @@ class AIController {
 
       const project = projectResult.rows[0];
 
-      // Get recent project history for context
       const historyResult = await query(
         `SELECT action, description, created_at, action_type
          FROM project_history 
-         WHERE project_id = $1 
-         ORDER BY created_at DESC 
-         LIMIT 10`,
-        [projectId]
-      );
-
-      // Get recent comments for sentiment analysis
-      const commentsResult = await query(
-        `SELECT content, created_at
-         FROM project_comments 
          WHERE project_id = $1 
          ORDER BY created_at DESC 
          LIMIT 5`,
         [projectId]
       );
 
-      // Try to use AI service for enhanced insights
-      let aiGeneratedInsights = null;
+      let finalInsights = [];
       
       try {
         if (aiService && aiService.processChat) {
-          console.log('🚀 Using AI service for advanced insights...');
+          console.log('ðŸš€ Using AI service for enhanced insights...');
           
-          const insightPrompt = `Analyze this project data and provide exactly 3 actionable insights in JSON format:
+          const insightPrompt = `As a senior project management consultant, analyze this project and provide exactly 3 actionable insights:
 
-Project: "${project.name}"
-Status: ${project.status}
-Priority: ${project.priority}
-PM Progress: ${project.pm_progress}/7
-Leadership: ${project.leadership_progress}/7
-Change Management: ${project.change_mgmt_progress}/7
-Career Development: ${project.career_dev_progress}/7
-Team Size: ${project.team_count}
-Average Feedback: ${project.avg_feedback || 'No feedback yet'}
-Team Members: ${project.team_names ? project.team_names.join(', ') : 'None'}
+Project Overview:
+- Name: "${project.name}"
+- Status: ${project.status}
+- Priority: ${project.priority}
+- Team Size: ${project.team_count || 0} members
+- PM Progress: ${project.pm_progress || 0}/7 (${Math.round(((project.pm_progress || 0)/7)*100)}%)
+- Leadership Development: ${project.leadership_progress || 0}/7 (${Math.round(((project.leadership_progress || 0)/7)*100)}%)
+- Change Management: ${project.change_mgmt_progress || 0}/7 (${Math.round(((project.change_mgmt_progress || 0)/7)*100)}%)
+- Career Development: ${project.career_dev_progress || 0}/7 (${Math.round(((project.career_dev_progress || 0)/7)*100)}%)
+${project.avg_feedback ? `- Team Feedback Score: ${parseFloat(project.avg_feedback).toFixed(1)}/7` : ''}
 
-Recent Activity:
-${historyResult.rows.map(h => `- ${h.description} (${h.action_type})`).join('\n')}
+Recent Activity Summary:
+${historyResult.rows.map(h => `- ${h.description}`).join('\n') || '- No recent activity recorded'}
 
-Provide response as JSON:
+Provide exactly 3 insights in this JSON format:
 {
   "insights": [
-    {"type": "success|warning|info", "message": "actionable insight 1"},
-    {"type": "success|warning|info", "message": "actionable insight 2"},
-    {"type": "success|warning|info", "message": "actionable insight 3"}
+    {"type": "success", "message": "specific strength or achievement worth celebrating"},
+    {"type": "warning", "message": "specific area needing attention with clear action"},
+    {"type": "info", "message": "strategic recommendation for next steps"}
   ]
 }
 
-Types:
-- success: Something going well
-- warning: Needs attention
-- info: Recommendation or neutral observation
-
-Keep messages under 80 characters and actionable.`;
+Requirements:
+- Focus on actionable business insights
+- Use specific progress percentages when relevant
+- Recommend concrete next steps
+- Keep each insight under 120 characters
+- Use professional consulting language
+- Do not mention any technical terms, files, or system details`;
 
           const aiContext = {
-            user: { id: user.id, name: user.name, role: user.role },
-            project: project,
+            user: { name: user.name, role: user.role },
             isInsightGeneration: true
           };
 
           const aiResponse = await aiService.processChat(insightPrompt, aiContext);
           
-          // Try to parse AI response as JSON
           try {
-            const parsedResponse = JSON.parse(aiResponse.content);
-            if (parsedResponse.insights && Array.isArray(parsedResponse.insights)) {
-              aiGeneratedInsights = parsedResponse.insights.map(insight => ({
+            const parsed = JSON.parse(aiResponse.content);
+            if (parsed.insights && Array.isArray(parsed.insights)) {
+              finalInsights = parsed.insights.map(insight => ({
                 type: insight.type || 'info',
-                message: insight.message || 'AI analysis completed',
-                source: 'ai'
+                message: this.cleanInsightMessage(insight.message || 'Analysis completed'),
+                source: 'ai_consultant'
               }));
-              console.log('✅ AI insights parsed successfully:', aiGeneratedInsights.length);
+              console.log('âœ… AI insights parsed successfully:', finalInsights.length);
             }
           } catch (parseError) {
-            console.log('⚠️ Could not parse AI response as JSON, using text analysis');
-            // Fallback: extract insights from text
-            aiGeneratedInsights = this.extractInsightsFromText(aiResponse.content);
+            console.log('âš ï¸ Could not parse AI response as JSON, using fallback');
+            finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
           }
         }
       } catch (aiError) {
-        console.log('⚠️ AI service error, using fallback insights:', aiError.message);
+        console.log('âš ï¸ AI service error, using rule-based insights:', aiError.message);
+        finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
       }
 
-      // Generate rule-based insights as fallback or supplement
-      const ruleBasedInsights = this.generateRuleBasedInsights(project, historyResult.rows, commentsResult.rows);
-
-      // Combine AI and rule-based insights, prioritizing AI if available
-      let finalInsights = aiGeneratedInsights || ruleBasedInsights;
-      
-      // Ensure we have exactly 3 insights
-      if (finalInsights.length < 3) {
-        finalInsights = [...finalInsights, ...ruleBasedInsights].slice(0, 3);
-      } else if (finalInsights.length > 3) {
-        finalInsights = finalInsights.slice(0, 3);
+      if (finalInsights.length === 0) {
+        finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
       }
+      finalInsights = finalInsights.slice(0, 3);
 
-      // Build comprehensive response
       const insights = {
-        summary: this.generateProjectSummary(project),
+        summary: this.generateCleanProjectSummary(project),
         recommendations: finalInsights.map(insight => insight.message),
         detailedInsights: finalInsights,
-        confidence: aiGeneratedInsights ? 0.9 : 0.75,
+        confidence: finalInsights[0]?.source === 'ai_consultant' ? 0.9 : 0.75,
         metrics: {
           status: project.status,
           priority: project.priority,
@@ -303,12 +320,12 @@ Keep messages under 80 characters and actionable.`;
             careerDev: project.career_dev_progress || 0
           }
         },
-        recentActivity: historyResult.rows.slice(0, 5),
+        recentActivity: historyResult.rows.slice(0, 3),
         lastGenerated: new Date().toISOString(),
-        source: aiGeneratedInsights ? 'ai_enhanced' : 'rule_based'
+        source: finalInsights[0]?.source || 'consultant_analysis'
       };
 
-      console.log('✅ Generated insights:', {
+      console.log('âœ… Clean insights generated:', {
         source: insights.source,
         insightCount: finalInsights.length,
         confidence: insights.confidence
@@ -329,8 +346,19 @@ Keep messages under 80 characters and actionable.`;
     }
   }
 
-  // Helper method to generate project summary
-  generateProjectSummary(project) {
+  cleanInsightMessage(message) {
+    if (!message) return 'Analysis completed';
+
+    return message
+      .replace(/\b\w+\.(js|jsx|ts|tsx|json|md|txt|csv)\b/gi, '')
+      .replace(/\/api\/[a-zA-Z\/\-_]+/gi, '')
+      .replace(/\b(function|method|endpoint|query|response|error|log)\b/gi, '')
+      .replace(/\b(aiService|apiService|controller|service)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  generateCleanProjectSummary(project) {
     const avgScore = (
       (project.pm_progress || 0) + 
       (project.leadership_progress || 0) + 
@@ -338,91 +366,63 @@ Keep messages under 80 characters and actionable.`;
       (project.career_dev_progress || 0)
     ) / 4;
 
-    let statusDesc = 'progressing';
+    const progressPercentage = Math.round((avgScore / 7) * 100);
+    
+    let statusDesc = 'in early development';
     if (avgScore >= 6) statusDesc = 'performing excellently';
     else if (avgScore >= 5) statusDesc = 'performing well';
     else if (avgScore >= 3) statusDesc = 'showing steady progress';
-    else statusDesc = 'in early stages';
 
-    return `Project "${project.name}" is currently ${project.status} with ${statusDesc} (avg score: ${avgScore.toFixed(1)}/7) and ${project.team_count || 0} team members.`;
+    return `Project "${project.name}" is currently ${project.status} and ${statusDesc} with ${progressPercentage}% overall progress across key areas. The team has ${project.team_count || 0} active members.`;
   }
 
-  // Helper method to extract insights from AI text response
-  extractInsightsFromText(text) {
-    const insights = [];
-    const lines = text.split('\n').filter(line => line.trim());
-    
-    for (const line of lines) {
-      if (line.includes('excellent') || line.includes('great') || line.includes('strong')) {
-        insights.push({ type: 'success', message: line.trim(), source: 'ai_text' });
-      } else if (line.includes('consider') || line.includes('should') || line.includes('recommend')) {
-        insights.push({ type: 'info', message: line.trim(), source: 'ai_text' });
-      } else if (line.includes('concern') || line.includes('issue') || line.includes('problem')) {
-        insights.push({ type: 'warning', message: line.trim(), source: 'ai_text' });
-      }
-    }
-    
-    return insights.slice(0, 3);
-  }
-
-  // Enhanced rule-based insights
-  generateRuleBasedInsights(project, history, comments) {
+  generateRuleBasedInsights(project, history) {
     const insights = [];
     
-    // Progress analysis
     const pmProgress = project.pm_progress || 0;
-    const leadershipProgress = project.leadership_progress || 0;
-    const changeMgmtProgress = project.change_mgmt_progress || 0;
-    const careerDevProgress = project.career_dev_progress || 0;
-    const avgProgress = (pmProgress + leadershipProgress + changeMgmtProgress + careerDevProgress) / 4;
+    const avgProgress = (
+      (project.pm_progress || 0) + 
+      (project.leadership_progress || 0) + 
+      (project.change_mgmt_progress || 0) + 
+      (project.career_dev_progress || 0)
+    ) / 4;
+    const progressPercentage = Math.round((avgProgress / 7) * 100);
 
-    // PM Progress insights
-    if (pmProgress >= 6) {
+    if (avgProgress >= 6) {
       insights.push({
         type: 'success',
-        message: `Excellent PM progress (${pmProgress}/7) - project management is strong`,
-        source: 'rule_based'
+        message: `Excellent progress at ${progressPercentage}% - project is on track for successful delivery`,
+        source: 'consultant_analysis'
       });
-    } else if (pmProgress <= 2) {
+    } else if (avgProgress <= 2) {
       insights.push({
         type: 'warning',
-        message: `PM progress needs attention (${pmProgress}/7) - focus on planning`,
-        source: 'rule_based'
+        message: `Low progress at ${progressPercentage}% - recommend weekly progress reviews and clearer milestones`,
+        source: 'consultant_analysis'
       });
     }
 
-    // Team size analysis
     const teamCount = parseInt(project.team_count) || 0;
     if (teamCount === 0) {
       insights.push({
         type: 'warning',
-        message: 'No team members assigned - add team members to get started',
-        source: 'rule_based'
+        message: 'No team members assigned - add team members to accelerate project delivery',
+        source: 'consultant_analysis'
       });
     } else if (teamCount < 3 && project.priority === 'critical') {
       insights.push({
         type: 'warning',
-        message: `Critical project needs more team members (currently ${teamCount})`,
-        source: 'rule_based'
+        message: `Critical project needs more resources - current team of ${teamCount} may be insufficient`,
+        source: 'consultant_analysis'
       });
-    } else if (teamCount > 10) {
+    } else if (teamCount > 8) {
       insights.push({
         type: 'info',
-        message: `Large team (${teamCount} members) - ensure clear communication`,
-        source: 'rule_based'
+        message: `Large team of ${teamCount} members - ensure clear communication channels and role definitions`,
+        source: 'consultant_analysis'
       });
     }
 
-    // Career development insight
-    if (careerDevProgress === 0 && teamCount > 0) {
-      insights.push({
-        type: 'info',
-        message: 'Consider starting career development assessments for team growth',
-        source: 'rule_based'
-      });
-    }
-
-    // Activity-based insights
     const recentActivity = history.filter(h => {
       const activityDate = new Date(h.created_at);
       const daysSince = (new Date() - activityDate) / (1000 * 60 * 60 * 24);
@@ -432,32 +432,14 @@ Keep messages under 80 characters and actionable.`;
     if (recentActivity.length === 0) {
       insights.push({
         type: 'info',
-        message: 'No recent activity - consider updating project progress',
-        source: 'rule_based'
+        message: 'No recent activity - schedule team check-in to maintain project momentum',
+        source: 'consultant_analysis'
       });
     } else if (recentActivity.length > 5) {
       insights.push({
         type: 'success',
-        message: 'High activity level - team is actively engaged',
-        source: 'rule_based'
-      });
-    }
-
-    // Priority vs progress mismatch
-    if (project.priority === 'critical' && avgProgress < 4) {
-      insights.push({
-        type: 'warning',
-        message: 'Critical priority project needs accelerated progress',
-        source: 'rule_based'
-      });
-    }
-
-    // Status insights
-    if (project.status === 'planning' && avgProgress > 4) {
-      insights.push({
-        type: 'info',
-        message: 'Good progress in planning - consider moving to active status',
-        source: 'rule_based'
+        message: 'High activity level indicates strong team engagement and project momentum',
+        source: 'consultant_analysis'
       });
     }
 

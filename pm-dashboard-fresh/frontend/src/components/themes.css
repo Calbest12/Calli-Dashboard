@@ -1,0 +1,162 @@
+/* themes.css - Add this to your project */
+
+/* Light Theme Variables */
+:root,
+.light-theme {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --bg-tertiary: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-primary: #e5e7eb;
+  --border-secondary: #d1d5db;
+  --accent-primary: #2563eb;
+  --accent-secondary: #3b82f6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --sidebar-bg: #ffffff;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  --shadow: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark Theme Variables */
+.dark-theme {
+  --bg-primary: #111827;
+  --bg-secondary: #1f2937;
+  --bg-tertiary: #374151;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-tertiary: #9ca3af;
+  --border-primary: #374151;
+  --border-secondary: #4b5563;
+  --accent-primary: #3b82f6;
+  --accent-secondary: #60a5fa;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --sidebar-bg: #1f2937;
+  --card-bg: #1f2937;
+  --input-bg: #374151;
+  --shadow: rgba(0, 0, 0, 0.3);
+}
+
+/* Apply theme variables to common elements */
+body {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Cards and containers */
+.card,
+.settings-card,
+.project-card,
+.modal-content {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-primary) !important;
+  box-shadow: 0 1px 3px var(--shadow) !important;
+}
+
+/* Sidebar */
+.sidebar {
+  background-color: var(--sidebar-bg) !important;
+  border-color: var(--border-primary) !important;
+}
+
+/* Inputs */
+input,
+textarea,
+select {
+  background-color: var(--input-bg) !important;
+  border-color: var(--border-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-primary) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--accent-primary) !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-secondary) !important;
+  border-color: var(--accent-secondary) !important;
+}
+
+/* Text elements */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary) !important;
+}
+
+p {
+  color: var(--text-secondary) !important;
+}
+
+.text-muted {
+  color: var(--text-tertiary) !important;
+}
+
+/* Borders */
+.border {
+  border-color: var(--border-primary) !important;
+}
+
+/* Override inline styles for theme support */
+[style*="background"] {
+  background-color: var(--card-bg) !important;
+}
+
+[style*="color: #111827"] {
+  color: var(--text-primary) !important;
+}
+
+[style*="color: #6b7280"] {
+  color: var(--text-secondary) !important;
+}
+
+[style*="color: #9ca3af"] {
+  color: var(--text-tertiary) !important;
+}
+
+[style*="border"] {
+  border-color: var(--border-primary) !important;
+}
+
+/* Navigation active states */
+.nav-active {
+  background-color: var(--accent-primary) !important;
+  color: white !important;
+}
+
+/* Auto theme support */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light-theme):not(.dark-theme) {
+    --bg-primary: #111827;
+    --bg-secondary: #1f2937;
+    --bg-tertiary: #374151;
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-tertiary: #9ca3af;
+    --border-primary: #374151;
+    --border-secondary: #4b5563;
+    --accent-primary: #3b82f6;
+    --accent-secondary: #60a5fa;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --sidebar-bg: #1f2937;
+    --card-bg: #1f2937;
+    --input-bg: #374151;
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+}

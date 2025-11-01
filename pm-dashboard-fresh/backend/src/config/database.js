@@ -5,7 +5,7 @@ const pool = new Pool({
   port: 5432,
   database: 'project_manager',
   user: 'callibest',
-  password: '', // Add password if needed
+  password: '', 
 });
 
 const query = async (text, params) => {

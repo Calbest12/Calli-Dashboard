@@ -59,7 +59,7 @@ app.use(cors({
 }));
 
 let transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST, // SMTP host
+  host: process.env.MAIL_HOST, //SMTP Port
   port: process.env.MAIL_PORT, // SMTP port
   secure: envSEC, 
   auth: {
@@ -71,7 +71,6 @@ let transporter = nodemailer.createTransport({
 app.post('/email/send-reset-code', async (req, res) => {
   const { userId } = req.body;
   try {
-    // Select the latest non-expired reset code for the user
     const result = await pool.query(
       'SELECT code FROM password_reset WHERE user_id = $1 AND used = FALSE AND expires > NOW() ORDER BY expires DESC LIMIT 1',
       [userId]
@@ -83,7 +82,6 @@ app.post('/email/send-reset-code', async (req, res) => {
 
     const resetCode = result.rows[0].code;
 
-    // Fetch the user's email address from the users table
     const userResult = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
     if (userResult.rows.length === 0) {
       throw new Error('User not found.');
@@ -91,7 +89,6 @@ app.post('/email/send-reset-code', async (req, res) => {
     
     const userEmail = userResult.rows[0].email;
     
-    // Send the email with the reset code
     let mailOptions = {
       from: process.env.MAIL_USERNAME,
       to: userEmail,
@@ -120,7 +117,6 @@ app.post('/email/send-user', async (req, res) => {
       throw new Error('Email or username not provided.');
     }
 
-    // Prepare the email message
     let mailOptions = {
       from: process.env.MAIL_USERNAME, 
       to: email, 
@@ -129,7 +125,6 @@ app.post('/email/send-user', async (req, res) => {
       html: `<p>Hello, your username is: <strong>${username}</strong>.</p>`
     };
 
-    // Send the email
     transporter.sendMail(mailOptions, (error, info) => {
       if (error) {
         console.error('Error sending username email:', error);

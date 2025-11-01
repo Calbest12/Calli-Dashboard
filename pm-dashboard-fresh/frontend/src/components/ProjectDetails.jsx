@@ -14,73 +14,60 @@ import ProjectAnalyticsSection from './ProjectAnalyticsSection';
 import apiService from '../services/apiService';
 
 const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, currentUser }) => {
-  // ALL STATE HOOKS AT THE TOP
+  console.log('ðŸ” ProjectDetails Full Debug:', {
+    'project exists': !!project,
+    'project.id': project?.id,
+    'project.name': project?.name,
+    'project.teamMembers exists': !!project?.teamMembers,
+    'project.teamMembers length': project?.teamMembers?.length,
+    'project.team_size': project?.team_size,
+    'project keys': project ? Object.keys(project) : 'null',
+    'full project object': project
+  });
   const [activeTab, setActiveTab] = useState('overview');
   const [newComment, setNewComment] = useState('');
-  const [comments, setComments] = useState([
-    {
-      id: 1,
-      author: 'Sarah Johnson',
-      avatar: 'SJ',
-      content: 'Great progress on the initial wireframes! The user flow looks much cleaner now.',
-      timestamp: '2024-07-26T10:30:00Z',
-      type: 'comment'
-    },
-    {
-      id: 2,
-      author: 'Mike Johnson',
-      avatar: 'MJ',
-      content: 'I\'ve completed the database schema design. Ready for review.',
-      timestamp: '2024-07-26T09:15:00Z',
-      type: 'comment'
-    },
-    {
-      id: 3,
-      author: 'System',
-      avatar: 'SYS',
-      content: 'Project status changed from Planning to Active',
-      timestamp: '2024-07-25T16:45:00Z',
-      type: 'system'
-    }
-  ]);
+  const [comments, setComments] = useState([]);
   const [projectHistory, setProjectHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [commentsCount, setCommentsCount] = useState(0);
+  const [teamMembersFromAPI, setTeamMembersFromAPI] = useState([]);
 
-  // CREATE SAFE CURRENT USER - BEFORE ANY EFFECTS OR EARLY RETURNS
+  useEffect(() => {
+    const loadTeamData = async () => {
+      if (!project?.id) return;
+      
+      try {
+        console.log('ðŸ”„ Loading team data for project:', project.id);
+        const teamResponse = await apiService.getProjectTeam(project.id);
+        console.log('ðŸ“¡ Team API response:', teamResponse);
+        
+        if (teamResponse && teamResponse.success && teamResponse.data) {
+          console.log('âœ… Team members loaded:', teamResponse.data.length);
+          setTeamMembersFromAPI(teamResponse.data);
+        }
+      } catch (error) {
+        console.error('âŒ Failed to load team data:', error);
+        setTeamMembersFromAPI([]);
+      }
+    };
+  
+    loadTeamData();
+  }, [project?.id]);
+
   const createSafeCurrentUser = () => {
-    console.log('🔍 ===== createSafeCurrentUser START =====');
-    console.log('🔍 Raw currentUser prop:', currentUser);
-    console.log('🔍 currentUser type:', typeof currentUser);
-    console.log('🔍 currentUser is null:', currentUser === null);
-    console.log('🔍 currentUser is undefined:', currentUser === undefined);
-    console.log('🔍 currentUser keys:', currentUser ? Object.keys(currentUser) : 'null');
-    
-    // Log each property individually
-    if (currentUser) {
-      console.log('🔍 currentUser.id:', currentUser.id, 'type:', typeof currentUser.id);
-      console.log('🔍 currentUser.name:', currentUser.name, 'type:', typeof currentUser.name);
-      console.log('🔍 currentUser.email:', currentUser.email, 'type:', typeof currentUser.email);
-    }
-    
-    // Test condition 1: Valid user with id and name
+
     const hasValidId = currentUser && currentUser.id;
     const hasValidName = currentUser && currentUser.name;
-    console.log('🔍 hasValidId:', hasValidId, '| hasValidName:', hasValidName);
     
     if (hasValidId && hasValidName) {
-      console.log('✅ CONDITION 1 MET: Using valid currentUser');
       const result = {
         ...currentUser,
         id: typeof currentUser.id === 'string' ? parseInt(currentUser.id) || 1 : currentUser.id
       };
-      console.log('✅ Returning valid user:', result);
       return result;
     }
     
-    // Test condition 2: User exists but missing some properties
     if (currentUser && typeof currentUser === 'object') {
-      console.log('🔧 CONDITION 2: Attempting to fix currentUser');
       const fixedUser = {
         id: currentUser.id || currentUser.userId || 1,
         name: currentUser.name || currentUser.username || currentUser.displayName || 'Fixed User Name',
@@ -88,18 +75,13 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
         ...currentUser
       };
       
-      // Convert string ID to number if needed
       if (typeof fixedUser.id === 'string') {
         fixedUser.id = parseInt(fixedUser.id) || 1;
       }
       
-      console.log('🔧 Fixed user result:', fixedUser);
       return fixedUser;
     }
     
-    // Fallback
-    console.log('⚠️ CONDITION 3: Using fallback user - THIS SHOULD NOT HAPPEN');
-    console.log('⚠️ This means currentUser prop is completely missing or invalid');
     return {
       id: 1,
       name: 'FALLBACK USER (Fix the currentUser prop!)',
@@ -109,8 +91,23 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
   };
   
   const safeCurrentUser = createSafeCurrentUser();
-
-  // SAFE PROJECT OBJECT - MUST BE BEFORE EARLY RETURN
+  const tabs = useMemo(() => {
+    const baseTabs = [
+      { id: 'overview', label: 'Overview', icon: Info },
+      { id: 'comments', label: 'Comments', icon: MessageSquare },
+      { id: 'team', label: 'Team', icon: Users },
+      { id: 'history', label: 'History', icon: Clock },
+      { id: 'analytics', label: 'Analytics', icon: BarChart3 }
+    ];
+  
+    // ONLY show these tabs to Team Members and Project Managers
+    if (safeCurrentUser.role !== 'Executive Leader') {
+      baseTabs.splice(1, 0, { id: 'progress', label: 'Update Progress', icon: Target });
+      baseTabs.push({ id: 'feedback', label: 'Feedback', icon: Send });
+    }
+  
+    return baseTabs;
+  }, [safeCurrentUser.role]);
   const safeProject = useMemo(() => {
     if (!project) return null;
     
@@ -132,21 +129,22 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     };
   }, [project]);
 
-  // TEAM MEMBERS DATA - MUST BE BEFORE EARLY RETURN
   const teamMembersDetailed = useMemo(() => {
-    // Use the actual team data from the project
+    // First try the API data
+    if (teamMembersFromAPI && teamMembersFromAPI.length > 0) {
+      return teamMembersFromAPI;
+    }
+    
+    // Fallback to computed data from project.team if available
     if (!safeProject?.team || !Array.isArray(safeProject.team)) {
       return [];
     }
-    
-    // Convert team names to detailed objects, or use existing detailed data
+  
     return safeProject.team.map((teamMember, index) => {
-      // If teamMember is already an object with details, use it
       if (typeof teamMember === 'object' && teamMember.name) {
         return teamMember;
       }
-      
-      // If teamMember is just a string (name), create a basic object
+  
       if (typeof teamMember === 'string') {
         return {
           name: teamMember,
@@ -154,8 +152,8 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
           email: `${teamMember.toLowerCase().replace(' ', '.')}@company.com`,
           avatar: teamMember.split(' ').map(n => n[0]).join('').toUpperCase(),
           status: 'active',
-          contribution: Math.floor(Math.random() * 20) + 80, // 80-100%
-          tasksCompleted: Math.floor(Math.random() * 15) + 5, // 5-20 tasks
+          contribution: Math.floor(Math.random() * 20) + 80, 
+          tasksCompleted: Math.floor(Math.random() * 15) + 5, 
           joinedDate: '2024-07-20',
           skills: ['Project Management', 'Communication']
         };
@@ -173,11 +171,10 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
         skills: []
       };
     });
-  }, [safeProject?.team]);
+  }, [safeProject?.team, teamMembersFromAPI]);
 
-  // ALL USEEFFECT HOOKS BEFORE ANY EARLY RETURNS
   useEffect(() => {
-    console.log('🔍 ProjectDetails currentUser debugging:', {
+    console.log('ðŸ” ProjectDetails currentUser debugging:', {
       'currentUser prop received': currentUser,
       'currentUser is null/undefined': currentUser == null,
       'currentUser has id': !!currentUser?.id,
@@ -187,67 +184,65 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     });
   }, [currentUser, safeCurrentUser]);
 
-  // CENTRALIZED HISTORY REFRESH FUNCTION
+
   const refreshProjectHistory = async () => {
     if (!safeProject?.id) {
-      console.log('⚠️ No project ID available for history refresh');
+      console.log('âš ï¸ No project ID available for history refresh');
       return;
     }
     
     try {
       setHistoryLoading(true);
-      console.log('🔄 Refreshing project history for project:', safeProject.id);
+      console.log('ðŸ”„ Refreshing project history for project:', safeProject.id);
       
       const response = await apiService.getProjectHistory(safeProject.id);
-      console.log('✅ History refresh response:', response);
+      console.log('âœ… History refresh response:', response);
       
       if (response && response.success && response.data) {
         setProjectHistory(response.data);
-        console.log('✅ Project history refreshed with', response.data.length, 'entries');
+        console.log('âœ… Project history refreshed with', response.data.length, 'entries');
       } else {
-        console.warn('⚠️ Invalid history refresh response:', response);
+        console.warn('âš ï¸ Invalid history refresh response:', response);
         setProjectHistory([]);
       }
     } catch (error) {
-      console.error('❌ Failed to refresh project history:', error);
+      console.error('âŒ Failed to refresh project history:', error);
       setProjectHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
-  // Initial fetch of project history
   useEffect(() => {
     const fetchProjectHistory = async () => {
       if (!safeProject?.id) {
-        console.log('⚠️ No project ID available for history fetch');
+        console.log('âš ï¸ No project ID available for history fetch');
         setProjectHistory([]);
         return;
       }
       
       try {
         setHistoryLoading(true);
-        console.log('🔄 Initial fetch of project history for project:', safeProject.id, 'Name:', safeProject.name);
+        console.log('ðŸ”„ Initial fetch of project history for project:', safeProject.id, 'Name:', safeProject.name);
         
         const response = await apiService.getProjectHistory(safeProject.id);
-        console.log('✅ Raw history API response:', response);
+        console.log('âœ… Raw history API response:', response);
         
         if (response && response.success && response.data) {
           setProjectHistory(response.data);
-          console.log('✅ Project history state updated with', response.data.length, 'entries');
+          console.log('âœ… Project history state updated with', response.data.length, 'entries');
         } else {
-          console.warn('⚠️ Invalid history response format:', response);
+          console.warn('âš ï¸ Invalid history response format:', response);
           setProjectHistory([]);
         }
       } catch (error) {
-        console.error('❌ Failed to load project history:', error);
+        console.error('âŒ Failed to load project history:', error);
         setProjectHistory([]);
       } finally {
         setHistoryLoading(false);
       }
     };
 
-    // Expose refresh function globally for debugging
     window.forceRefreshHistory = refreshProjectHistory;
     window.currentProjectDebug = {
       project,
@@ -259,13 +254,11 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     fetchProjectHistory();
   }, [safeProject?.id]);
 
-  // CALLBACK TO UPDATE COMMENTS COUNT
   const handleCommentsCountChange = (count) => {
-    console.log('🔄 Comments count updated:', count);
+    console.log('ðŸ”„ Comments count updated:', count);
     setCommentsCount(count);
   };
 
-  // SAFETY CHECK - EARLY RETURN IF NO PROJECT (AFTER ALL HOOKS)
   if (!project || !safeProject) {
     return (
       <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
@@ -284,7 +277,7 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
               cursor: 'pointer'
             }}
           >
-            ← Back to Projects
+            â† Back to Projects
           </button>
         </div>
       </div>
@@ -301,7 +294,7 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
       fontSize: '0.75rem'
     }}>
       <h4 style={{ margin: '0 0 0.5rem 0', color: '#991b1b' }}>
-        🐛 COMPREHENSIVE DEBUG INFO
+        ðŸ› COMPREHENSIVE DEBUG INFO
       </h4>
       <div style={{ color: '#991b1b' }}>
         <div><strong>1. Raw currentUser prop:</strong></div>
@@ -329,7 +322,6 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     </div>
   );
 
-  // HELPER FUNCTIONS
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -389,7 +381,6 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     return colors[type] || '#6b7280';
   };
 
-  // EVENT HANDLERS
   const handleAddComment = () => {
     if (newComment.trim()) {
       const comment = {
@@ -412,119 +403,91 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
     }
   };
 
-  // TAB CHANGE HANDLER WITH AUTO-REFRESH
   const handleTabChange = (newTab) => {
     setActiveTab(newTab);
     
-    // Auto-refresh history when switching to history tab
     if (newTab === 'history') {
-      console.log('🔄 Switching to history tab - auto-refreshing...');
+      console.log('ðŸ”„ Switching to history tab - auto-refreshing...');
       setTimeout(() => refreshProjectHistory(), 100);
     }
   };
 
-  // ENHANCED PROGRESS UPDATE HANDLER WITH AUTO-REFRESH
   const handleProgressUpdate = async (updatedProject) => {
-    console.log('🔄 Progress updated:', updatedProject);
-    
-    // Update project in parent component
+    console.log('ðŸ”„ Progress updated:', updatedProject);
+
     if (onUpdateProject) {
       onUpdateProject(updatedProject);
     }
-    
-    // Immediately refresh project history
-    console.log('🔄 Auto-refreshing history after progress update...');
+
+    console.log('ðŸ”„ Auto-refreshing history after progress update...');
     await refreshProjectHistory();
     
-    console.log('✅ Progress update complete with history refresh');
+    console.log('âœ… Progress update complete with history refresh');
   };
 
-  // ENHANCED FEEDBACK SUBMISSION HANDLER WITH AUTO-REFRESH
   const handleFeedbackSubmission = async (feedbackRecord) => {
     try {
-      console.log('📝 Submitting feedback to backend:', feedbackRecord);
+      console.log('ðŸ“ Submitting feedback to backend:', feedbackRecord);
       
-      // Add current user info to the feedback data
       const feedbackWithUser = {
         ...feedbackRecord,
         userName: safeCurrentUser?.name || feedbackRecord.userName || 'Current User',
         currentUser: safeCurrentUser
       };
       
-      // Submit feedback to backend
       await apiService.submitProjectFeedback(safeProject.id, feedbackWithUser);
-      console.log('✅ Feedback submitted to backend successfully');
+      console.log('âœ… Feedback submitted to backend successfully');
       
-      // Refresh the project data to get updated progress
       try {
         const updatedProjectResponse = await apiService.getProject(safeProject.id);
-        console.log('🔄 Refreshed project data:', updatedProjectResponse.data);
+        console.log('ðŸ”„ Refreshed project data:', updatedProjectResponse.data);
         
-        // Update project in parent component with fresh data from backend
         if (onUpdateProject) {
           onUpdateProject(updatedProjectResponse.data);
         }
       } catch (error) {
-        console.error('❌ Failed to refresh project data:', error);
+        console.error('âŒ Failed to refresh project data:', error);
       }
-      
-      // Immediately refresh project history
-      console.log('🔄 Auto-refreshing history after feedback submission...');
+
+      console.log('ðŸ”„ Auto-refreshing history after feedback submission...');
       await refreshProjectHistory();
-      
-      // Show success message
+
       alert('Feedback submitted successfully!');
       
     } catch (error) {
-      console.error('❌ Failed to submit feedback:', error);
+      console.error('âŒ Failed to submit feedback:', error);
       alert(`Failed to submit feedback: ${error.message || 'Please try again.'}`);
     }
   };
 
-  // PROJECT UPDATE HANDLER WITH AUTO-REFRESH
   const handleProjectUpdate = async (updatedData) => {
     try {
-      console.log('🔄 Updating project:', updatedData);
+      console.log('ðŸ”„ Updating project:', updatedData);
       
-      // Call your project update API
       const response = await apiService.updateProject(safeProject.id, updatedData);
-      console.log('✅ Project update response:', response);
+      console.log('âœ… Project update response:', response);
       
       if (response && response.success) {
-        // Update the project in parent component
         if (onUpdateProject) {
           onUpdateProject(response.data);
         }
         
-        // Immediately refresh history
-        console.log('🔄 Auto-refreshing history after project update...');
+        console.log('ðŸ”„ Auto-refreshing history after project update...');
         await refreshProjectHistory();
         
-        console.log('✅ Project update complete with history refresh');
+        console.log('âœ… Project update complete with history refresh');
       }
     } catch (error) {
-      console.error('❌ Failed to update project:', error);
+      console.error('âŒ Failed to update project:', error);
       alert(`Failed to update project: ${error.message || 'Please try again.'}`);
     }
   };
 
-  // CALCULATED VALUES
   const avgProgress = Math.round((safeProject.progress.PM) * 100 / 7);
   const statusColors = getStatusColor(safeProject.status);
   const priorityColors = getPriorityColor(safeProject.priority);
   const PriorityIcon = priorityColors.icon;
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: Info },
-    { id: 'progress', label: 'Update Progress', icon: Target },
-    { id: 'comments', label: 'Comments', icon: MessageSquare, badge: commentsCount },
-    { id: 'team', label: 'Team', icon: Users, badge: teamMembersDetailed.length },
-    { id: 'history', label: 'History', icon: Clock, badge: projectHistory.length },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'feedback', label: 'Feedback', icon: Send }
-  ];
-
-  // CONTENT RENDERER WITH REFRESH FUNCTIONS PASSED TO CHILD COMPONENTS
   const renderContent = () => {
     switch (activeTab) {
       case 'overview':
@@ -571,7 +534,6 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
             project={safeProject}
             currentUser={safeCurrentUser}
             onTeamUpdate={(updatedTeam) => {
-              // Update the project with new team data
               const updatedProject = { ...safeProject, team: updatedTeam };
               if (onUpdateProject) {
                 onUpdateProject(updatedProject);
@@ -591,12 +553,14 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
             onRefresh={refreshProjectHistory}
           />
         );
-      case 'analytics':
-        return (
-          <ProjectAnalyticsSection
-            teamMembersDetailed={teamMembersDetailed}
-          />
-        );
+        case 'analytics':
+          return (
+            <ProjectAnalyticsSection
+              teamMembersDetailed={teamMembersDetailed}
+              project={safeProject}  // This must be safeProject, not project
+              currentUser={safeCurrentUser}
+            />
+          );
       case 'feedback':
         return (
           <LikertFeedbackSection
@@ -638,7 +602,7 @@ const ProjectDetails = ({ project, onBack, onUpdateProject, onEditProject, curre
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('⬅️ Back button clicked in ProjectDetails');
+                console.log('â¬…ï¸ Back button clicked in ProjectDetails');
                 onBack();
               }}
               style={{

@@ -1,597 +1,716 @@
-// COMPLETELY FIXED teamController.js - Replace your entire file with this:
-
+// backend/src/controllers/teamController.js
 const { query } = require('../config/database');
-const { ApiError } = require('../middleware/errorHandler');
 
-// Get all team members for a project
+// ========================================
+// PROJECT TEAM MANAGEMENT (Existing functionality)
+// ========================================
+
+// Add team member to project
+const addTeamMember = async (req, res) => {
+  try {
+    const projectId = req.params.id || req.params.projectId;
+    const { userId, role, contribution } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Check if user exists
+    const userCheck = await query('SELECT name, email FROM users WHERE id = $1', [userId]);
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    // Check if user is already a team member
+    const existingMember = await query(
+      'SELECT id FROM project_team_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+
+    if (existingMember.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User is already a team member'
+      });
+    }
+
+    // Add team member
+    const addMemberQuery = `
+      INSERT INTO project_team_members (project_id, user_id, role_in_project, contribution_percentage, tasks_completed)
+      VALUES ($1, $2, $3, $4, 0)
+      RETURNING id
+    `;
+
+    await query(addMemberQuery, [
+      projectId,
+      userId,
+      role || 'Team Member',
+      contribution || 0
+    ]);
+
+    const user = userCheck.rows[0];
+    console.log(`âœ… Added ${user.name} to project ${projectId} team`);
+
+    res.json({
+      success: true,
+      message: `${user.name} has been added to the project team`
+    });
+
+  } catch (error) {
+    console.error('âŒ Error adding team member to project:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add team member'
+    });
+  }
+};
+
+// Remove team member from project
+const removeTeamMember = async (req, res) => {
+  try {
+    const projectId = req.params.id || req.params.projectId;
+    const userId = req.params.userId || req.params.memberId;
+
+    // Get member info before removing
+    const memberQuery = `
+      SELECT u.name 
+      FROM users u
+      JOIN project_team_members ptm ON u.id = ptm.user_id
+      WHERE ptm.project_id = $1 AND ptm.user_id = $2
+    `;
+
+    const memberResult = await query(memberQuery, [projectId, userId]);
+
+    if (memberResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Team member not found in this project'
+      });
+    }
+
+    const memberName = memberResult.rows[0].name;
+
+    // Remove team member
+    await query(
+      'DELETE FROM project_team_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+
+    console.log(`âœ… Removed ${memberName} from project ${projectId} team`);
+
+    res.json({
+      success: true,
+      message: `${memberName} has been removed from the project team`
+    });
+
+  } catch (error) {
+    console.error('âŒ Error removing team member from project:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to remove team member'
+    });
+  }
+};
+
+// Update team member in project
+const updateTeamMember = async (req, res) => {
+  try {
+    const projectId = req.params.id || req.params.projectId;
+    const userId = req.params.userId || req.params.memberId;
+    const { role, contribution, tasks } = req.body;
+
+    // Check if member exists in project
+    const memberCheck = await query(
+      'SELECT id FROM project_team_members WHERE project_id = $1 AND user_id = $2',
+      [projectId, userId]
+    );
+
+    if (memberCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Team member not found in this project'
+      });
+    }
+
+    // Build update query
+    const updateFields = [];
+    const values = [];
+    let valueIndex = 1;
+
+    if (role !== undefined) {
+      updateFields.push(`role_in_project = $${valueIndex}`);
+      values.push(role);
+      valueIndex++;
+    }
+
+    if (contribution !== undefined) {
+      updateFields.push(`contribution_percentage = $${valueIndex}`);
+      values.push(contribution);
+      valueIndex++;
+    }
+
+    if (tasks !== undefined) {
+      updateFields.push(`tasks_completed = $${valueIndex}`);
+      values.push(tasks);
+      valueIndex++;
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No valid fields to update'
+      });
+    }
+
+    // Add project_id and user_id for WHERE clause
+    values.push(projectId, userId);
+
+    const updateQuery = `
+      UPDATE project_team_members 
+      SET ${updateFields.join(', ')}
+      WHERE project_id = $${valueIndex} AND user_id = $${valueIndex + 1}
+      RETURNING role_in_project, contribution_percentage, tasks_completed
+    `;
+
+    const result = await query(updateQuery, values);
+
+    res.json({
+      success: true,
+      message: 'Team member updated successfully',
+      updatedMember: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('âŒ Error updating team member in project:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update team member'
+    });
+  }
+};
+
+// Get project team members
 const getProjectTeam = async (req, res) => {
   try {
-    // FIX: Check for both possible parameter names
-    const projectId = req.params.projectId || req.params.id;
-    
-    console.log('🔄 Fetching team for project:', projectId);
-    console.log('🔍 All req.params:', req.params);
-    console.log('🔍 Project ID type:', typeof projectId, 'Value:', projectId);
-    
-    // Validate projectId
-    if (!projectId || isNaN(parseInt(projectId))) {
-      console.error('❌ Invalid project ID provided:', projectId);
-      console.error('❌ Available params:', Object.keys(req.params));
-      throw new ApiError('Invalid project ID', 400);
-    }
-    
-    const parsedProjectId = parseInt(projectId);
-    console.log('✅ Using project ID:', parsedProjectId);
-    
-    // FIXED SQL QUERY - matches your exact database schema and includes skills
-    const result = await query(`
+    const projectId = req.params.id || req.params.projectId;
+
+    const teamQuery = `
       SELECT 
-        ptm.id,
-        ptm.project_id,
-        ptm.user_id,
+        u.id,
         u.name,
         u.email,
-        u.avatar,
-        u.role,
+        u.role as user_role,
         ptm.role_in_project,
         ptm.contribution_percentage,
         ptm.tasks_completed,
-        ptm.joined_date,
-        ptm.skills,
-        u.created_at as user_created_at
+        COUNT(DISTINCT cdg.id) as career_goals_count
       FROM project_team_members ptm
       JOIN users u ON ptm.user_id = u.id
+      LEFT JOIN career_development_goals cdg ON u.id = cdg.user_id AND cdg.status = 'active'
       WHERE ptm.project_id = $1
-      ORDER BY ptm.joined_date ASC, u.created_at ASC
-    `, [parsedProjectId]);
-    
-    console.log('✅ Raw team members found:', result.rows.length);
-    console.log('📋 Raw team data:', result.rows.map(r => ({ id: r.id, name: r.name, role: r.role_in_project })));
-    
-    // Format the response to match expected frontend structure
-    const formattedTeam = result.rows.map(row => {
-      console.log('🔄 Processing team member:', row.name);
-      console.log('📊 Raw member data:', {
-        contribution: row.contribution_percentage,
-        tasks: row.tasks_completed,
-        skills: row.skills
-      });
-      
-      return {
-        id: row.id,
-        projectId: row.project_id,
-        userId: row.user_id,
-        name: row.name,
-        email: row.email,
-        avatar: row.avatar || row.name?.split(' ').map(n => n[0]).join('').toUpperCase(),
-        role: row.role_in_project || row.role || 'Team Member',
-        contribution: row.contribution_percentage || 0, // Default to 0, not 85
-        tasksCompleted: row.tasks_completed || 0,
-        joinedDate: row.joined_date || new Date().toISOString().split('T')[0],
-        status: 'active',
-        skills: row.skills ? (Array.isArray(row.skills) ? row.skills : JSON.parse(row.skills)) : [], // Parse skills from JSON
-        userCreatedAt: row.user_created_at
-      };
-    });
-    
-    console.log('✅ Formatted team members:', formattedTeam.length);
-    console.log('📋 Final formatted data:', formattedTeam.map(m => ({ id: m.id, name: m.name, role: m.role })));
-    
+      GROUP BY u.id, u.name, u.email, u.role, ptm.role_in_project, ptm.contribution_percentage, ptm.tasks_completed
+      ORDER BY u.name
+    `;
+
+    const result = await query(teamQuery, [projectId]);
+
     res.json({
       success: true,
-      data: formattedTeam,
-      count: formattedTeam.length
+      team: result.rows.map(member => ({
+        ...member,
+        career_goals_count: parseInt(member.career_goals_count) || 0
+      }))
     });
+
   } catch (error) {
-    console.error('❌ Failed to fetch project team:', error);
-    console.error('❌ Error details:', {
-      message: error.message,
-      stack: error.stack,
-      params: req.params,
-      url: req.url
+    console.error('âŒ Error getting project team:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get project team'
     });
-    throw new ApiError('Failed to fetch project team', 500);
   }
 };
 
-// Add a new team member to a project
-const addTeamMember = async (req, res) => {
+// ========================================
+// EXECUTIVE TEAM MANAGEMENT (New RBAC functionality)
+// ========================================
+
+// Get executive leader's team
+const getExecutiveTeam = async (req, res) => {
   try {
-    // FIX: Check for both possible parameter names
-    const projectId = req.params.projectId || req.params.id;
-    
-    console.log('🔄 addTeamMember called with:');
-    console.log('  - All params:', req.params);
-    console.log('  - projectId:', projectId, typeof projectId);
-    console.log('  - URL:', req.url);
-    
-    const memberData = req.body;
-    console.log('  - memberData:', JSON.stringify(memberData, null, 2));
-    
-    // Validate inputs
-    if (!projectId || isNaN(parseInt(projectId))) {
-      console.error('❌ Invalid project ID:', projectId);
-      throw new ApiError('Invalid project ID', 400);
+    const executiveId = req.user.id;
+
+    // Verify user is an executive leader
+    const userCheck = await query('SELECT role FROM users WHERE id = $1', [executiveId]);
+    if (userCheck.rows.length === 0 || userCheck.rows[0].role !== 'Executive Leader') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only Executive Leaders can access team management'
+      });
     }
-    
-    const { 
-      name, 
-      email, 
-      role, 
-      contribution = 0,  // Start at 0%, not 85%
-      tasksCompleted = 0, 
-      joinedDate = new Date().toISOString().split('T')[0],
-      skills = [],
-      status = 'active'
-    } = memberData;
-    
-    // Validate required fields
-    if (!name || !email || !role) {
-      console.error('❌ Missing required fields:', { name: !!name, email: !!email, role: !!role });
-      throw new ApiError('Name, email, and role are required', 400);
+
+    const teamQuery = `
+      SELECT 
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        u.created_at,
+        tm.added_date,
+        tm.status,
+        tm.notes,
+        COUNT(DISTINCT ptm.project_id) as active_projects,
+        COUNT(DISTINCT cdg.id) as career_goals,
+        AVG(CASE WHEN p.status != 'completed' THEN p.progress END) as avg_project_progress
+      FROM team_members tm
+      JOIN users u ON tm.user_id = u.id
+      LEFT JOIN project_team_members ptm ON u.id = ptm.user_id
+      LEFT JOIN projects p ON ptm.project_id = p.id AND p.status != 'completed'
+      LEFT JOIN career_development_goals cdg ON u.id = cdg.user_id AND cdg.status = 'active'
+      WHERE tm.executive_id = $1 AND tm.status = 'active'
+      GROUP BY u.id, u.name, u.email, u.role, u.created_at, tm.added_date, tm.status, tm.notes
+      ORDER BY u.name
+    `;
+
+    const result = await query(teamQuery, [executiveId]);
+
+    res.json({
+      success: true,
+      team: result.rows.map(member => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        joinedTeam: member.added_date,
+        status: member.status,
+        notes: member.notes,
+        stats: {
+          activeProjects: parseInt(member.active_projects) || 0,
+          careerGoals: parseInt(member.career_goals) || 0,
+          avgProgress: parseFloat(member.avg_project_progress) || 0
+        }
+      }))
+    });
+
+  } catch (error) {
+    console.error('âŒ Error getting executive team:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get team members'
+    });
+  }
+};
+
+// Get available users to add to executive team
+const getAvailableTeamMembers = async (req, res) => {
+  try {
+    const executiveId = req.user.id;
+
+    // Get users who are not already in any team
+    const availableUsersQuery = `
+      SELECT u.id, u.name, u.email, u.role, u.created_at,
+             COUNT(DISTINCT p.id) as project_count
+      FROM users u
+      LEFT JOIN team_members tm ON u.id = tm.user_id AND tm.status = 'active'
+      LEFT JOIN project_team_members ptm ON u.id = ptm.user_id
+      LEFT JOIN projects p ON ptm.project_id = p.id
+      WHERE tm.user_id IS NULL 
+        AND u.id != $1 
+        AND u.role = 'Team Member'
+      GROUP BY u.id, u.name, u.email, u.role, u.created_at
+      ORDER BY u.name
+    `;
+
+    const result = await query(availableUsersQuery, [executiveId]);
+
+    res.json({
+      success: true,
+      availableUsers: result.rows.map(user => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        created_at: user.created_at,
+        projectCount: parseInt(user.project_count) || 0
+      }))
+    });
+
+  } catch (error) {
+    console.error('âŒ Error getting available users:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get available users'
+    });
+  }
+};
+
+// Add user to executive team
+const addExecutiveTeamMember = async (req, res) => {
+  try {
+    const executiveId = req.user.id;
+    const { userId, notes } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
     }
-    
-    console.log('✅ Validation passed, starting transaction...');
-    
-    await query('BEGIN');
-    
-    try {
-      // Check if user already exists
-      console.log('🔍 Checking if user exists...');
-      const existingUser = await query(
-        'SELECT * FROM users WHERE email = $1',
-        [email]
-      );
-      
-      let userId;
-      
-      if (existingUser.rows.length > 0) {
-        // User exists, use their ID
-        userId = existingUser.rows[0].id;
-        console.log('✅ Found existing user:', existingUser.rows[0].name, 'ID:', userId);
-        
-        // Update their information if needed
-        await query(`
-          UPDATE users SET 
-            name = $1, 
-            role = $2, 
-            avatar = $3, 
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $4
-        `, [
-          name, 
-          role,
-          name.split(' ').map(n => n[0]).join('').toUpperCase(),
-          userId
-        ]);
-        
-        console.log('✅ Updated existing user information');
-      } else {
-        // Create new user
-        console.log('🔄 Creating new user...');
-        const newUser = await query(`
-          INSERT INTO users (name, email, role, avatar, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-          RETURNING id
-        `, [
-          name, 
-          email, 
-          role,
-          name.split(' ').map(n => n[0]).join('').toUpperCase()
-        ]);
-        
-        userId = newUser.rows[0].id;
-        console.log('✅ Created new user with ID:', userId);
+
+    // Check if user exists and is a team member
+    const userCheck = await query(
+      'SELECT id, name, email, role FROM users WHERE id = $1 AND role = $2',
+      [userId, 'Team Member']
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found or not a team member'
+      });
+    }
+
+    // Check if user is already in a team
+    const existingTeamCheck = await query(
+      'SELECT executive_id FROM team_members WHERE user_id = $1 AND status = $2',
+      [userId, 'active']
+    );
+
+    if (existingTeamCheck.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'User is already assigned to a team'
+      });
+    }
+
+    // Add user to team
+    const addQuery = `
+      INSERT INTO team_members (user_id, executive_id, added_by, notes, added_date, status)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, 'active')
+      RETURNING id
+    `;
+
+    await query(addQuery, [userId, executiveId, executiveId, notes || '']);
+
+    const user = userCheck.rows[0];
+
+    console.log(`âœ… Added ${user.name} to executive team of ${executiveId}`);
+
+    res.json({
+      success: true,
+      message: `${user.name} has been added to your team`,
+      addedUser: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
       }
-      
-      // Check if user is already a team member of this project
-      console.log('🔍 Checking if user is already on team...');
-      const existingMember = await query(
-        'SELECT * FROM project_team_members WHERE project_id = $1 AND user_id = $2',
-        [parseInt(projectId), userId]
-      );
-      
-      if (existingMember.rows.length > 0) {
-        await query('ROLLBACK');
-        console.error('❌ User already on team');
-        throw new ApiError('User is already a member of this project', 400);
+    });
+
+  } catch (error) {
+    console.error('âŒ Error adding executive team member:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add team member'
+    });
+  }
+};
+
+// Remove user from executive team
+const removeExecutiveTeamMember = async (req, res) => {
+  try {
+    const executiveId = req.user.id;
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Check if user is in this executive's team
+    const teamMemberCheck = await query(
+      `SELECT tm.id, u.name 
+       FROM team_members tm 
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.user_id = $1 AND tm.executive_id = $2 AND tm.status = 'active'`,
+      [userId, executiveId]
+    );
+
+    if (teamMemberCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User is not in your team'
+      });
+    }
+
+    // Update status to inactive instead of deleting
+    const removeQuery = `
+      UPDATE team_members 
+      SET status = 'inactive', updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND executive_id = $2 AND status = 'active'
+    `;
+
+    await query(removeQuery, [userId, executiveId]);
+
+    const userName = teamMemberCheck.rows[0].name;
+
+    console.log(`âœ… Removed ${userName} from executive team of ${executiveId}`);
+
+    res.json({
+      success: true,
+      message: `${userName} has been removed from your team`
+    });
+
+  } catch (error) {
+    console.error('âŒ Error removing executive team member:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to remove team member'
+    });
+  }
+};
+
+// Update executive team member notes
+const updateExecutiveTeamMember = async (req, res) => {
+  try {
+    const executiveId = req.user.id;
+    const { userId } = req.params;
+    const { notes } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Check if user is in this executive's team
+    const teamMemberCheck = await query(
+      `SELECT tm.id, u.name 
+       FROM team_members tm 
+       JOIN users u ON tm.user_id = u.id
+       WHERE tm.user_id = $1 AND tm.executive_id = $2 AND tm.status = 'active'`,
+      [userId, executiveId]
+    );
+
+    if (teamMemberCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User is not in your team'
+      });
+    }
+
+    // Update notes
+    const updateQuery = `
+      UPDATE team_members 
+      SET notes = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $2 AND executive_id = $3 AND status = 'active'
+    `;
+
+    await query(updateQuery, [notes || '', userId, executiveId]);
+
+    const userName = teamMemberCheck.rows[0].name;
+
+    console.log(`âœ… Updated notes for ${userName} in executive team of ${executiveId}`);
+
+    res.json({
+      success: true,
+      message: `Notes updated for ${userName}`
+    });
+
+  } catch (error) {
+    console.error('âŒ Error updating executive team member:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update team member'
+    });
+  }
+};
+
+// Get executive team member details
+const getExecutiveTeamMemberDetails = async (req, res) => {
+  try {
+    const executiveId = req.user.id;
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Check if user is in this executive's team
+    const teamMemberQuery = `
+      SELECT 
+        u.id, u.name, u.email, u.role, u.created_at,
+        tm.added_date, tm.notes, tm.status,
+        COUNT(DISTINCT p.id) as total_projects,
+        COUNT(DISTINCT CASE WHEN p.status = 'completed' THEN p.id END) as completed_projects,
+        COUNT(DISTINCT cdg.id) as total_career_goals,
+        COUNT(DISTINCT CASE WHEN cdg.status = 'completed' THEN cdg.id END) as completed_goals
+      FROM team_members tm
+      JOIN users u ON tm.user_id = u.id
+      LEFT JOIN project_team_members ptm ON u.id = ptm.user_id
+      LEFT JOIN projects p ON ptm.project_id = p.id
+      LEFT JOIN career_development_goals cdg ON u.id = cdg.user_id
+      WHERE tm.user_id = $1 AND tm.executive_id = $2 AND tm.status = 'active'
+      GROUP BY u.id, u.name, u.email, u.role, u.created_at, tm.added_date, tm.notes, tm.status
+    `;
+
+    const result = await query(teamMemberQuery, [userId, executiveId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'User is not in your team'
+      });
+    }
+
+    const member = result.rows[0];
+
+    // Get recent career development goals
+    const careerGoalsQuery = `
+      SELECT id, title, category, current_level, target_level, 
+             current_progress, status, target_date
+      FROM career_development_goals
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT 5
+    `;
+
+    const careerGoalsResult = await query(careerGoalsQuery, [userId]);
+
+    // Get recent projects
+    const projectsQuery = `
+      SELECT p.id, p.name, p.status, p.priority, p.progress,
+             ptm.role_in_project, ptm.contribution_percentage
+      FROM projects p
+      JOIN project_team_members ptm ON p.id = ptm.project_id
+      WHERE ptm.user_id = $1
+      ORDER BY p.created_at DESC
+      LIMIT 5
+    `;
+
+    const projectsResult = await query(projectsQuery, [userId]);
+
+    res.json({
+      success: true,
+      member: {
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        joinedTeam: member.added_date,
+        notes: member.notes,
+        stats: {
+          totalProjects: parseInt(member.total_projects) || 0,
+          completedProjects: parseInt(member.completed_projects) || 0,
+          totalCareerGoals: parseInt(member.total_career_goals) || 0,
+          completedGoals: parseInt(member.completed_goals) || 0
+        },
+        recentCareerGoals: careerGoalsResult.rows,
+        recentProjects: projectsResult.rows
       }
-      
-      // Add user to project team
-      console.log('🔄 Adding user to project team...');
-      const teamMember = await query(`
-        INSERT INTO project_team_members (
-          project_id, user_id, role_in_project, contribution_percentage, 
-          tasks_completed, joined_date, skills
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id
-      `, [
-        parseInt(projectId),
-        userId,
-        role,
-        contribution,
-        tasksCompleted,
-        joinedDate,
-        JSON.stringify(skills) // Store skills as JSON
-      ]);
-      
-      const memberId = teamMember.rows[0].id;
-      console.log('✅ Added to team with member ID:', memberId);
-      
-      // Get the complete team member data
-      console.log('🔍 Fetching complete member data...');
-      const completeMember = await query(`
+    });
+
+  } catch (error) {
+    console.error('âŒ Error getting executive team member details:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get team member details'
+    });
+  }
+};
+
+// Get all team members (for general team overview)
+const getAllTeamMembers = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    let teamQuery;
+    let queryParams;
+
+    if (userRole === 'Executive Leader') {
+      // Executive leaders see their team members
+      teamQuery = `
         SELECT 
-          ptm.id,
-          ptm.project_id,
-          ptm.user_id,
-          u.name,
-          u.email,
-          u.avatar,
-          u.role,
-          ptm.role_in_project,
-          ptm.contribution_percentage,
-          ptm.tasks_completed,
-          ptm.joined_date,
-          ptm.skills,
-          u.created_at as user_created_at
-        FROM project_team_members ptm
-        JOIN users u ON ptm.user_id = u.id
-        WHERE ptm.id = $1
-      `, [memberId]);
-      
-      if (completeMember.rows.length === 0) {
-        await query('ROLLBACK');
-        throw new Error('Failed to fetch created member data');
-      }
-      
-      // Format response to match frontend expectations
-      const formattedMember = {
-        id: completeMember.rows[0].id,
-        projectId: completeMember.rows[0].project_id,
-        userId: completeMember.rows[0].user_id,
-        name: completeMember.rows[0].name,
-        email: completeMember.rows[0].email,
-        avatar: completeMember.rows[0].avatar,
-        role: completeMember.rows[0].role_in_project,
-        contribution: completeMember.rows[0].contribution_percentage,
-        tasksCompleted: completeMember.rows[0].tasks_completed,
-        joinedDate: completeMember.rows[0].joined_date,
-        status: 'active',
-        skills: completeMember.rows[0].skills ? 
-          (Array.isArray(completeMember.rows[0].skills) ? 
-            completeMember.rows[0].skills : 
-            JSON.parse(completeMember.rows[0].skills)) : [],
-        userCreatedAt: completeMember.rows[0].user_created_at
-      };
-      
-      // Log the activity in project history
-      console.log('🔄 Adding to project history...');
-      await query(`
-        INSERT INTO project_history (
-          project_id, user_id, action, description, action_type, details
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-      `, [
-        parseInt(projectId),
-        userId,
-        'Team Member Added',
-        `${name} was added to the project team`,
-        'team_change',
-        JSON.stringify({ member: name, action: 'added', role: role })
-      ]);
-      
-      await query('COMMIT');
-      
-      console.log('✅ Team member added successfully:', formattedMember.name);
-      
-      res.json({
-        success: true,
-        data: formattedMember,
-        message: 'Team member added successfully'
-      });
-      
-    } catch (innerError) {
-      await query('ROLLBACK');
-      console.error('❌ Inner transaction error:', innerError);
-      throw innerError;
-    }
-    
-  } catch (error) {
-    console.error('❌ addTeamMember error details:');
-    console.error('  - Error message:', error.message);
-    console.error('  - Error stack:', error.stack);
-    console.error('  - Request params:', req.params);
-    console.error('  - Request body:', req.body);
-    console.error('  - Request URL:', req.url);
-    
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError(`Failed to add team member: ${error.message}`, 500);
-  }
-};
-
-// Update a team member
-const updateTeamMember = async (req, res) => {
-  try {
-    // FIX: Check for both possible parameter names
-    const projectId = req.params.projectId || req.params.id;
-    const memberId = req.params.memberId;
-    
-    console.log('🔄 updateTeamMember called with:');
-    console.log('  - All params:', req.params);
-    console.log('  - projectId:', projectId, typeof projectId);
-    console.log('  - memberId:', memberId, typeof memberId);
-    console.log('  - URL:', req.url);
-    
-    const updateData = req.body;
-    console.log('  - updateData:', JSON.stringify(updateData, null, 2));
-    
-    // Validate inputs
-    if (!projectId || isNaN(parseInt(projectId))) {
-      console.error('❌ Invalid project ID:', projectId);
-      throw new ApiError('Invalid project ID', 400);
-    }
-    
-    if (!memberId || isNaN(parseInt(memberId))) {
-      console.error('❌ Invalid member ID:', memberId);
-      throw new ApiError('Invalid member ID', 400);
-    }
-    
-    const { 
-      name, 
-      email, 
-      role, 
-      contribution, 
-      tasksCompleted, 
-      joinedDate,
-      skills = [],
-      status
-    } = updateData;
-    
-    // Validate required fields
-    if (!name || !email || !role) {
-      console.error('❌ Missing required fields:', { name: !!name, email: !!email, role: !!role });
-      throw new ApiError('Name, email, and role are required', 400);
-    }
-    
-    console.log('✅ Validation passed, starting transaction...');
-    
-    await query('BEGIN');
-    
-    try {
-      // Get the current team member data
-      console.log('🔍 Fetching current member data...');
-      const currentMember = await query(`
-        SELECT ptm.*, u.* FROM project_team_members ptm
-        JOIN users u ON ptm.user_id = u.id
-        WHERE ptm.id = $1 AND ptm.project_id = $2
-      `, [parseInt(memberId), parseInt(projectId)]);
-      
-      if (currentMember.rows.length === 0) {
-        await query('ROLLBACK');
-        console.error('❌ Team member not found:', { memberId, projectId });
-        throw new ApiError('Team member not found', 404);
-      }
-      
-      const userId = currentMember.rows[0].user_id;
-      console.log('✅ Found team member:', currentMember.rows[0].name, 'userId:', userId);
-      
-      // Update user information - ONLY update columns that exist
-      console.log('🔄 Updating user table...');
-      await query(`
-        UPDATE users SET 
-          name = $1, 
-          email = $2, 
-          role = $3, 
-          avatar = $4, 
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = $5
-      `, [
-        name, 
-        email, 
-        role,
-        name.split(' ').map(n => n[0]).join('').toUpperCase(),
-        userId
-      ]);
-      
-      console.log('✅ User table updated');
-      
-      // Update team member information - ONLY update columns that exist
-      console.log('🔄 Updating project_team_members table...');
-      await query(`
-        UPDATE project_team_members SET 
-          role_in_project = $1, 
-          contribution_percentage = $2,
-          tasks_completed = $3, 
-          joined_date = $4,
-          skills = $5
-        WHERE id = $6
-      `, [
-        role, 
-        contribution || 0,  // Default to 0, not 85
-        tasksCompleted || 0, 
-        joinedDate || currentMember.rows[0].joined_date,
-        JSON.stringify(skills),
-        parseInt(memberId)
-      ]);
-      
-      console.log('✅ project_team_members table updated');
-      
-      // Get the updated team member data
-      console.log('🔍 Fetching updated member data...');
-      const updatedMember = await query(`
+          u.id, u.name, u.email, u.role, u.created_at,
+          COUNT(DISTINCT ptm.project_id) as project_count,
+          AVG(ptm.contribution_percentage) as avg_contribution
+        FROM team_members tm
+        JOIN users u ON tm.user_id = u.id
+        LEFT JOIN project_team_members ptm ON u.id = ptm.user_id
+        WHERE tm.executive_id = $1 AND tm.status = 'active'
+        GROUP BY u.id, u.name, u.email, u.role, u.created_at
+        ORDER BY u.name
+      `;
+      queryParams = [userId];
+    } else {
+      // Other users see general team info (limited)
+      teamQuery = `
         SELECT 
-          ptm.id,
-          ptm.project_id,
-          ptm.user_id,
-          u.name,
-          u.email,
-          u.avatar,
-          u.role,
-          ptm.role_in_project,
-          ptm.contribution_percentage,
-          ptm.tasks_completed,
-          ptm.joined_date,
-          ptm.skills,
-          u.created_at as user_created_at
-        FROM project_team_members ptm
-        JOIN users u ON ptm.user_id = u.id
-        WHERE ptm.id = $1
-      `, [parseInt(memberId)]);
-      
-      if (updatedMember.rows.length === 0) {
-        await query('ROLLBACK');
-        throw new Error('Failed to fetch updated member data');
-      }
-      
-      // Format response to match frontend expectations
-      const formattedMember = {
-        id: updatedMember.rows[0].id,
-        projectId: updatedMember.rows[0].project_id,
-        userId: updatedMember.rows[0].user_id,
-        name: updatedMember.rows[0].name,
-        email: updatedMember.rows[0].email,
-        avatar: updatedMember.rows[0].avatar,
-        role: updatedMember.rows[0].role_in_project,
-        contribution: updatedMember.rows[0].contribution_percentage,
-        tasksCompleted: updatedMember.rows[0].tasks_completed,
-        joinedDate: updatedMember.rows[0].joined_date,
-        status: 'active',
-        skills: updatedMember.rows[0].skills ? 
-          (Array.isArray(updatedMember.rows[0].skills) ? 
-            updatedMember.rows[0].skills : 
-            JSON.parse(updatedMember.rows[0].skills)) : [],
-        userCreatedAt: updatedMember.rows[0].user_created_at
-      };
-      
-      // Log the activity in project history
-      console.log('🔄 Adding to project history...');
-      await query(`
-        INSERT INTO project_history (
-          project_id, user_id, action, description, action_type, details
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-      `, [
-        parseInt(projectId),
-        userId,
-        'Team Member Updated',
-        `${name}'s information was updated`,
-        'team_change',
-        JSON.stringify({ member: name, action: 'updated' })
-      ]);
-      
-      await query('COMMIT');
-      
-      console.log('✅ Team member updated successfully:', formattedMember.name);
-      
-      res.json({
-        success: true,
-        data: formattedMember,
-        message: 'Team member updated successfully'
-      });
-      
-    } catch (innerError) {
-      await query('ROLLBACK');
-      console.error('❌ Inner transaction error:', innerError);
-      throw innerError;
+          u.id, u.name, u.email, u.role, u.created_at,
+          COUNT(DISTINCT ptm.project_id) as project_count
+        FROM users u
+        LEFT JOIN project_team_members ptm ON u.id = ptm.user_id
+        WHERE u.id != $1
+        GROUP BY u.id, u.name, u.email, u.role, u.created_at
+        ORDER BY u.name
+        LIMIT 20
+      `;
+      queryParams = [userId];
     }
-    
-  } catch (error) {
-    console.error('❌ updateTeamMember error details:');
-    console.error('  - Error message:', error.message);
-    console.error('  - Error stack:', error.stack);
-    console.error('  - Request params:', req.params);
-    console.error('  - Request body:', req.body);
-    console.error('  - Request URL:', req.url);
-    
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError(`Failed to update team member: ${error.message}`, 500);
-  }
-};
 
-// Remove a team member from a project
-const removeTeamMember = async (req, res) => {
-  try {
-    // FIX: Check for both possible parameter names
-    const projectId = req.params.projectId || req.params.id;
-    const memberId = req.params.memberId;
-    
-    console.log('🔄 Removing team member:', memberId, 'from project:', projectId);
-    console.log('🔍 All params:', req.params);
-    
-    if (!projectId || isNaN(parseInt(projectId))) {
-      throw new ApiError('Invalid project ID', 400);
-    }
-    
-    if (!memberId || isNaN(parseInt(memberId))) {
-      throw new ApiError('Invalid member ID', 400);
-    }
-    
-    await query('BEGIN');
-    
-    try {
-      // Get the team member data before deletion
-      const memberData = await query(`
-        SELECT ptm.*, u.name FROM project_team_members ptm
-        JOIN users u ON ptm.user_id = u.id
-        WHERE ptm.id = $1 AND ptm.project_id = $2
-      `, [parseInt(memberId), parseInt(projectId)]);
-      
-      if (memberData.rows.length === 0) {
-        await query('ROLLBACK');
-        throw new ApiError('Team member not found', 404);
-      }
-      
-      const member = memberData.rows[0];
-      console.log('✅ Found team member to remove:', member.name);
-      
-      // Remove from team
-      await query(
-        'DELETE FROM project_team_members WHERE id = $1',
-        [parseInt(memberId)]
-      );
-      
-      // Log the activity in project history
-      await query(`
-        INSERT INTO project_history (
-          project_id, user_id, action, description, action_type, details
-        ) VALUES ($1, $2, $3, $4, $5, $6)
-      `, [
-        parseInt(projectId),
-        member.user_id,
-        'Team Member Removed',
-        `${member.name} was removed from the project team`,
-        'team_change',
-        JSON.stringify({ member: member.name, action: 'removed' })
-      ]);
-      
-      await query('COMMIT');
-      
-      console.log('✅ Team member removed successfully');
-      
-      res.json({
-        success: true,
-        message: 'Team member removed successfully'
-      });
-    } catch (error) {
-      await query('ROLLBACK');
-      throw error;
-    }
+    const result = await query(teamQuery, queryParams);
+
+    res.json({
+      success: true,
+      team: result.rows.map(member => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        created_at: member.created_at,
+        project_count: parseInt(member.project_count) || 0,
+        avg_contribution: parseFloat(member.avg_contribution) || 0
+      })),
+      userRole
+    });
+
   } catch (error) {
-    console.error('❌ Failed to remove team member:', error);
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError('Failed to remove team member', 500);
+    console.error('âŒ Error getting all team members:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get team members'
+    });
   }
 };
 
 module.exports = {
-  getProjectTeam,
+  // Project team management
   addTeamMember,
+  removeTeamMember,
   updateTeamMember,
-  removeTeamMember
+  getProjectTeam,
+  
+  // Executive team management  
+  getExecutiveTeam,
+  getAvailableTeamMembers,
+  addExecutiveTeamMember,
+  removeExecutiveTeamMember,
+  updateExecutiveTeamMember,
+  getExecutiveTeamMemberDetails,
+  
+  // General team functions
+  getAllTeamMembers
 };

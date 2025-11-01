@@ -1,16 +1,11 @@
-// Update your backend/app.js to ensure auth routes are loaded:
-
 const express = require('express');
 const cors = require('cors');
 
 const app = express();
 
-// Add this debugging section to your backend/app.js (after const app = express();):
-
 console.log('🔍 Current working directory:', process.cwd());
 console.log('🔍 __dirname:', __dirname);
 
-// Test individual route files
 console.log('🔍 Testing route files...');
 
 try {
@@ -57,11 +52,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -70,7 +63,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Import and use routes
 try {
   const authRoutes = require('./routes/auth');
   app.use('/api/auth', authRoutes);
@@ -95,7 +87,8 @@ try {
   console.warn('⚠️ User routes not found:', error.message);
 }
 
-// Basic error handling
+app.use('/api/team', require('./routes/teamManagement'));
+
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.message);
   res.status(500).json({
@@ -104,7 +97,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,

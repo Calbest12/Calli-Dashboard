@@ -27,17 +27,17 @@ const pool = new Pool({
   host: process.env.DB_HOST,
   database: 'user_data',
   password: process.env.DB_PASS,
-  port: process.env.DB_PORT, // Default port for PostgreSQL
+  port: process.env.DB_PORT, 
 });
 
 app.use(session({
   store: new pgSession({
-    pool: pool, // Use the same pool instance for the session store
+    pool: pool, 
   }),
-  secret: process.env.SESSION_SEC, // Secret key for signing the session ID cookie
+  secret: process.env.SESSION_SEC, 
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: envHTTPS, maxAge: 30 * 24 * 60 * 60 * 1000} // Cookie settings, `secure: true` in production with HTTPS
+  cookie: { secure: envHTTPS, maxAge: 30 * 24 * 60 * 60 * 1000} 
 }));
 app.use(cookieParser());
 app.use(express.json());
@@ -49,7 +49,6 @@ passport.serializeUser((user, done) => {
 });
 
 passport.deserializeUser((id, done) => {
-  // Retrieve the user from the database using the id stored in the session
   pool.query('SELECT * FROM users WHERE id = $1', [id], (err, result) => {
     if (err) {
       return done(err);
@@ -66,38 +65,31 @@ passport.use(new LocalStrategy(
         const user = userResult.rows[0];
         const isMatch = await bcrypt.compare(password, user.password);
         if (isMatch) {
-          return done(null, user);  // User authenticated
+          return done(null, user);  
         }
       }
-      return done(null, false);  // Authentication failed
+      return done(null, false); 
     } catch (error) {
       return done(error);
     }
   }
 ));
 
-//MIDDLE WARES
-// Middleware to parse JSON bodies
-
 app.use(cors({
-  origin: process.env.FRONTEND_URL, // Frontend server URL
-  credentials: true // Allow sending of cookies
+  origin: process.env.FRONTEND_URL, 
+  credentials: true
 }));
 
 app.use((req, res, next) => {
-  // Check for the existence of the session cookie
   if (req.cookies && req.cookies['connect.sid']) {
-    // Proceed if the user is authenticated through Passport
     if (req.isAuthenticated()) {
       return next();
     }
 
-    // check if there is a validated resetSession
     if (req.session.resetSession && req.session.resetSession.verified) {
       return next();
     }
 
-    // If neither condition is met, clear the session cookie and return 401
     res.clearCookie('connect.sid', { path: '/' });
     return res.status(401).send('Session is invalid or expired. Cookie cleared.');
   }
@@ -113,7 +105,6 @@ async function ensureUserProgressSync(req, res, next) {
   const userId = req.user.id;
   
   try {
-    // Ensure user_module_progress is up-to-date
     const modules = await pool.query('SELECT moduleid FROM modules');
     for (let module of modules.rows) {
       const userModuleCheck = await pool.query('SELECT * FROM user_module_progress WHERE user_id = $1 AND module_id = $2', [userId, module.moduleid]);
@@ -122,7 +113,6 @@ async function ensureUserProgressSync(req, res, next) {
       }
     }
 
-    // Ensure user_content_progress is up-to-date
     const contents = await pool.query('SELECT id, module_id FROM contents');
     for (let content of contents.rows) {
       const userContentCheck = await pool.query('SELECT * FROM user_content_progress WHERE user_id = $1 AND content_id = $2', [userId, content.id]);
@@ -149,13 +139,10 @@ const serveModuleFile = (req, res, next) => {
 
     res.sendFile(filePath, function (err) {
       if (err) {
-        // Check if the headers have already been sent
         if (!res.headersSent) {
           if (err.code === 'ENOENT') {
-            // File not found
             res.status(404).send('File not found.');
           } else {
-            // Some other server error or request was aborted
             res.status(500).send('Server error.');
           }
         }
@@ -168,7 +155,6 @@ const serveModuleFile = (req, res, next) => {
 };
 
 app.use('/mod/:fileName', serveModuleFile);
-//ENDPOINTS
 
 app.get('/api/check-session', (req, res) => {
   if (req.isAuthenticated()) {
@@ -183,8 +169,6 @@ app.get('/api/check-session', (req, res) => {
   }
 });
 
-// Login endpoint
-
 app.post('/api/login', (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
     if (err) {
@@ -192,7 +176,6 @@ app.post('/api/login', (req, res, next) => {
       return res.status(500).json({ message: 'Internal server error' });
     }
     if (!user) {
-      // No user found, or the login details were incorrect
       return res.status(401).json({ message: 'Invalid credentials' });
     }
     req.logIn(user, (err) => {
@@ -200,7 +183,6 @@ app.post('/api/login', (req, res, next) => {
         console.error(err);
         return res.status(500).json({ message: 'Error logging in' });
       }
-      // Successful login
       const { username } = req.body;
       console.log(username + " has logged in");
       return res.json({ message: 'Logged in successfully' });
@@ -208,8 +190,6 @@ app.post('/api/login', (req, res, next) => {
   })(req, res, next);
 });
 
-
-// Logout endpoint
 app.post('/api/logout', (req, res, next) => {
   req.logout(function(err) {
     if (err) { return next(err); }
@@ -300,10 +280,8 @@ app.post('/api/verify-code', async (req, res) => {
     `;
     await pool.query(updateQuery, [result.rows[0].user_id, resetCode]);
 
-    // Assign values to session object
     req.session.resetSession = { userId: result.rows[0].user_id, email: email, verified: true };
 
-    // Respond to the client. Session is automatically saved.
     res.send('Reset code verified. Proceed with password reset.');
     console.log("Code verified");
   } catch (error) {
@@ -325,7 +303,6 @@ app.post('/api/reset-pwd', async (req, res) => {
       message: 'Password must be at least 8 characters long, include at least one uppercase letter, one symbol, and one number.'
     });
   }
-  // Check for a valid reset session or a normal authenticated session
   if (req.session.resetSession && req.session.resetSession.verified) {
       userId = req.session.resetSession.userId;
   } else if (req.isAuthenticated()) {
@@ -363,18 +340,15 @@ app.post('/api/forgot-user', async (req, res) => {
   const { email } = req.body;
 
   try {
-    // Fetch the user's username based on the email address
     const userResult = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
     if (userResult.rows.length === 0) {
       console.log("No user found for email:", email);
-      // Send a generic response to avoid revealing whether an email is registered
       return res.status(200).send('If the email is associated with an account, the username will be sent.');
     }
 
     const username = userResult.rows[0].username;
     console.log(`Found username: ${username} for email: ${email}`);
 
-    // Send the username to the internal email server's /send-user endpoint
     const emailResponse = await fetch('http://localhost:3003/email/send-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -386,7 +360,6 @@ app.post('/api/forgot-user', async (req, res) => {
     }
 
     console.log('Username sent successfully via email.');
-    // Send a generic response for security reasons
     res.status(200).send('If the email is associated with an account, the username will be sent.');
   } catch (error) {
     console.error('Error during forgot username operation:', error);
@@ -432,7 +405,6 @@ app.post('/api/register', async (req, res) => {
     if (client) await client.query('ROLLBACK');
     console.error('Error registering new user:', error);
 
-    // Check if the error is a unique violation
     if (error.code === '23505') {
       if (error.constraint === 'users_email_key') {
         return res.status(400).json({ message: 'Email already exists.' });
@@ -462,7 +434,6 @@ app.get('/api/aimetrics', async (req, res) => {
     );
 
     if (chatDataResult.rowCount > 0) {
-      // Directly send the num_chats integer value
       res.json({ numChats: chatDataResult.rows[0].num_chats });
     } else {
       res.status(404).send('No chat data found.');
@@ -473,9 +444,6 @@ app.get('/api/aimetrics', async (req, res) => {
   }
 });
 
-
-
-//get profile of signed in user
 app.get('/api/profile', (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
@@ -519,14 +487,10 @@ app.post('/api/update-email', async (req, res) => {
   }
 });
 
-
-
-// Get all modules
 app.get('/api/modules', async (req, res) => {
   if (req.isAuthenticated()) {
     try {
       const result = await pool.query('SELECT * FROM modules');
-      //console.log('GET MODULES: Modules retrieved successfully.');
       res.status(200).json(result.rows);
     } catch (error) {
       console.error(error);
@@ -538,88 +502,69 @@ app.get('/api/modules', async (req, res) => {
   }
 });
 
-// Get a specific module based on id
 app.get('/api/module/id/:id', async (req, res) => {
   if (req.isAuthenticated()) {
     const { id } = req.params;
     try {
       const result = await pool.query('SELECT * FROM modules WHERE moduleid = $1', [id]);
       if (result.rows.length === 0) {
-        //console.log('GET MODULE: Module with the given ID not found.');
         res.status(404).send('Module with the given ID not found.');
       } else {
-        //console.log('GET MODULE: Module retrieved successfully.');
         res.status(200).json(result.rows[0]);
       }
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error retrieving module.');
     }
   } else {
-    //console.log('GET MODULE: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Get all content  
 app.get('/api/content', ensureUserProgressSync, async (req, res) => {
   if (req.isAuthenticated()) {
     try {
       const result = await pool.query('SELECT * FROM contents ORDER BY content_order ASC');
-      //console.log('GET CONTENT: Content retrieved and sorted by order successfully.');
       res.status(200).json(result.rows);
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error retrieving and sorting content.');
     }
   } else {
-    //console.log('GET CONTENT: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Get each user_module_progress entry for a specific user
 app.get('/api/user-module-progress', ensureUserProgressSync, async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
     try {
       const result = await pool.query('SELECT * FROM user_module_progress WHERE user_id = $1', [userId]);
-      //console.log('GET USER MODULE PROGRESS: User module progress retrieved successfully.');
       res.status(200).json(result.rows);
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error retrieving user module progress.');
     }
   } else {
-    //console.log('GET USER MODULE PROGRESS: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Post a new user_module_progress entry for a specific user
 app.post('/api/user-module-progress', ensureUserProgressSync, async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
     const { module_id, completed } = req.body;
-    //console.log(module_id, completed);
     try {
       const result = await pool.query(
         'INSERT INTO user_module_progress (user_id, module_id, completed) VALUES ($1, $2, $3) RETURNING *',
         [userId, module_id, completed]
       );
-      //console.log('POST USER MODULE PROGRESS: User module progress added successfully.');
       res.status(201).json(result.rows[0]);
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error adding user module progress.');
     }
   } else {
-    //console.log('POST USER MODULE PROGRESS: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Update a user_module_progress entry for a specific user
 app.put('/api/user-module-progress', ensureUserProgressSync,async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
@@ -630,41 +575,32 @@ app.put('/api/user-module-progress', ensureUserProgressSync,async (req, res) => 
         [completed, userId, module_id]
       );
       if (result.rows.length === 0) {
-        //console.log('PUT USER MODULE PROGRESS: User module progress not found.');
         res.status(404).send('User module progress not found.');
       } else {
-        //console.log('PUT USER MODULE PROGRESS: User module progress updated successfully.');
         res.status(200).json(result.rows[0]);
       }
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error updating user module progress.');
     }
   } else {
-    //console.log('PUT USER MODULE PROGRESS: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Get each user_content_progress entry for a specific user
 app.get('/api/user-content-progress', ensureUserProgressSync,async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
     try {
       const result = await pool.query('SELECT * FROM user_content_progress WHERE user_id = $1', [userId]);
-      //console.log('GET USER CONTENT PROGRESS: User content progress retrieved successfully.');
       res.status(200).json(result.rows);
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error retrieving user content progress.');
     }
   } else {
-    //console.log('GET USER CONTENT PROGRESS: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Post a new user_content_progress entry for a specific user
 app.post('/api/user-content-progress', ensureUserProgressSync,async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
@@ -674,19 +610,15 @@ app.post('/api/user-content-progress', ensureUserProgressSync,async (req, res) =
         'INSERT INTO user_content_progress (user_id, content_id, started, module_id) VALUES ($1, $2, $3, $4) RETURNING *',
         [userId, content_id, started, module_id]
       );
-      //console.log('POST USER CONTENT PROGRESS: User content progress added successfully.');
       res.status(201).json(result.rows[0]);
     } catch (error) {
-      //console.error(error);
       res.status(500).send('Error adding user content progress.');
     }
   } else {
-    //console.log('POST USER CONTENT PROGRESS: User not authenticated.');
     res.status(401).send('User not authenticated.');
   }
 });
 
-// Update a user_content_progress entry for a specific user
 app.put('/api/user-content-progress', ensureUserProgressSync, async (req, res) => {
   if (req.isAuthenticated()) {
     const userId = req.user.id; 
@@ -704,7 +636,6 @@ app.put('/api/user-content-progress', ensureUserProgressSync, async (req, res) =
 
       const moduleId = resultContentProgress.rows[0].module_id;
 
-      // Update user_module_progress to set viewed to true
       const resultModuleProgress = await pool.query(
         'UPDATE user_module_progress SET viewed = true WHERE user_id = $1 AND module_id = $2 RETURNING *',
         [userId, moduleId]
@@ -736,7 +667,6 @@ app.get('/api/download/:contentId', async (req, res) => {
   const { contentId } = req.params;
 
   try {
-    // Retrieve the download_src for the given content ID
     const queryResult = await pool.query('SELECT download_src FROM contents WHERE id = $1', [contentId]);
     if (queryResult.rows.length === 0) {
       return res.status(404).send('Content not found.');
@@ -744,19 +674,16 @@ app.get('/api/download/:contentId', async (req, res) => {
 
     const { download_src: downloadSrc } = queryResult.rows[0];
 
-    // Define the full path to the file
     const filePath = process.env.NODE_ENV === 'production'
       ? path.join('/var/www/files', downloadSrc)
       : path.join(__dirname, '..', 'files', downloadSrc);
 
-    // Check if the file exists
     fs.access(filePath, fs.constants.F_OK, (err) => {
       if (err) {
         console.error(`File not found: ${filePath}`);
         return res.status(404).send('File not found.');
       }
 
-      // Set the header to force download
       res.download(filePath, (downloadErr) => {
         if (downloadErr) {
           console.error(`Error downloading file: ${downloadErr}`);

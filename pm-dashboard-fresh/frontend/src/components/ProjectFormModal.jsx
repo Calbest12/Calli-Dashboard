@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, Users, Flag, FileText } from 'lucide-react';
 
 const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
-  // Available team members (you might want to fetch this from your API)
   const availableTeamMembers = [
     'John Doe',
     'Jane Smith', 
@@ -14,7 +13,6 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
     'Chris Wilson'
   ];
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -32,15 +30,11 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-
-
-  // Populate form when project changes or modal opens
   useEffect(() => {
     if (project && isOpen) {
-      console.log('🔄 Populating form with project data:', project);
-      console.log('🔍 Raw team data:', project.team);
+      console.log('ðŸ”„ Populating form with project data:', project);
+      console.log('ðŸ” Raw team data:', project.team);
       
-      // Format deadline for input field (needs YYYY-MM-DD format)
       let formattedDeadline = '';
       if (project.deadline) {
         const deadlineDate = new Date(project.deadline);
@@ -49,12 +43,10 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
         }
       }
       
-      // Clean and format team data
       let cleanTeam = [];
       if (Array.isArray(project.team)) {
         cleanTeam = project.team.filter(member => member && member.trim() !== '');
       } else if (project.team && typeof project.team === 'string') {
-        // Handle case where team might be a string
         cleanTeam = [project.team].filter(member => member && member.trim() !== '');
       }
       
@@ -73,7 +65,6 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
         }
       });
     } else if (!project && isOpen) {
-      // Reset form for new project
       setFormData({
         name: '',
         description: '',
@@ -91,7 +82,6 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
     }
   }, [project, isOpen]);
 
-  // Handle form field changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -123,11 +113,9 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
     }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.name.trim()) {
       alert('Project name is required');
       return;
@@ -149,7 +137,7 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
       setIsSubmitting(true);
       await onSubmit(formData);
     } catch (error) {
-      console.error('❌ Form submission error:', error);
+      console.error('âŒ Form submission error:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -458,7 +446,7 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
                 marginTop: '0.5rem',
                 fontStyle: 'italic'
               }}>
-                💡 Tip: Current team members are highlighted in blue. Uncheck to remove, check others to add.
+                ðŸ’¡ Tip: Current team members are highlighted in blue. Uncheck to remove, check others to add.
               </div>
             )}
           </div>
