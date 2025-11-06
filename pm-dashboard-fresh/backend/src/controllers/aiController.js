@@ -1,449 +1,557 @@
-const { query } = require('../config/database');
-
-let aiService;
-try {
-  aiService = require('../services/ai/aiService');
-  console.log('âœ… AI service loaded successfully');
-} catch (error) {
-  console.warn('âš ï¸ AI service not available:', error.message);
-  aiService = {
-    processChat: async (message, context) => {
-      return {
-        content: `I received your message: "${message}". AI service is not fully configured yet. Please set up your OpenAI API key to enable full AI capabilities.`,
-        model: 'fallback-mode',
-        tokensUsed: 0
-      };
-    }
-  };
-}
+const AIService = require('../services/ai/aiService');
+const { Pool } = require('pg');
 
 class AIController {
+  constructor() {
+    this.dbPool = new Pool({
+      user: process.env.DB_USER || 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      database: process.env.DB_NAME || 'project_manager',
+      password: process.env.DB_PASSWORD || 'postgres',
+      port: process.env.DB_PORT || 5432,
+    });
+  }
+
   async chat(req, res) {
     try {
-      const { message, context, projectId } = req.body;
-      const user = req.user; 
+      console.log('🤖 Enhanced AI Chat Request');
+      console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+      console.log('👤 User:', req.user?.name, req.user?.role);
 
-      if (!user) {
-        return res.status(401).json({
+      const { message, projectId } = req.body;
+      
+      // Validate input
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({
           success: false,
-          error: 'User not authenticated'
+          error: 'Message is required and must be a non-empty string'
         });
       }
 
-      console.log('ðŸ¤– AI Chat request from user:', user.name, 'ID:', user.id);
+      if (message.trim().length > 2000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Message too long. Please keep messages under 2000 characters.'
+        });
+      }
 
-      console.log('ðŸ“Š Fetching user projects...');
-      const userProjectsResult = await query(
-        `SELECT p.id, p.name, p.description, p.status, p.priority, 
-                p.pm_progress, p.leadership_progress, p.change_mgmt_progress, p.career_dev_progress,
-                COUNT(ptm2.id) as team_count,
-                AVG(pf.overall_average) as avg_feedback
-         FROM projects p
-         INNER JOIN project_team_members ptm ON p.id = ptm.project_id
-         LEFT JOIN project_team_members ptm2 ON p.id = ptm2.project_id
-         LEFT JOIN project_feedback pf ON p.id = pf.project_id
-         WHERE ptm.user_id = $1
-         GROUP BY p.id, p.name, p.description, p.status, p.priority, 
-                  p.pm_progress, p.leadership_progress, p.change_mgmt_progress, p.career_dev_progress
-         ORDER BY 
-           CASE p.priority 
-             WHEN 'critical' THEN 1 
-             WHEN 'high' THEN 2 
-             WHEN 'medium' THEN 3 
-             WHEN 'low' THEN 4 
-           END,
-           p.status = 'active' DESC`,
-        [user.id]
+      // Build comprehensive context
+      const context = await this.buildComprehensiveContext(req.user, projectId, message);
+      
+      console.log('🔍 Context built with:', {
+        userId: context.user?.id,
+        projectId: context.projectId,
+        hasProjects: context.projects?.length > 0,
+        hasAssessments: context.assessments?.length > 0,
+        hasGoals: context.goals?.length > 0
+      });
+
+      // Process with enhanced AI service
+      const aiResponse = await AIService.processChat(message.trim(), context);
+      
+      console.log('✅ AI Response generated:', {
+        model: aiResponse.model,
+        tokensUsed: aiResponse.tokensUsed,
+        documentsUsed: aiResponse.documentsUsed,
+        dataSourcesUsed: aiResponse.dataSourcesUsed
+      });
+
+      // Log comprehensive interaction
+      await this.logEnhancedInteraction(
+        req.user.id, 
+        projectId, 
+        message.trim(), 
+        aiResponse.content, 
+        {
+          model: aiResponse.model,
+          tokensUsed: aiResponse.tokensUsed,
+          documentsUsed: aiResponse.documentsUsed,
+          dataSourcesUsed: aiResponse.dataSourcesUsed,
+          contextSources: this.getContextSources(context),
+          userAgent: req.headers['user-agent'],
+          timestamp: new Date().toISOString()
+        }
       );
-
-      const userProjects = userProjectsResult.rows;
-      console.log(`ðŸ“Š Found ${userProjects.length} projects for user ${user.name}`);
-
-      let currentProject = null;
-      if (projectId) {
-        const projectResult = await query(
-          `SELECT p.*, 
-                  COUNT(ptm.id) as team_count,
-                  AVG(pf.overall_average) as avg_feedback
-           FROM projects p
-           LEFT JOIN project_team_members ptm ON p.id = ptm.project_id
-           LEFT JOIN project_feedback pf ON p.id = pf.project_id
-           WHERE p.id = $1
-           GROUP BY p.id`,
-          [projectId]
-        );
-        currentProject = projectResult.rows[0];
-        console.log('ðŸŽ¯ Current project:', currentProject?.name || 'Not found');
-      } else if (userProjects.length > 0) {
-        currentProject = userProjects.find(p => p.status === 'active') || userProjects[0];
-        console.log('ðŸŽ¯ Auto-selected current project:', currentProject.name);
-      }
-
-      const cleanContext = {
-        user: {
-          name: user.name,
-          role: user.role
-        },
-        portfolio: {
-          totalProjects: userProjects.length,
-          activeProjects: userProjects.filter(p => p.status === 'active').length,
-          avgProgress: userProjects.length > 0 ? 
-            Math.round(userProjects.reduce((sum, p) => sum + (p.pm_progress || 0), 0) / userProjects.length) : 0
-        },
-        currentProject: currentProject ? {
-          name: currentProject.name,
-          status: currentProject.status,
-          priority: currentProject.priority,
-          teamSize: parseInt(currentProject.team_count) || 0,
-          pmProgress: currentProject.pm_progress || 0,
-          leadershipProgress: currentProject.leadership_progress || 0
-        } : null,
-        timestamp: new Date().toISOString()
-      };
-
-      const enhancedMessage = this.createCleanPrompt(message, cleanContext);
-
-      console.log('ðŸ¤– Calling AI service with clean context...');
-      const response = await aiService.processChat(enhancedMessage, cleanContext);
-
-      const cleanedResponse = this.cleanAIResponse(response.content);
-
-      try {
-        await query(
-          `INSERT INTO ai_interactions (user_id, project_id, query, response, model_used, tokens_used, context_data)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            user.id,
-            currentProject?.id || null,
-            message,
-            cleanedResponse,
-            response.model,
-            response.tokensUsed || 0,
-            JSON.stringify(cleanContext)
-          ]
-        );
-        console.log('ðŸ“ AI interaction logged to database');
-      } catch (logError) {
-        console.warn('Failed to log AI interaction:', logError.message);
-      }
 
       res.json({
         success: true,
-        response: cleanedResponse,
-        model: response.model,
-        tokensUsed: response.tokensUsed
+        response: aiResponse.content,
+        model: aiResponse.model,
+        metadata: {
+          tokensUsed: aiResponse.tokensUsed,
+          documentsUsed: aiResponse.documentsUsed,
+          dataSourcesUsed: aiResponse.dataSourcesUsed,
+          contextEnhanced: true,
+          timestamp: new Date().toISOString()
+        }
       });
 
     } catch (error) {
-      console.error('AI chat error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'AI service temporarily unavailable'
-      });
+      console.error('❌ Enhanced AI chat error:', error);
+      
+      // Log error for debugging
+      try {
+        if (req.user?.id) {
+          await this.logEnhancedInteraction(
+            req.user.id,
+            req.body.projectId,
+            req.body.message || 'Error before processing',
+            'Error: ' + error.message,
+            {
+              error: true,
+              errorType: error.constructor.name,
+              errorMessage: error.message,
+              timestamp: new Date().toISOString()
+            }
+          );
+        }
+      } catch (logError) {
+        console.error('❌ Failed to log error interaction:', logError.message);
+      }
+
+      if (error.message.includes('API key')) {
+        res.status(503).json({
+          success: false,
+          error: 'AI service temporarily unavailable. Please try again later.'
+        });
+      } else if (error.message.includes('rate limit') || error.message.includes('quota')) {
+        res.status(429).json({
+          success: false,
+          error: 'Service temporarily busy. Please try again in a moment.'
+        });
+      } else if (error.message.includes('network') || error.message.includes('timeout')) {
+        res.status(503).json({
+          success: false,
+          error: 'Network connectivity issue. Please check your connection and try again.'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          error: 'I apologize, but I\'m experiencing technical difficulties. Please try again.',
+          details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
     }
   }
 
-  createCleanPrompt(userMessage, context) {
-    const systemContext = `You are an expert project management consultant providing insights to ${context.user.name}, a ${context.user.role}. 
+  async buildComprehensiveContext(user, projectId, message) {
+    const context = {
+      user: user,
+      projectId: projectId,
+      projects: [],
+      assessments: [],
+      goals: [],
+      team: [],
+      interactions: []
+    };
 
-Current Portfolio Context:
-- Total Projects: ${context.portfolio.totalProjects}
-- Active Projects: ${context.portfolio.activeProjects}
-- Average Progress: ${context.portfolio.avgProgress}/7 (${Math.round((context.portfolio.avgProgress/7)*100)}%)
+    try {
+      // Get user's projects (recent and relevant)
+      const projectsQuery = `
+        SELECT p.*, 
+               COUNT(DISTINCT pt.user_id) as team_size,
+               COUNT(DISTINCT f.id) as feedback_count
+        FROM projects p
+        LEFT JOIN project_teams pt ON p.id = pt.project_id
+        LEFT JOIN feedback f ON p.id = f.project_id
+        WHERE p.user_id = $1 
+           OR pt.user_id = $1
+           OR p.name ILIKE $2 
+           OR p.description ILIKE $2
+        GROUP BY p.id
+        ORDER BY 
+          CASE WHEN p.id = $3 THEN 0 ELSE 1 END,
+          p.updated_at DESC
+        LIMIT 10
+      `;
+      const projectsResult = await this.dbPool.query(projectsQuery, [
+        user.id, 
+        `%${message}%`, 
+        projectId || 0
+      ]);
+      context.projects = projectsResult.rows;
 
-${context.currentProject ? `Current Project Focus: "${context.currentProject.name}"
-- Status: ${context.currentProject.status}
-- Priority: ${context.currentProject.priority}
-- Team Size: ${context.currentProject.teamSize} members
-- PM Progress: ${context.currentProject.pmProgress}/7 (${Math.round((context.currentProject.pmProgress/7)*100)}%)
-- Leadership Progress: ${context.currentProject.leadershipProgress}/7 (${Math.round((context.currentProject.leadershipProgress/7)*100)}%)` : 'No specific project selected'}
+      // Get user's assessments
+      const assessmentsQuery = `
+        SELECT 'leadership_diamond' as type, 
+               ld.task_score, ld.team_score, ld.individual_score, ld.organization_score,
+               ld.responses, ld.created_at
+        FROM leadership_diamond_assessments ld
+        WHERE ld.user_id = $1
+        UNION ALL
+        SELECT 'value' as type,
+               va.vision_score as task_score, va.alignment_score as team_score, 
+               va.understanding_score as individual_score, va.enactment_score as organization_score,
+               va.responses, va.created_at
+        FROM value_assessments va
+        WHERE va.user_id = $1
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+      const assessmentsResult = await this.dbPool.query(assessmentsQuery, [user.id]);
+      context.assessments = assessmentsResult.rows;
 
-Instructions:
-- Provide practical, actionable advice
-- Focus on project management best practices
-- Use specific metrics when relevant
-- Keep responses professional and concise
-- Do not mention any technical implementation details
-- Do not reference file names, code, or system internals
-- Speak directly to the user as their consultant
+      // Get career development goals
+      const goalsQuery = `
+        SELECT cg.*, 
+               COUNT(DISTINCT lr.id) as learning_resources_count,
+               COUNT(DISTINCT gph.id) as progress_history_count
+        FROM career_development_goals cg
+        LEFT JOIN learning_resources lr ON cg.id = lr.goal_id
+        LEFT JOIN goal_progress_history gph ON cg.id = gph.goal_id
+        WHERE cg.user_id = $1
+           OR cg.description ILIKE $2
+           OR cg.notes ILIKE $2
+        GROUP BY cg.id
+        ORDER BY 
+          CASE WHEN cg.status = 'active' THEN 0 ELSE 1 END,
+          cg.updated_at DESC
+        LIMIT 10
+      `;
+      const goalsResult = await this.dbPool.query(goalsQuery, [user.id, `%${message}%`]);
+      context.goals = goalsResult.rows;
 
-User Question: ${userMessage}`;
+      // Get team information for context
+      const teamQuery = `
+        SELECT DISTINCT u.id, u.name, u.role, u.avatar,
+               COUNT(DISTINCT p.id) as shared_projects
+        FROM users u
+        JOIN project_teams pt ON u.id = pt.user_id
+        JOIN projects p ON pt.project_id = p.id
+        WHERE p.user_id = $1 OR pt.user_id = $1
+        AND u.id != $1
+        GROUP BY u.id, u.name, u.role, u.avatar
+        ORDER BY shared_projects DESC
+        LIMIT 10
+      `;
+      const teamResult = await this.dbPool.query(teamQuery, [user.id]);
+      context.team = teamResult.rows;
 
-    return systemContext;
-  }
+      // Get recent relevant interactions for continuity
+      const interactionsQuery = `
+        SELECT query, response, context_data, created_at
+        FROM ai_interactions
+        WHERE user_id = $1
+          AND (query ILIKE $2 OR response ILIKE $2)
+        ORDER BY created_at DESC
+        LIMIT 3
+      `;
+      const interactionsResult = await this.dbPool.query(interactionsQuery, [
+        user.id, 
+        `%${message.split(' ').slice(0, 3).join(' ')}%`
+      ]);
+      context.interactions = interactionsResult.rows;
 
-  cleanAIResponse(responseText) {
-    if (!responseText) return 'I apologize, but I\'m unable to provide a response at this time.';
-
-    let cleaned = responseText
-      .replace(/\b\w+\.(js|jsx|ts|tsx|json|md|txt|csv)\b/gi, '')
-      .replace(/\/api\/[a-zA-Z\/\-_]+/gi, '')
-      .replace(/\b(apiService|query|response|console\.log|useState|useEffect)\b/gi, '')
-      .replace(/\berror:\s*[a-zA-Z0-9\s]+/gi, '')
-      .replace(/\b[a-zA-Z]+Controller\b/gi, '')
-      .replace(/\b[a-zA-Z]+Service\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .replace(/\s*,\s*,/g, ',')
-      .trim();
-
-    if (cleaned.length < 20) {
-      return 'Thank you for your question. I can help you with project management insights and recommendations. Could you provide more details about what specific area you\'d like guidance on?';
+    } catch (dbError) {
+      console.error('❌ Database context building error:', dbError.message);
+      // Continue with partial context rather than failing
     }
 
-    return cleaned;
+    return context;
+  }
+
+  getContextSources(context) {
+    return {
+      projects: context.projects?.length || 0,
+      assessments: context.assessments?.length || 0,
+      goals: context.goals?.length || 0,
+      teamMembers: context.team?.length || 0,
+      interactions: context.interactions?.length || 0
+    };
+  }
+
+  async logEnhancedInteraction(userId, projectId, query, response, metadata = {}) {
+    try {
+      if (!userId) return;
+      
+      await this.dbPool.query(
+        `INSERT INTO ai_interactions (user_id, project_id, query, response, model_used, tokens_used, context_data, document_context)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          userId, 
+          projectId || null, 
+          query, 
+          response, 
+          metadata.model || 'enhanced-ai-service',
+          metadata.tokensUsed || 0,
+          JSON.stringify(metadata),
+          JSON.stringify(metadata.dataSourcesUsed || {})
+        ]
+      );
+    } catch (error) {
+      console.warn('⚠️ Failed to log enhanced interaction:', error.message);
+    }
   }
 
   async getProjectInsights(req, res) {
     try {
       const { projectId } = req.params;
-      const user = req.user;
-
-      console.log('ðŸ§  Generating clean AI insights for project:', projectId, 'User:', user.name);
-
-      const projectResult = await query(
-        `SELECT p.*, 
-                COUNT(ptm.id) as team_count,
-                AVG(pf.overall_average) as avg_feedback,
-                ARRAY_AGG(DISTINCT u.name) FILTER (WHERE u.name IS NOT NULL) as team_names
-         FROM projects p
-         LEFT JOIN project_team_members ptm ON p.id = ptm.project_id
-         LEFT JOIN users u ON ptm.user_id = u.id
-         LEFT JOIN project_feedback pf ON p.id = pf.project_id
-         WHERE p.id = $1
-         GROUP BY p.id`,
-        [projectId]
-      );
-
-      if (projectResult.rows.length === 0) {
-        return res.status(404).json({
+      
+      if (!projectId || isNaN(parseInt(projectId))) {
+        return res.status(400).json({
           success: false,
-          error: 'Project not found'
+          error: 'Valid project ID is required'
         });
       }
 
-      const project = projectResult.rows[0];
+      console.log(`🔍 Getting AI insights for project ${projectId}`);
 
-      const historyResult = await query(
-        `SELECT action, description, created_at, action_type
-         FROM project_history 
-         WHERE project_id = $1 
-         ORDER BY created_at DESC 
-         LIMIT 5`,
-        [projectId]
-      );
-
-      let finalInsights = [];
+      // Get comprehensive project data
+      const projectData = await this.getProjectData(parseInt(projectId), req.user.id);
       
-      try {
-        if (aiService && aiService.processChat) {
-          console.log('ðŸš€ Using AI service for enhanced insights...');
-          
-          const insightPrompt = `As a senior project management consultant, analyze this project and provide exactly 3 actionable insights:
-
-Project Overview:
-- Name: "${project.name}"
-- Status: ${project.status}
-- Priority: ${project.priority}
-- Team Size: ${project.team_count || 0} members
-- PM Progress: ${project.pm_progress || 0}/7 (${Math.round(((project.pm_progress || 0)/7)*100)}%)
-- Leadership Development: ${project.leadership_progress || 0}/7 (${Math.round(((project.leadership_progress || 0)/7)*100)}%)
-- Change Management: ${project.change_mgmt_progress || 0}/7 (${Math.round(((project.change_mgmt_progress || 0)/7)*100)}%)
-- Career Development: ${project.career_dev_progress || 0}/7 (${Math.round(((project.career_dev_progress || 0)/7)*100)}%)
-${project.avg_feedback ? `- Team Feedback Score: ${parseFloat(project.avg_feedback).toFixed(1)}/7` : ''}
-
-Recent Activity Summary:
-${historyResult.rows.map(h => `- ${h.description}`).join('\n') || '- No recent activity recorded'}
-
-Provide exactly 3 insights in this JSON format:
-{
-  "insights": [
-    {"type": "success", "message": "specific strength or achievement worth celebrating"},
-    {"type": "warning", "message": "specific area needing attention with clear action"},
-    {"type": "info", "message": "strategic recommendation for next steps"}
-  ]
-}
-
-Requirements:
-- Focus on actionable business insights
-- Use specific progress percentages when relevant
-- Recommend concrete next steps
-- Keep each insight under 120 characters
-- Use professional consulting language
-- Do not mention any technical terms, files, or system details`;
-
-          const aiContext = {
-            user: { name: user.name, role: user.role },
-            isInsightGeneration: true
-          };
-
-          const aiResponse = await aiService.processChat(insightPrompt, aiContext);
-          
-          try {
-            const parsed = JSON.parse(aiResponse.content);
-            if (parsed.insights && Array.isArray(parsed.insights)) {
-              finalInsights = parsed.insights.map(insight => ({
-                type: insight.type || 'info',
-                message: this.cleanInsightMessage(insight.message || 'Analysis completed'),
-                source: 'ai_consultant'
-              }));
-              console.log('âœ… AI insights parsed successfully:', finalInsights.length);
-            }
-          } catch (parseError) {
-            console.log('âš ï¸ Could not parse AI response as JSON, using fallback');
-            finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
-          }
-        }
-      } catch (aiError) {
-        console.log('âš ï¸ AI service error, using rule-based insights:', aiError.message);
-        finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
+      if (!projectData.project) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found or access denied'
+        });
       }
 
-      if (finalInsights.length === 0) {
-        finalInsights = this.generateRuleBasedInsights(project, historyResult.rows);
-      }
-      finalInsights = finalInsights.slice(0, 3);
-
-      const insights = {
-        summary: this.generateCleanProjectSummary(project),
-        recommendations: finalInsights.map(insight => insight.message),
-        detailedInsights: finalInsights,
-        confidence: finalInsights[0]?.source === 'ai_consultant' ? 0.9 : 0.75,
-        metrics: {
-          status: project.status,
-          priority: project.priority,
-          teamSize: parseInt(project.team_count) || 0,
-          avgFeedback: project.avg_feedback ? parseFloat(project.avg_feedback).toFixed(2) : null,
-          progressScores: {
-            pm: project.pm_progress || 0,
-            leadership: project.leadership_progress || 0,
-            changeManagement: project.change_mgmt_progress || 0,
-            careerDev: project.career_dev_progress || 0
-          }
-        },
-        recentActivity: historyResult.rows.slice(0, 3),
-        lastGenerated: new Date().toISOString(),
-        source: finalInsights[0]?.source || 'consultant_analysis'
-      };
-
-      console.log('âœ… Clean insights generated:', {
-        source: insights.source,
-        insightCount: finalInsights.length,
-        confidence: insights.confidence
-      });
+      // Generate AI insights using comprehensive context
+      const insights = await this.generateProjectInsights(projectData);
 
       res.json({
         success: true,
-        insights,
-        cached: false
+        data: {
+          projectId: parseInt(projectId),
+          projectName: projectData.project.name,
+          insights: insights,
+          metadata: {
+            generatedAt: new Date().toISOString(),
+            dataPoints: this.countDataPoints(projectData),
+            confidenceLevel: this.calculateConfidenceLevel(projectData)
+          }
+        }
       });
 
     } catch (error) {
-      console.error('AI insights error:', error);
+      console.error('❌ Project insights error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to generate insights'
+        error: 'Failed to generate project insights',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
 
-  cleanInsightMessage(message) {
-    if (!message) return 'Analysis completed';
+  async getProjectData(projectId, userId) {
+    const data = { project: null, team: [], feedback: [], progress: [], risks: [] };
 
-    return message
-      .replace(/\b\w+\.(js|jsx|ts|tsx|json|md|txt|csv)\b/gi, '')
-      .replace(/\/api\/[a-zA-Z\/\-_]+/gi, '')
-      .replace(/\b(function|method|endpoint|query|response|error|log)\b/gi, '')
-      .replace(/\b(aiService|apiService|controller|service)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    try {
+      // Get project details
+      const projectQuery = `
+        SELECT p.*, u.name as creator_name, u.role as creator_role,
+               COUNT(DISTINCT pt.user_id) as team_size,
+               COUNT(DISTINCT f.id) as feedback_count,
+               AVG(f.rating) as avg_rating
+        FROM projects p
+        LEFT JOIN users u ON p.user_id = u.id
+        LEFT JOIN project_teams pt ON p.id = pt.project_id
+        LEFT JOIN feedback f ON p.id = f.project_id
+        WHERE p.id = $1
+        AND (p.user_id = $2 OR pt.user_id = $2 OR $3 = 'Executive Leader' OR $3 = 'AI Lead')
+        GROUP BY p.id, u.name, u.role
+      `;
+      const projectResult = await this.dbPool.query(projectQuery, [projectId, userId, req.user?.role || 'Team Member']);
+      
+      if (projectResult.rows.length === 0) {
+        return data;
+      }
+      
+      data.project = projectResult.rows[0];
+
+      // Get team members
+      const teamQuery = `
+        SELECT u.id, u.name, u.role, u.avatar, pt.joined_at,
+               COUNT(DISTINCT f.id) as feedback_given
+        FROM project_teams pt
+        JOIN users u ON pt.user_id = u.id
+        LEFT JOIN feedback f ON pt.user_id = f.user_id AND f.project_id = $1
+        WHERE pt.project_id = $1
+        GROUP BY u.id, u.name, u.role, u.avatar, pt.joined_at
+        ORDER BY pt.joined_at ASC
+      `;
+      const teamResult = await this.dbPool.query(teamQuery, [projectId]);
+      data.team = teamResult.rows;
+
+      // Get recent feedback
+      const feedbackQuery = `
+        SELECT f.*, u.name as user_name, u.role as user_role
+        FROM feedback f
+        JOIN users u ON f.user_id = u.id
+        WHERE f.project_id = $1
+        ORDER BY f.created_at DESC
+        LIMIT 10
+      `;
+      const feedbackResult = await this.dbPool.query(feedbackQuery, [projectId]);
+      data.feedback = feedbackResult.rows;
+
+      // Get progress data if available
+      // Note: This would depend on your specific progress tracking implementation
+
+    } catch (error) {
+      console.error('❌ Error getting project data:', error.message);
+    }
+
+    return data;
   }
 
-  generateCleanProjectSummary(project) {
-    const avgScore = (
-      (project.pm_progress || 0) + 
-      (project.leadership_progress || 0) + 
-      (project.change_mgmt_progress || 0) + 
-      (project.career_dev_progress || 0)
-    ) / 4;
+  async generateProjectInsights(projectData) {
+    try {
+      const { project, team, feedback } = projectData;
+      
+      // Build insights prompt
+      const insightsPrompt = `Analyze this project data and provide actionable insights:
 
-    const progressPercentage = Math.round((avgScore / 7) * 100);
+PROJECT: ${project.name}
+Description: ${project.description}
+Status: ${project.status}
+Team Size: ${team.length}
+Feedback Count: ${feedback.length}
+Average Rating: ${project.avg_rating ? project.avg_rating.toFixed(1) : 'N/A'}
+
+TEAM COMPOSITION:
+${team.map(member => `- ${member.name} (${member.role})`).join('\n')}
+
+RECENT FEEDBACK:
+${feedback.slice(0, 5).map(f => `- Rating: ${f.rating}/5, Comment: "${f.feedback_text}"`).join('\n')}
+
+Provide specific insights about:
+1. Project health and momentum
+2. Team dynamics and engagement
+3. Risk areas requiring attention
+4. Recommendations for improvement
+5. Success indicators and trends`;
+
+      const context = {
+        user: { name: 'Project Analyst', role: 'AI Lead' },
+        projectId: project.id,
+        projects: [project],
+        team: team,
+        feedback: feedback
+      };
+
+      const aiResponse = await AIService.processChat(insightsPrompt, context);
+      
+      return {
+        summary: this.extractInsightsSummary(aiResponse.content),
+        detailed: aiResponse.content,
+        recommendations: this.extractRecommendations(aiResponse.content),
+        riskAreas: this.extractRiskAreas(projectData),
+        successMetrics: this.calculateSuccessMetrics(projectData)
+      };
+
+    } catch (error) {
+      console.error('❌ Error generating insights:', error.message);
+      return {
+        summary: 'Unable to generate insights at this time',
+        detailed: 'Insights generation temporarily unavailable',
+        recommendations: [],
+        riskAreas: [],
+        successMetrics: {}
+      };
+    }
+  }
+
+  extractInsightsSummary(content) {
+    // Extract first paragraph or first 200 characters as summary
+    const firstParagraph = content.split('\n\n')[0];
+    return firstParagraph.length > 200 ? firstParagraph.substring(0, 200) + '...' : firstParagraph;
+  }
+
+  extractRecommendations(content) {
+    // Extract bullet points or numbered items as recommendations
+    const recommendations = [];
+    const lines = content.split('\n');
     
-    let statusDesc = 'in early development';
-    if (avgScore >= 6) statusDesc = 'performing excellently';
-    else if (avgScore >= 5) statusDesc = 'performing well';
-    else if (avgScore >= 3) statusDesc = 'showing steady progress';
-
-    return `Project "${project.name}" is currently ${project.status} and ${statusDesc} with ${progressPercentage}% overall progress across key areas. The team has ${project.team_count || 0} active members.`;
+    for (const line of lines) {
+      if (line.match(/^[\d\-\*\•]\s+/) || line.toLowerCase().includes('recommend')) {
+        recommendations.push(line.replace(/^[\d\-\*\•]\s+/, '').trim());
+      }
+    }
+    
+    return recommendations.slice(0, 5); // Limit to top 5 recommendations
   }
 
-  generateRuleBasedInsights(project, history) {
-    const insights = [];
+  extractRiskAreas(projectData) {
+    const risks = [];
+    const { project, team, feedback } = projectData;
     
-    const pmProgress = project.pm_progress || 0;
-    const avgProgress = (
-      (project.pm_progress || 0) + 
-      (project.leadership_progress || 0) + 
-      (project.change_mgmt_progress || 0) + 
-      (project.career_dev_progress || 0)
-    ) / 4;
-    const progressPercentage = Math.round((avgProgress / 7) * 100);
+    // Analyze for potential risks based on data
+    if (team.length < 2) {
+      risks.push({ type: 'team', level: 'medium', description: 'Small team size may limit project capacity' });
+    }
+    
+    if (feedback.length > 0) {
+      const avgRating = feedback.reduce((sum, f) => sum + f.rating, 0) / feedback.length;
+      if (avgRating < 3) {
+        risks.push({ type: 'satisfaction', level: 'high', description: 'Low satisfaction ratings require attention' });
+      }
+    }
+    
+    if (project.status === 'active' && !project.target_date) {
+      risks.push({ type: 'timeline', level: 'medium', description: 'No target completion date set' });
+    }
+    
+    return risks;
+  }
 
-    if (avgProgress >= 6) {
-      insights.push({
-        type: 'success',
-        message: `Excellent progress at ${progressPercentage}% - project is on track for successful delivery`,
-        source: 'consultant_analysis'
+  calculateSuccessMetrics(projectData) {
+    const { project, team, feedback } = projectData;
+    
+    return {
+      teamEngagement: team.length > 0 ? Math.min(100, team.length * 25) : 0,
+      feedbackScore: feedback.length > 0 ? 
+        (feedback.reduce((sum, f) => sum + f.rating, 0) / feedback.length) * 20 : 0,
+      projectMomentum: project.status === 'active' ? 75 : project.status === 'completed' ? 100 : 25,
+      overallHealth: 0 // Calculate based on other metrics
+    };
+  }
+
+  countDataPoints(projectData) {
+    return {
+      projectDetails: projectData.project ? 1 : 0,
+      teamMembers: projectData.team?.length || 0,
+      feedbackEntries: projectData.feedback?.length || 0,
+      totalDataPoints: (projectData.project ? 1 : 0) + 
+                      (projectData.team?.length || 0) + 
+                      (projectData.feedback?.length || 0)
+    };
+  }
+
+  calculateConfidenceLevel(projectData) {
+    const dataPoints = this.countDataPoints(projectData);
+    
+    if (dataPoints.totalDataPoints >= 10) return 'high';
+    if (dataPoints.totalDataPoints >= 5) return 'medium';
+    return 'low';
+  }
+
+  async healthCheck(req, res) {
+    try {
+      const aiHealth = await AIService.healthCheck();
+      
+      // Test database connection
+      await this.dbPool.query('SELECT 1');
+      
+      res.json({
+        success: true,
+        data: {
+          ...aiHealth,
+          controllerStatus: 'healthy',
+          databaseConnected: true,
+          enhancedFeatures: true,
+          timestamp: new Date().toISOString()
+        }
       });
-    } else if (avgProgress <= 2) {
-      insights.push({
-        type: 'warning',
-        message: `Low progress at ${progressPercentage}% - recommend weekly progress reviews and clearer milestones`,
-        source: 'consultant_analysis'
+      
+    } catch (error) {
+      console.error('❌ Health check error:', error);
+      res.status(503).json({
+        success: false,
+        error: 'Health check failed',
+        details: error.message
       });
     }
-
-    const teamCount = parseInt(project.team_count) || 0;
-    if (teamCount === 0) {
-      insights.push({
-        type: 'warning',
-        message: 'No team members assigned - add team members to accelerate project delivery',
-        source: 'consultant_analysis'
-      });
-    } else if (teamCount < 3 && project.priority === 'critical') {
-      insights.push({
-        type: 'warning',
-        message: `Critical project needs more resources - current team of ${teamCount} may be insufficient`,
-        source: 'consultant_analysis'
-      });
-    } else if (teamCount > 8) {
-      insights.push({
-        type: 'info',
-        message: `Large team of ${teamCount} members - ensure clear communication channels and role definitions`,
-        source: 'consultant_analysis'
-      });
-    }
-
-    const recentActivity = history.filter(h => {
-      const activityDate = new Date(h.created_at);
-      const daysSince = (new Date() - activityDate) / (1000 * 60 * 60 * 24);
-      return daysSince <= 7;
-    });
-
-    if (recentActivity.length === 0) {
-      insights.push({
-        type: 'info',
-        message: 'No recent activity - schedule team check-in to maintain project momentum',
-        source: 'consultant_analysis'
-      });
-    } else if (recentActivity.length > 5) {
-      insights.push({
-        type: 'success',
-        message: 'High activity level indicates strong team engagement and project momentum',
-        source: 'consultant_analysis'
-      });
-    }
-
-    return insights.slice(0, 3);
   }
 }
 

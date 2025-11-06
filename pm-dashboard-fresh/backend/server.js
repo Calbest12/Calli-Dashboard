@@ -14,6 +14,9 @@ const teamRoutes = require('./src/routes/team');
 const teamManagementRoutes = require('./src/routes/teamManagement');
 const leadershipRoutes = require('./src/routes/leadership');
 const aiRoutes = require('./src/routes/ai');
+// Add to backend/src/app.js or server.js
+const documentsRoutes = require('./src/routes/documents');
+
 
 // Import middleware - FIXED TYPO AND DESTRUCTURING
 const { errorHandler } = require('./src/middleware/errorHandler'); // Fixed: destructure errorHandler
@@ -70,6 +73,8 @@ app.use((req, res, next) => {
 
 // Apply rate limiting
 app.use(rateLimiter);
+
+app.use('/api/documents', documentsRoutes);
 
 // Request logging middleware
 app.use((req, res, next) => {
