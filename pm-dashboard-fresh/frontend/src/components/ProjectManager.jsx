@@ -1,6 +1,6 @@
 // frontend/src/components/ProjectManager.jsx
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, Loader, AlertCircle } from 'lucide-react';
 import ProjectDetails from './ProjectDetails';
 import ProjectFormModal from './ProjectFormModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
@@ -44,15 +44,14 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
         
         setError(null);
       } else {
-        console.warn('⚠️ ProjectManager: Unexpected response format:', response);
+        console.warn('⚠️ ProjectManager: API response not successful:', response);
+        setError(response?.error || 'Failed to load projects');
         setProjects([]);
-        setError('Unexpected response format from server');
       }
-      
     } catch (error) {
-      console.error('❌ ProjectManager: API Error:', error);
+      console.error('❌ ProjectManager: Error loading projects:', error);
+      setError(error.message || 'Failed to load projects');
       setProjects([]);
-      setError(`Failed to load projects: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -63,7 +62,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   }, []);
 
   const handleAddProject = () => {
-    console.log('🔧 Add Project button clicked');
+    console.log('➕ Add project button clicked');
     setEditingProject(null);
     setShowProjectForm(true);
   };
@@ -75,156 +74,141 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   };
 
   const handleDeleteProject = (project) => {
-    console.log('🗑️ Delete project triggered:', project.name);
+    console.log('🗑️ Delete project:', project.name);
     setDeletingProject(project);
     setShowDeleteConfirm(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    try {
-      console.log('🗑️ Confirming deletion of project:', deletingProject.name);
-      
-      const response = await apiService.deleteProject(deletingProject.id);
-      
-      if (response && response.success) {
-        console.log('✅ Project deleted successfully');
-        const updatedProjects = projects.filter(p => p.id !== deletingProject.id);
-        setProjects(updatedProjects);
-        
-        if (onProjectsChange) {
-          onProjectsChange(updatedProjects);
-        }
-        
-      } else {
-        console.error('❌ Delete failed:', response);
-        setError(response?.error || 'Failed to delete project');
-      }
-    } catch (error) {
-      console.error('❌ Delete error:', error);
-      setError(`Failed to delete project: ${error.message}`);
-    } finally {
-      setShowDeleteConfirm(false);
-      setDeletingProject(null);
-    }
   };
 
   const handleViewProject = (project) => {
     console.log('👁️ View project:', project.name);
     setSelectedProject(project);
-    if (onProjectSelect) {
-      onProjectSelect(project);
-    }
+    if (onProjectSelect) onProjectSelect(project);
   };
-
-  const showProjectDetails = selectedProject !== null;
 
   const handleSubmitProject = async (projectData) => {
     try {
-      console.log('💾 Submitting project:', projectData.name);
+      console.log('💾 Submitting project:', projectData);
       
       let response;
       if (editingProject) {
-        console.log('🔄 Updating existing project');
         response = await apiService.updateProject(editingProject.id, projectData);
       } else {
-        console.log('🆕 Creating new project');
         response = await apiService.createProject(projectData);
       }
-
-      if (response && response.success) {
+      
+      if (response.success) {
         console.log('✅ Project saved successfully');
-        await loadProjects();
         setShowProjectForm(false);
         setEditingProject(null);
-        setError(null);
+        await loadProjects();
       } else {
-        console.error('❌ Project save failed:', response);
-        throw new Error(response?.error || 'Failed to save project');
+        console.error('❌ Failed to save project:', response.error);
+        throw new Error(response.error || 'Failed to save project');
       }
-
     } catch (error) {
-      console.error('❌ Project submission error:', error);
+      console.error('❌ Error in handleSubmitProject:', error);
       throw error;
     }
   };
 
-  const handleUpdateProject = async (updatedProject) => {
+  const handleConfirmDelete = async () => {
     try {
-      console.log('🔄 Syncing project update to backend:', updatedProject.name);
-      const response = await apiService.updateProject(updatedProject.id, updatedProject);
+      if (!deletingProject) return;
       
-      if (!response || !response.success) {
-        throw new Error(response?.error || 'Failed to update project');
+      console.log('🗑️ Confirming delete for:', deletingProject.name);
+      const response = await apiService.deleteProject(deletingProject.id);
+      
+      if (response.success) {
+        console.log('✅ Project deleted successfully');
+        setShowDeleteConfirm(false);
+        setDeletingProject(null);
+        await loadProjects();
+      } else {
+        console.error('❌ Failed to delete project:', response.error);
+        throw new Error(response.error || 'Failed to delete project');
       }
-      
-      const backendProject = response.data || response.project || updatedProject;
-      console.log('✅ Backend sync successful:', backendProject);
-      
-      const updatedProjects = projects.map(p => p.id === backendProject.id ? backendProject : p);
-      setProjects(updatedProjects);
-      
-      if (onProjectsChange) {
-        onProjectsChange(updatedProjects);
-      }
-
-      if (selectedProject && selectedProject.id === backendProject.id) {
-        setSelectedProject(backendProject);
-      }
-      
     } catch (error) {
-      console.error('❌ Failed to sync project update to backend:', error);
-      
-      const updatedProjects = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
-      setProjects(updatedProjects);
-      
-      if (onProjectsChange) {
-        onProjectsChange(updatedProjects);
-      }
-      
-      if (selectedProject && selectedProject.id === updatedProject.id) {
-        setSelectedProject(updatedProject);
-      }
-      
-      console.warn('⚠️ Project updated locally but failed to sync with backend');
+      console.error('❌ Error in handleConfirmDelete:', error);
+      alert('Failed to delete project: ' + error.message);
     }
   };
 
-  console.log('🔧 Current state - showProjectForm:', showProjectForm, 'editingProject:', editingProject?.name);
+  const handleUpdateProject = async (updatedProject) => {
+    console.log('📝 Updating project from details view:', updatedProject);
+    await loadProjects();
+    setSelectedProject(updatedProject);
+  };
 
+  // If loading show loading state
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>Loading projects...</h2>
+      <div style={{ 
+        padding: '2rem',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+        gap: '1rem'
+      }}>
+        <Loader size={32} style={{ 
+          animation: 'spin 1s linear infinite',
+          color: '#3b82f6'
+        }} />
+        <p style={{ color: '#6b7280', fontSize: '1rem' }}>Loading projects...</p>
       </div>
     );
   }
 
+  // If error show error state
   if (error) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2 style={{ color: '#ef4444' }}>Error: {error}</h2>
-        <button 
+      <div style={{ 
+        padding: '2rem',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+        gap: '1rem'
+      }}>
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '0.5rem',
+          padding: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          maxWidth: '400px'
+        }}>
+          <AlertCircle size={20} style={{ color: '#dc2626', flexShrink: 0 }} />
+          <span style={{ color: '#dc2626', fontSize: '0.875rem' }}>
+            {error}
+          </span>
+        </div>
+        <button
           onClick={loadProjects}
           style={{
-            marginTop: '1rem',
             padding: '0.5rem 1rem',
-            background: '#2563eb',
+            backgroundColor: '#3b82f6',
             color: 'white',
             border: 'none',
-            borderRadius: '0.25rem',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
             cursor: 'pointer'
           }}
         >
-          Retry
+          Try Again
         </button>
       </div>
     );
   }
-  
+
   return (
     <div>
-      {/* Conditionally show either ProjectDetails or Project Management */}
-      {showProjectDetails ? (
+      {/* Project Details View */}
+      {selectedProject ? (
         <ProjectDetails
           project={selectedProject}
           onBack={() => {
@@ -240,49 +224,71 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
           currentUser={currentUser}
         />
       ) : (
-        /* Main Project Management View - Clean Simple Grid */
-        <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            {/* Simple Header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '2rem'
-            }}>
-              <div>
-                <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
-                  Project Management
-                </h1>
-                <p style={{ color: '#6b7280', fontSize: '1.125rem', margin: 0 }}>
-                  Manage all your projects in one place
-                </p>
-              </div>
-
-              <button
-                onClick={handleAddProject}
-                style={{
-                  background: 'linear-gradient(to right, #2563eb, #1d4ed8)',
-                  color: 'white',
-                  padding: '0.75rem 1.5rem',
-                  borderRadius: '0.5rem',
-                  border: 'none',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  boxShadow: '0 4px 6px rgba(59, 130, 246, 0.25)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Plus size={20} />
-                Add New Project
-              </button>
+        /* Main Project Management View */
+        <div style={{ padding: '2rem' }}>
+          {/* Header Section */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '2rem'
+          }}>
+            <div>
+              <h1 style={{ 
+                fontSize: '2rem', 
+                fontWeight: '700', 
+                color: '#111827', 
+                marginBottom: '0.5rem',
+                margin: 0
+              }}>
+                Project Management
+              </h1>
+              <p style={{ 
+                color: '#6b7280', 
+                fontSize: '1rem', 
+                margin: '0.5rem 0 0 0'
+              }}>
+                Manage all your projects in one place
+              </p>
             </div>
 
-            {/* Simple Project Grid */}
+            <button
+              onClick={handleAddProject}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '0.5rem',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(59, 130, 246, 0.25)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#2563eb';
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 4px 8px rgba(59, 130, 246, 0.35)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#3b82f6';
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.25)';
+              }}
+            >
+              <Plus size={20} />
+              Add New Project
+            </button>
+          </div>
+
+          {/* Projects Grid */}
+          <div>
             {projects.length === 0 ? (
+              /* Empty State */
               <div style={{
                 backgroundColor: 'white',
                 borderRadius: '0.75rem',
@@ -290,18 +296,63 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
                 padding: '4rem 2rem',
                 textAlign: 'center'
               }}>
-                <FileText size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
-                <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#111827', marginBottom: '0.5rem' }}>
+                <FileText 
+                  size={48} 
+                  style={{ 
+                    color: '#d1d5db', 
+                    margin: '0 auto 1.5rem',
+                    display: 'block'
+                  }} 
+                />
+                <h3 style={{ 
+                  fontSize: '1.25rem', 
+                  fontWeight: '600', 
+                  color: '#111827', 
+                  marginBottom: '0.5rem',
+                  margin: '0 0 0.5rem 0'
+                }}>
                   No projects yet
                 </h3>
-                <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+                <p style={{ 
+                  color: '#6b7280', 
+                  marginBottom: '1.5rem',
+                  margin: '0 0 1.5rem 0',
+                  fontSize: '1rem'
+                }}>
                   Get started by creating your first project
                 </p>
+                <button
+                  onClick={handleAddProject}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1.5rem',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = '#2563eb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = '#3b82f6';
+                  }}
+                >
+                  <Plus size={16} />
+                  Create Your First Project
+                </button>
               </div>
             ) : (
+              /* Projects Grid */
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
                 gap: '1.5rem'
               }}>
                 {projects.map(project => (

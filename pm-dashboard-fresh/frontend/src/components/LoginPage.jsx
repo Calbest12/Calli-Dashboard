@@ -1,6 +1,6 @@
 // frontend/src/components/LoginPage.jsx
 import React, { useState } from 'react';
-import { Brain, Eye, EyeOff, Lock, Mail, User, Shield, Crown } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User, Shield, Crown } from 'lucide-react';
 import apiService from '../services/apiService';
 import logo from '../assets/logo.png';
 
@@ -98,47 +98,32 @@ const LoginPage = ({ onLogin }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1rem'
+      padding: '.25rem'
     }}>
       <div style={{
         backgroundColor: 'white',
+        padding: '2rem',
         borderRadius: '1rem',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-        width: '100%',
-        maxWidth: '400px',
-        padding: '2rem'
+        boxShadow: '0 20px 25px rgba(0, 0, 0, 0.15)',
+        width: '200%',
+        maxWidth: '500px'
       }}>
-        {/* Header */}
+        {/* Logo and Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            width: '60px',
-            height: '60px',
-            backgroundColor: '#667eea',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem'
-          }}>
-            <Brain size={30} color="white" />
-          </div>
-          <h1 style={{
-            fontSize: '1.875rem',
-            fontWeight: '700',
-            color: '#111827',
-            marginBottom: '0.5rem'
-          }}>
-            EPM
-          </h1>
+          <img 
+            src={logo}
+            alt="ERM Logo"
+            style={{
+              width: '300px',
+              height: '200px',
+              margin: '0 auto 1rem auto',
+              display: 'block'
+            }}
+          />
+          
+          {/* Meeting Notes Requirement: Add tagline */}
           <p style={{
-            fontSize: '1rem',
-            color: '#6b7280',
-            margin: '0 0 0.5rem 0'
-          }}>
-            PROJECT MANAGEMENT
-          </p>
-          <p style={{
-            fontSize: '0.875rem',
+            fontSize: '1.25rem',
             color: '#9ca3af',
             margin: 0,
             fontStyle: 'italic'
@@ -147,13 +132,13 @@ const LoginPage = ({ onLogin }) => {
           </p>
         </div>
 
-        {/* Tab Toggle */}
+        {/* Auth Toggle Tabs */}
         <div style={{
-          backgroundColor: '#f3f4f6',
-          borderRadius: '0.5rem',
-          padding: '0.25rem',
           display: 'flex',
-          marginBottom: '1.5rem'
+          marginBottom: '2rem',
+          backgroundColor: '#f3f4f6',
+          borderRadius: '1rem',
+          padding: '0.25rem'
         }}>
           <button
             type="button"
@@ -163,16 +148,16 @@ const LoginPage = ({ onLogin }) => {
             }}
             style={{
               flex: 1,
-              padding: '0.75rem',
+              padding: '0.5rem',
               borderRadius: '0.5rem',
               border: 'none',
-              fontSize: '0.875rem',
-              fontWeight: '600',
+              backgroundColor: isLogin ? 'white' : 'transparent',
+              color: isLogin ? '#111827' : '#6b7280',
+              fontSize: '1rem',
+              fontWeight: '500',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              backgroundColor: isLogin ? 'white' : 'transparent',
-              color: isLogin ? '#2563eb' : '#6b7280',
-              boxShadow: isLogin ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none'
+              boxShadow: isLogin ? '0 2px 4px rgba(0, 0, 0, 0.1)' : 'none'
             }}
           >
             Sign In
@@ -185,114 +170,136 @@ const LoginPage = ({ onLogin }) => {
             }}
             style={{
               flex: 1,
-              padding: '0.75rem',
+              padding: '0.5rem',
               borderRadius: '0.5rem',
               border: 'none',
-              fontSize: '0.875rem',
-              fontWeight: '600',
+              backgroundColor: !isLogin ? 'white' : 'transparent',
+              color: !isLogin ? '#111827' : '#6b7280',
+              fontSize: '1rem',
+              fontWeight: '500',
               cursor: 'pointer',
               transition: 'all 0.2s',
-              backgroundColor: !isLogin ? 'white' : 'transparent',
-              color: !isLogin ? '#2563eb' : '#6b7280',
-              boxShadow: !isLogin ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none'
+              boxShadow: !isLogin ? '0 2px 4px rgba(0, 0, 0, 0.1)' : 'none'
             }}
           >
             Sign Up
           </button>
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#dc2626',
+            padding: '0.75rem',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            marginBottom: '1rem',
+            textAlign: 'center'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Form */}
         <form onSubmit={handleSubmit}>
-          {/* Name Fields - Only for Registration - Split into First and Last */}
+          {/* Registration-only fields */}
           {!isLogin && (
             <>
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '0.875rem',
-                    fontWeight: '500',
-                    color: '#374151',
-                    marginBottom: '0.5rem'
-                  }}>
-                    First Name
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <User size={18} style={{
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '0.5rem'
+                }}>
+                  First Name
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <User 
+                    size={18} 
+                    style={{
                       position: 'absolute',
-                      left: '1rem',
+                      left: '0.75rem',
                       top: '50%',
                       transform: 'translateY(-50%)',
                       color: '#9ca3af'
-                    }} />
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleInputChange}
-                      placeholder="Enter your first name"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem 1rem 0.75rem 3rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '0.5rem',
-                        fontSize: '0.875rem',
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                    />
-                  </div>
+                    }}
+                  />
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    placeholder="Enter your first name"
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.875rem',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '0.875rem',
-                    fontWeight: '500',
-                    color: '#374151',
-                    marginBottom: '0.5rem'
-                  }}>
-                    Last Name
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <User size={18} style={{
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '1rem',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '0.5rem'
+                }}>
+                  Last Name
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <User 
+                    size={18} 
+                    style={{
                       position: 'absolute',
-                      left: '1rem',
+                      left: '0.75rem',
                       top: '50%',
                       transform: 'translateY(-50%)',
                       color: '#9ca3af'
-                    }} />
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleInputChange}
-                      placeholder="Enter your last name"
-                      style={{
-                        width: '100%',
-                        padding: '0.75rem 1rem 0.75rem 3rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '0.5rem',
-                        fontSize: '0.875rem',
-                        outline: 'none',
-                        transition: 'border-color 0.2s',
-                        boxSizing: 'border-box'
-                      }}
-                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                    />
-                  </div>
+                    }}
+                  />
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    placeholder="Enter your last name"
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
                 </div>
               </div>
             </>
           )}
 
-          {/* Email Field */}
-          <div style={{ marginBottom: '1.5rem' }}>
+          {/* Email field */}
+          <div style={{ marginBottom: '1rem' }}>
             <label style={{
               display: 'block',
-              fontSize: '0.875rem',
+              fontSize: '1rem',
               fontWeight: '500',
               color: '#374151',
               marginBottom: '0.5rem'
@@ -300,13 +307,16 @@ const LoginPage = ({ onLogin }) => {
               Email Address
             </label>
             <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{
-                position: 'absolute',
-                left: '1rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af'
-              }} />
+              <Mail 
+                size={18} 
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af'
+                }}
+              />
               <input
                 type="email"
                 name="email"
@@ -315,10 +325,10 @@ const LoginPage = ({ onLogin }) => {
                 placeholder="Enter your email"
                 style={{
                   width: '100%',
-                  padding: '0.75rem 1rem 0.75rem 3rem',
+                  padding: '0.75rem 0.75rem 0.75rem 2.5rem',
                   border: '1px solid #d1d5db',
                   borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
+                  fontSize: '1rem',
                   outline: 'none',
                   transition: 'border-color 0.2s',
                   boxSizing: 'border-box'
@@ -329,11 +339,11 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </div>
 
-          {/* Password Field */}
-          <div style={{ marginBottom: isLogin ? '2rem' : '1.5rem' }}>
+          {/* Password field */}
+          <div style={{ marginBottom: !isLogin ? '1rem' : '1.5rem' }}>
             <label style={{
               display: 'block',
-              fontSize: '0.875rem',
+              fontSize: '1rem',
               fontWeight: '500',
               color: '#374151',
               marginBottom: '0.5rem'
@@ -341,13 +351,16 @@ const LoginPage = ({ onLogin }) => {
               Password
             </label>
             <div style={{ position: 'relative' }}>
-              <Lock size={18} style={{
-                position: 'absolute',
-                left: '1rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#9ca3af'
-              }} />
+              <Lock 
+                size={18} 
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af'
+                }}
+              />
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
@@ -356,10 +369,10 @@ const LoginPage = ({ onLogin }) => {
                 placeholder="Enter your password"
                 style={{
                   width: '100%',
-                  padding: '0.75rem 3rem 0.75rem 3rem',
+                  padding: '0.75rem 2.5rem 0.75rem 2.5rem',
                   border: '1px solid #d1d5db',
                   borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
+                  fontSize: '1rem',
                   outline: 'none',
                   transition: 'border-color 0.2s',
                   boxSizing: 'border-box'
@@ -372,13 +385,15 @@ const LoginPage = ({ onLogin }) => {
                 onClick={() => setShowPassword(!showPassword)}
                 style={{
                   position: 'absolute',
-                  right: '1rem',
+                  right: '0.75rem',
                   top: '50%',
                   transform: 'translateY(-50%)',
+                  background: 'none',
                   border: 'none',
-                  backgroundColor: 'transparent',
+                  color: '#9ca3af',
                   cursor: 'pointer',
-                  color: '#9ca3af'
+                  padding: '0.25rem',
+                  borderRadius: '0.25rem'
                 }}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -386,28 +401,29 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </div>
 
-          {/* Role Selection - Only for Registration */}
+          {/* Role selection for registration */}
           {!isLogin && (
-            <div style={{ marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
               <label style={{
                 display: 'block',
-                fontSize: '0.875rem',
+                fontSize: '1rem',
                 fontWeight: '500',
                 color: '#374151',
                 marginBottom: '0.5rem'
               }}>
                 Choose Your Role
               </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                {/* Team Member Option */}
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '1rem',
-                  border: `2px solid ${formData.role === 'Team Member' ? '#2563eb' : '#e5e7eb'}`,
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
                   borderRadius: '0.5rem',
                   cursor: 'pointer',
                   backgroundColor: formData.role === 'Team Member' ? '#eff6ff' : 'white',
-                  transition: 'all 0.2s'
+                  borderColor: formData.role === 'Team Member' ? '#2563eb' : '#d1d5db'
                 }}>
                   <input
                     type="radio"
@@ -417,22 +433,25 @@ const LoginPage = ({ onLogin }) => {
                     onChange={handleInputChange}
                     style={{ marginRight: '0.75rem' }}
                   />
-                  <User size={20} style={{ marginRight: '0.75rem', color: '#2563eb' }} />
+                  <User size={18} style={{ marginRight: '0.5rem', color: '#6b7280' }} />
                   <div>
                     <div style={{ fontWeight: '500', color: '#111827' }}>Team Member</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Access to assigned projects and personal development</div>
+                    <div style={{ fontSize: '1rem', color: '#6b7280' }}>
+                      Access to projects and personal development
+                    </div>
                   </div>
                 </label>
-                
+
+                {/* Executive Leader Option */}
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
-                  padding: '1rem',
-                  border: `2px solid ${formData.role === 'Executive Leader' ? '#2563eb' : '#e5e7eb'}`,
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
                   borderRadius: '0.5rem',
                   cursor: 'pointer',
                   backgroundColor: formData.role === 'Executive Leader' ? '#eff6ff' : 'white',
-                  transition: 'all 0.2s'
+                  borderColor: formData.role === 'Executive Leader' ? '#2563eb' : '#d1d5db'
                 }}>
                   <input
                     type="radio"
@@ -442,32 +461,19 @@ const LoginPage = ({ onLogin }) => {
                     onChange={handleInputChange}
                     style={{ marginRight: '0.75rem' }}
                   />
-                  <Crown size={20} style={{ marginRight: '0.75rem', color: '#7c3aed' }} />
+                  <Crown size={18} style={{ marginRight: '0.5rem', color: '#6b7280' }} />
                   <div>
                     <div style={{ fontWeight: '500', color: '#111827' }}>Executive Leader</div>
-                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Full organizational oversight and team management</div>
+                    <div style={{ fontSize: '1rem', color: '#6b7280' }}>
+                      Team management and organizational oversight
+                    </div>
                   </div>
                 </label>
               </div>
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div style={{
-              backgroundColor: '#fef2f2',
-              border: '1px solid #fecaca',
-              color: '#dc2626',
-              padding: '0.75rem',
-              borderRadius: '0.5rem',
-              fontSize: '0.875rem',
-              marginBottom: '1.5rem'
-            }}>
-              {error}
-            </div>
-          )}
-
-          {/* Submit Button */}
+          {/* Submit button */}
           <button
             type="submit"
             disabled={isLoading}
