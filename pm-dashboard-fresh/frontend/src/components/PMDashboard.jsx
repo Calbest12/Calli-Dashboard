@@ -6,8 +6,9 @@ import apiService from '../services/apiService';
 import CareerDevelopmentTab from './CareerDevelopmentTab';
 import LeadershipTab from './LeadershipTab';
 import ExecutiveTeamTab from './ExecutiveTeamTab';
-import ValueTab from './ValueTab';
+import OCMTab from './organizationChangeManagementTab';
 import logo from '../assets/logo.png'; // adjust path as needed
+import OrganizationalChangeManagementTab from './organizationChangeManagementTab';
 
 const PMDashboard = ({ onUserChange, onProjectChange }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -33,7 +34,7 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     ...(currentUser?.role === 'Executive Leader' ? [
       { id: 'team', label: 'Team Management', icon: Users }
     ] : []),
-    { id: 'value', label: 'VALUE', icon: Target },
+    { id: 'org change mgmt', label: 'Org Change Mgmt', icon: Target },
     { id: 'career', label: 'Career Development', icon: TrendingUp },
     { id: 'leadership', label: 'Leadership', icon: Award },
     { id: 'settings', label: 'Settings', icon: Settings }
@@ -594,7 +595,7 @@ Each message should be 100-120 characters with specific data points and clear re
     { id: 'projects', label: 'Projects', icon: Folder, badge: projects.length },
     { id: 'leadership', label: 'Leadership', icon: Award },
     { id: 'career', label: 'Career Development', icon: TrendingUp },
-    { id: 'value', label: 'VALUE', icon: Target },
+    { id: 'org change mgmt', label: 'Org Change Mgmt', icon: Target },
     { 
       id: 'team', 
       label: 'Team Management', 
@@ -1030,9 +1031,9 @@ Each message should be 100-120 characters with specific data points and clear re
             onDataChange={loadUserData}
           />
         );
-      case 'value':  // ADD THIS CASE
+      case 'ocm':  // ADD THIS CASE
       return (
-        <ValueTab 
+        <OrganizationalChangeManagementTab 
           currentUser={currentUser}
           apiService={apiService}
           onDataChange={loadUserData}

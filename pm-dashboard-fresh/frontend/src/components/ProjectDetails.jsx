@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import ProgressUpdateSection from './ProgressUpdateSection';
-import LikertFeedbackSection from './LikertFeedbackSection';
+import LikertFeedbackSection from './ProjectFeedbackSection';
 import ProjectDetailsOverview from './ProjectDetailsOverview';
 import ProjectCommentsSection from './ProjectCommentsSection';
 import ProjectTeamSection from './ProjectTeamSection';

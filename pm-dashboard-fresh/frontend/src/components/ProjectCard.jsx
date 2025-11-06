@@ -1,276 +1,215 @@
-import React, { useState } from 'react';
-import { Calendar, Users, Target, FileText, Edit, Trash2, MoreVertical } from 'lucide-react';
+// frontend/src/components/ProjectCard.jsx
+import React from 'react';
 
 const ProjectCard = ({ project, onEdit, onDelete, onView }) => {
-  const [showActions, setShowActions] = useState(false);
-
   const getStatusColor = (status) => {
-    const statusColors = {
-      'active': { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-      'planning': { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-      'completed': { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
-      'on_hold': { bg: '#fee2e2', text: '#991b1b', border: '#fecaca' }
-    };
-    return statusColors[status] || { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb' };
+    switch (status) {
+      case 'completed': return '#10b981';
+      case 'active': return '#3b82f6';
+      case 'on_hold': return '#f59e0b';
+      case 'planning': return '#6b7280';
+      default: return '#6b7280';
+    }
   };
 
   const getPriorityColor = (priority) => {
-    const priorityColors = {
-      'low': { bg: '#f3f4f6', text: '#6b7280' },
-      'medium': { bg: '#fef3c7', text: '#92400e' },
-      'high': { bg: '#fecaca', text: '#991b1b' },
-      'critical': { bg: '#fee2e2', text: '#7f1d1d' }
-    };
-    return priorityColors[priority] || { bg: '#f3f4f6', text: '#6b7280' };
+    switch (priority) {
+      case 'critical': return '#ef4444';
+      case 'high': return '#f59e0b';
+      case 'medium': return '#3b82f6';
+      case 'low': return '#10b981';
+      default: return '#6b7280';
+    }
   };
 
-  const formatDeadline = (deadline) => {
-    const date = new Date(deadline);
-    const now = new Date();
-    const isOverdue = date < now;
-    return {
-      text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      isOverdue
-    };
+  const getOverallProgress = () => {
+    if (!project.progress) return 0;
+    const pmProgress = project.progress.PM || 0;
+    return Math.round((pmProgress / 7) * 100);
   };
 
-  const deadline = formatDeadline(project.deadline);
-  const avgProgress = Math.round((project.progress?.PM || 0) * 100 / 7);
-  const statusColors = getStatusColor(project.status);
-  const priorityColors = getPriorityColor(project.priority);
+  // Extract stakeholder/client information from project description or use dedicated field
+  const getProjectStakeholder = () => {
+    // Check for dedicated stakeholder field first
+    if (project.stakeholder) {
+      return project.stakeholder;
+    }
+    
+    // Fallback: extract from description if formatted as "client: Name"
+    if (project.description && project.description.toLowerCase().includes('client:')) {
+      const match = project.description.match(/client:\s*([^\.]+)/i);
+      return match ? match[1].trim() : 'Internal Project';
+    }
+    
+    // Default fallback
+    return 'Internal Project';
+  };
 
   return (
     <div style={{
       backgroundColor: 'white',
       borderRadius: '0.75rem',
       border: '1px solid #e5e7eb',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
       overflow: 'hidden',
-      transition: 'all 0.3s ease',
-      position: 'relative'
-    }}>
-      <div style={{ padding: '1.5rem' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0, flex: 1 }}>
+      transition: 'all 0.2s',
+      cursor: 'pointer'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+      e.currentTarget.style.transform = 'translateY(-2px)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.boxShadow = 'none';
+      e.currentTarget.style.transform = 'translateY(0)';
+    }}
+    onClick={() => onView(project)}
+    >
+      {/* Project Header */}
+      <div style={{ padding: '1.5rem 1.5rem 1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+          <h3 style={{
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#111827',
+            margin: 0,
+            flex: 1,
+            marginRight: '1rem'
+          }}>
             {project.name}
           </h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
             <span style={{
-              padding: '0.25rem 0.75rem',
-              borderRadius: '9999px',
+              backgroundColor: getStatusColor(project.status) + '20',
+              color: getStatusColor(project.status),
+              padding: '0.25rem 0.5rem',
+              borderRadius: '0.375rem',
               fontSize: '0.75rem',
-              fontWeight: '600',
-              backgroundColor: statusColors.bg,
-              color: statusColors.text,
-              border: `1px solid ${statusColors.border}`
+              fontWeight: '500',
+              textTransform: 'capitalize'
             }}>
-              {project.status.replace('_', ' ')}
+              {project.status?.replace('_', ' ')}
             </span>
-
+            
             <span style={{
-              padding: '0.25rem 0.75rem',
-              borderRadius: '9999px',
+              backgroundColor: getPriorityColor(project.priority) + '20',
+              color: getPriorityColor(project.priority),
+              padding: '0.25rem 0.5rem',
+              borderRadius: '0.375rem',
               fontSize: '0.75rem',
-              fontWeight: '600',
-              backgroundColor: priorityColors.bg,
-              color: priorityColors.text
+              fontWeight: '500',
+              textTransform: 'capitalize'
             }}>
               {project.priority}
             </span>
-
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setShowActions(!showActions)}
-                style={{
-                  padding: '0.5rem',
-                  background: 'transparent',
-                  border: 'none',
-                  borderRadius: '0.5rem',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s'
-                }}
-              >
-                <MoreVertical size={16} />
-              </button>
-
-              {showActions && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  backgroundColor: 'white',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  boxShadow: '0 10px 15px rgba(0, 0, 0, 0.1)',
-                  zIndex: 10,
-                  minWidth: '120px'
-                }}>
-                  <button
-                    onClick={() => {
-                      onEdit(project);
-                      setShowActions(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: 'none',
-                      background: 'transparent',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      color: '#374151'
-                    }}
-                  >
-                    <Edit size={14} />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      onDelete(project);
-                      setShowActions(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '0.75rem',
-                      border: 'none',
-                      background: 'transparent',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
-                      color: '#ef4444',
-                      borderTop: '1px solid #f3f4f6'
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Description */}
-        <p style={{ color: '#6b7280', fontSize: '0.875rem', marginBottom: '1.5rem', lineHeight: '1.625', margin: '0 0 1.5rem 0' }}>
+        {/* Project Stakeholder */}
+        <div style={{ marginBottom: '0.75rem' }}>
+          <p style={{ 
+            fontSize: '0.875rem', 
+            color: '#6b7280', 
+            margin: 0,
+            fontWeight: '500'
+          }}>
+            <span style={{ color: '#374151' }}>Who the project is for:</span> {getProjectStakeholder()}
+          </p>
+        </div>
+
+        <p style={{
+          fontSize: '0.875rem',
+          color: '#6b7280',
+          margin: 0,
+          lineHeight: '1.4'
+        }}>
           {project.description}
         </p>
+      </div>
 
-        {/* Simple Progress Bar */}
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>Project Progress</span>
-            <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>{avgProgress}%</span>
-          </div>
-          <div style={{ width: '100%', height: '0.5rem', backgroundColor: '#e5e7eb', borderRadius: '9999px', overflow: 'hidden' }}>
-            <div
-              style={{
-                height: '100%',
-                borderRadius: '9999px',
-                background: avgProgress >= 80 ? 'linear-gradient(to right, #10b981, #059669)' :
-                           avgProgress >= 60 ? 'linear-gradient(to right, #3b82f6, #2563eb)' :
-                           avgProgress >= 40 ? 'linear-gradient(to right, #eab308, #ca8a04)' :
-                           'linear-gradient(to right, #ef4444, #dc2626)',
-                width: `${avgProgress}%`,
-                transition: 'width 0.8s ease-in-out'
-              }}
-            />
-          </div>
+      {/* Progress Bar */}
+      <div style={{ padding: '0 1.5rem 1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '500' }}>
+            Overall Progress
+          </span>
+          <span style={{ fontSize: '0.75rem', color: '#374151', fontWeight: '600' }}>
+            {getOverallProgress()}%
+          </span>
         </div>
-
-        {/* Basic Project Info */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#6b7280' }}>
-            <Users size={16} style={{ color: '#9ca3af' }} />
-                {/* FIXED: Use team_size from backend instead of team.length */}
-                <span style={{ fontWeight: '500' }}>{project.team_size || 0} members</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Calendar size={16} style={{ color: deadline.isOverdue ? '#ef4444' : '#9ca3af' }} />
-            <span style={{ fontWeight: '500', color: deadline.isOverdue ? '#dc2626' : '#6b7280' }}>
-              {deadline.text}
-            </span>
-          </div>
+        <div style={{
+          width: '100%',
+          height: '6px',
+          backgroundColor: '#e5e7eb',
+          borderRadius: '3px',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            width: `${getOverallProgress()}%`,
+            height: '100%',
+            backgroundColor: '#3b82f6',
+            transition: 'width 0.3s ease'
+          }} />
         </div>
+      </div>
 
-        <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem', 
-            marginBottom: '1rem',
-            padding: '0.75rem',
-            backgroundColor: '#f9fafb',
-            borderRadius: '0.5rem',
-            border: '1px solid #e5e7eb'
-          }}>
-            <div style={{
-              width: '2rem',
-              height: '2rem',
-              borderRadius: '50%',
-              backgroundColor: '#2563eb',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontSize: '0.75rem',
-              fontWeight: '600',
-              flexShrink: 0
-            }}>
-              {project.creator_avatar || project.creator_name?.charAt(0) || 'U'}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ 
-                fontSize: '0.875rem', 
-                fontWeight: '500', 
-                color: '#374151', 
-                margin: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                {project.creator_name || 'Unknown'}
-              </p>
-              <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                Project Manager
-              </p>
-            </div>
-          </div>
-
-
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#9ca3af' }}>
-            <FileText size={12} />
-            <span>Updated {project.lastUpdate}</span>
-          </div>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              console.log('ðŸ”¥ View Details button clicked for:', project.name);
-              onView(project);
-            }}
-            style={{
-              padding: '0.5rem 1rem',
-              background: 'linear-gradient(to right, #eff6ff, #dbeafe)',
-              border: '1px solid #bfdbfe',
-              borderRadius: '0.5rem',
-              color: '#2563eb',
-              fontSize: '0.75rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            View Details
-          </button>
-        </div>
+      {/* Action Buttons */}
+      <div style={{
+        borderTop: '1px solid #f3f4f6',
+        padding: '1rem 1.5rem',
+        display: 'flex',
+        gap: '0.5rem'
+      }}>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(project);
+          }}
+          style={{
+            flex: 1,
+            padding: '0.5rem',
+            backgroundColor: '#f3f4f6',
+            border: '1px solid #e5e7eb',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            color: '#374151',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#e5e7eb';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#f3f4f6';
+          }}
+        >
+          Edit
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(project);
+          }}
+          style={{
+            flex: 1,
+            padding: '0.5rem',
+            backgroundColor: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            color: '#dc2626',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = '#fecaca';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = '#fef2f2';
+          }}
+        >
+          Delete
+        </button>
       </div>
     </div>
   );

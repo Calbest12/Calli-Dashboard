@@ -1,3 +1,4 @@
+// frontend/src/components/ProjectManager.jsx
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText } from 'lucide-react';
 import ProjectDetails from './ProjectDetails';
@@ -9,9 +10,9 @@ import apiService from '../services/apiService';
 const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   
   useEffect(() => {
-    console.log('ðŸ‘¤ ProjectManager received currentUser:', currentUser);
-    console.log('ðŸ‘¤ User ID type:', typeof currentUser?.id);
-    console.log('ðŸ‘¤ User name:', currentUser?.name);
+    console.log('👤 ProjectManager received currentUser:', currentUser);
+    console.log('👤 User ID type:', typeof currentUser?.id);
+    console.log('👤 User name:', currentUser?.name);
   }, [currentUser]);
 
   const [projects, setProjects] = useState([]);
@@ -29,27 +30,27 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
       setLoading(true);
       setError(null);
       
-      console.log('ðŸ“„ ProjectManager: Loading projects...');
+      console.log('🔄 ProjectManager: Loading projects...');
       const response = await apiService.getAllProjects();
       
       if (response && response.success && response.data) {
-        console.log('âœ… ProjectManager: Loaded', response.data.length, 'projects');
+        console.log('✅ ProjectManager: Loaded', response.data.length, 'projects');
         setProjects(response.data);
         
         if (onProjectsChange) {
-          console.log('ðŸ“¢ ProjectManager: Notifying parent about project changes');
+          console.log('📢 ProjectManager: Notifying parent about project changes');
           onProjectsChange(response.data);
         }
         
         setError(null);
       } else {
-        console.warn('âš ï¸ ProjectManager: Unexpected response format:', response);
+        console.warn('⚠️ ProjectManager: Unexpected response format:', response);
         setProjects([]);
         setError('Unexpected response format from server');
       }
       
     } catch (error) {
-      console.error('âŒ ProjectManager: API Error:', error);
+      console.error('❌ ProjectManager: API Error:', error);
       setProjects([]);
       setError(`Failed to load projects: ${error.message}`);
     } finally {
@@ -58,115 +59,106 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   };
 
   useEffect(() => {
-    console.log('ðŸ“„ ProjectManager: Initial load triggered');
     loadProjects();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (onProjectSelect) onProjectSelect(null);
-    };
-  }, [onProjectSelect]);
-
-  const showProjectDetails = selectedProject;
-
   const handleAddProject = () => {
+    console.log('🔧 Add Project button clicked');
     setEditingProject(null);
     setShowProjectForm(true);
   };
 
   const handleEditProject = (project) => {
+    console.log('🔧 Edit project:', project.name);
     setEditingProject(project);
     setShowProjectForm(true);
   };
 
   const handleDeleteProject = (project) => {
+    console.log('🗑️ Delete project triggered:', project.name);
     setDeletingProject(project);
     setShowDeleteConfirm(true);
   };
 
-  const handleViewProject = (project) => {
-    console.log('ðŸ”¥ View Details clicked for:', project.name);
-    setSelectedProject(project);
-    if (onProjectSelect) onProjectSelect(project);
-  };
-
-  const handleSubmitProject = async (projectData) => {
-    console.log('ðŸ’¾ Submitting project:', projectData.name, 'isEditing:', !!editingProject);
-    
+  const handleConfirmDelete = async () => {
     try {
-      if (editingProject) {
-        console.log('ðŸ“„ Updating project via API...');
-        const response = await apiService.updateProject(editingProject.id, projectData);
-        
-        const updatedProjects = projects.map(p => p.id === editingProject.id ? response.data : p);
+      console.log('🗑️ Confirming deletion of project:', deletingProject.name);
+      
+      const response = await apiService.deleteProject(deletingProject.id);
+      
+      if (response && response.success) {
+        console.log('✅ Project deleted successfully');
+        const updatedProjects = projects.filter(p => p.id !== deletingProject.id);
         setProjects(updatedProjects);
         
         if (onProjectsChange) {
           onProjectsChange(updatedProjects);
         }
         
-        if (selectedProject && selectedProject.id === editingProject.id) {
-          setSelectedProject(response.data);
-        }
       } else {
-        console.log('ðŸ†• Creating new project via API...');
-        const response = await apiService.createProject(projectData);
-        console.log('âœ… Project created:', response);
-        
-        const updatedProjects = [...projects, response.data];
-        setProjects(updatedProjects);
-        
-        if (onProjectsChange) {
-          onProjectsChange(updatedProjects);
-        }
+        console.error('❌ Delete failed:', response);
+        setError(response?.error || 'Failed to delete project');
       }
-      
-      setShowProjectForm(false);
-      setEditingProject(null);
-      
     } catch (error) {
-      console.error('âŒ Failed to save project:', error);
-      alert(`Failed to save project: ${error.message}`);
+      console.error('❌ Delete error:', error);
+      setError(`Failed to delete project: ${error.message}`);
+    } finally {
+      setShowDeleteConfirm(false);
+      setDeletingProject(null);
     }
   };
 
-  const handleConfirmDelete = async () => {
+  const handleViewProject = (project) => {
+    console.log('👁️ View project:', project.name);
+    setSelectedProject(project);
+    if (onProjectSelect) {
+      onProjectSelect(project);
+    }
+  };
+
+  const showProjectDetails = selectedProject !== null;
+
+  const handleSubmitProject = async (projectData) => {
     try {
-      console.log('ðŸ—‘ï¸ Deleting project via API:', deletingProject.name);
+      console.log('💾 Submitting project:', projectData.name);
       
-      await apiService.deleteProject(deletingProject.id);
-      console.log('âœ… Project deleted from backend');
-      
-      const updatedProjects = projects.filter(p => p.id !== deletingProject.id);
-      setProjects(updatedProjects);
-      
-      if (onProjectsChange) {
-        onProjectsChange(updatedProjects);
+      let response;
+      if (editingProject) {
+        console.log('🔄 Updating existing project');
+        response = await apiService.updateProject(editingProject.id, projectData);
+      } else {
+        console.log('🆕 Creating new project');
+        response = await apiService.createProject(projectData);
       }
-      
-      if (selectedProject && selectedProject.id === deletingProject.id) {
-        setSelectedProject(null);
-        if (onProjectSelect) onProjectSelect(null);
+
+      if (response && response.success) {
+        console.log('✅ Project saved successfully');
+        await loadProjects();
+        setShowProjectForm(false);
+        setEditingProject(null);
+        setError(null);
+      } else {
+        console.error('❌ Project save failed:', response);
+        throw new Error(response?.error || 'Failed to save project');
       }
-      
-      setShowDeleteConfirm(false);
-      setDeletingProject(null);
-      
+
     } catch (error) {
-      console.error('âŒ Failed to delete project:', error);
-      alert(`Failed to delete project: ${error.message}`);
+      console.error('❌ Project submission error:', error);
+      throw error;
     }
   };
 
   const handleUpdateProject = async (updatedProject) => {
     try {
-      console.log('ðŸ“„ Syncing project update to backend:', updatedProject.name);
- 
+      console.log('🔄 Syncing project update to backend:', updatedProject.name);
       const response = await apiService.updateProject(updatedProject.id, updatedProject);
-      console.log('âœ… Project updated in backend');
       
-      const backendProject = response.data;
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Failed to update project');
+      }
+      
+      const backendProject = response.data || response.project || updatedProject;
+      console.log('✅ Backend sync successful:', backendProject);
       
       const updatedProjects = projects.map(p => p.id === backendProject.id ? backendProject : p);
       setProjects(updatedProjects);
@@ -180,7 +172,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
       }
       
     } catch (error) {
-      console.error('âŒ Failed to sync project update to backend:', error);
+      console.error('❌ Failed to sync project update to backend:', error);
       
       const updatedProjects = projects.map(p => p.id === updatedProject.id ? updatedProject : p);
       setProjects(updatedProjects);
@@ -193,11 +185,11 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
         setSelectedProject(updatedProject);
       }
       
-      console.warn('âš ï¸ Project updated locally but failed to sync with backend');
+      console.warn('⚠️ Project updated locally but failed to sync with backend');
     }
   };
 
-  console.log('ðŸ”§ Current state - showProjectForm:', showProjectForm, 'editingProject:', editingProject?.name);
+  console.log('🔧 Current state - showProjectForm:', showProjectForm, 'editingProject:', editingProject?.name);
 
   if (loading) {
     return (
@@ -231,7 +223,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
   
   return (
     <div>
-      {/* Conditionally show either ProjectDetails or Project Manager */}
+      {/* Conditionally show either ProjectDetails or Project Management */}
       {showProjectDetails ? (
         <ProjectDetails
           project={selectedProject}
@@ -241,14 +233,14 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
           }}
           onUpdateProject={handleUpdateProject}
           onEditProject={() => {
-            console.log('ðŸ”§ Edit button clicked from ProjectDetails');
+            console.log('🔧 Edit button clicked from ProjectDetails');
             setEditingProject(selectedProject);
             setShowProjectForm(true);
           }}
           currentUser={currentUser}
         />
       ) : (
-        /* Main Project Manager View - Clean Simple Grid */
+        /* Main Project Management View - Clean Simple Grid */
         <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             {/* Simple Header */}
@@ -260,7 +252,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
             }}>
               <div>
                 <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
-                  Project Manager
+                  Project Management
                 </h1>
                 <p style={{ color: '#6b7280', fontSize: '1.125rem', margin: 0 }}>
                   Manage all your projects in one place
@@ -331,7 +323,7 @@ const ProjectManager = ({ currentUser, onProjectSelect, onProjectsChange }) => {
       <ProjectFormModal
         isOpen={showProjectForm}
         onClose={() => {
-          console.log('ðŸ”§ Closing project form modal');
+          console.log('🔧 Closing project form modal');
           setShowProjectForm(false);
           setEditingProject(null);
         }}

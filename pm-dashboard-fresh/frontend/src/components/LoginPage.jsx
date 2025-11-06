@@ -10,7 +10,8 @@ const LoginPage = ({ onLogin }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    name: '',
+    firstName: '',
+    lastName: '',
     role: 'Team Member'
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +45,7 @@ const LoginPage = ({ onLogin }) => {
         });
 
         if (response.success && response.user) {
-          console.log('âœ… Login successful:', response.user.name, 'as', response.user.role);
+          console.log('✅ Login successful:', response.user.name, 'as', response.user.role);
           onLogin(response.user);
         } else {
           setError(response.error || 'Login failed');
@@ -52,7 +53,7 @@ const LoginPage = ({ onLogin }) => {
 
       } else {
         // REGISTRATION
-        if (!formData.name || !formData.email || !formData.password) {
+        if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
           setError('Please fill in all fields');
           setIsLoading(false);
           return;
@@ -64,15 +65,18 @@ const LoginPage = ({ onLogin }) => {
           return;
         }
 
+        // Combine first and last name for backend
+        const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
+
         const response = await apiService.register({
-          name: formData.name,
+          name: fullName,
           email: formData.email,
           password: formData.password,
           role: formData.role
         });
 
         if (response.success && response.user) {
-          console.log('âœ… Registration successful:', response.user.name, 'as', response.user.role);
+          console.log('✅ Registration successful:', response.user.name, 'as', response.user.role);
           onLogin(response.user);
         } else {
           setError(response.error || 'Registration failed');
@@ -80,29 +84,12 @@ const LoginPage = ({ onLogin }) => {
       }
 
     } catch (error) {
-      console.error('âŒ Auth error:', error);
+      console.error('❌ Auth error:', error);
       setError(error.message || 'Authentication failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
-
-  const roleOptions = [
-    {
-      value: 'Team Member',
-      label: 'Team Member',
-      icon: User,
-      description: 'Access to assigned projects and personal career development',
-      color: '#6b7280'
-    },
-    {
-      value: 'Executive Leader',
-      label: 'Executive Leader', 
-      icon: Crown,
-      description: 'Team management and organizational oversight',
-      color: '#dc2626'
-    }
-  ];
 
   return (
     <div style={{
@@ -116,42 +103,63 @@ const LoginPage = ({ onLogin }) => {
       <div style={{
         backgroundColor: 'white',
         borderRadius: '1rem',
-        padding: '2rem',
         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         width: '100%',
-        maxWidth: '420px'
+        maxWidth: '400px',
+        padding: '2rem'
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img 
-            src={logo} 
-            alt="Company Logo" 
-            style={{ 
-              width: '250px',
-              height: 'auto',
-              marginBottom: '1rem',
-              objectFit: 'contain'
-            }} 
-          />
-          <p style={{ color: '#6b7280', fontSize: '1rem' }}>
-            {isLogin ? '' : 'Create your account'}
+          <div style={{
+            width: '60px',
+            height: '60px',
+            backgroundColor: '#667eea',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem'
+          }}>
+            <Brain size={30} color="white" />
+          </div>
+          <h1 style={{
+            fontSize: '1.875rem',
+            fontWeight: '700',
+            color: '#111827',
+            marginBottom: '0.5rem'
+          }}>
+            EPM
+          </h1>
+          <p style={{
+            fontSize: '1rem',
+            color: '#6b7280',
+            margin: '0 0 0.5rem 0'
+          }}>
+            PROJECT MANAGEMENT
+          </p>
+          <p style={{
+            fontSize: '0.875rem',
+            color: '#9ca3af',
+            margin: 0,
+            fontStyle: 'italic'
+          }}>
+            Assess and develop your project capabilities across multiple frameworks
           </p>
         </div>
 
-        {/* Auth Toggle */}
+        {/* Tab Toggle */}
         <div style={{
-          display: 'flex',
           backgroundColor: '#f3f4f6',
-          borderRadius: '0.75rem',
+          borderRadius: '0.5rem',
           padding: '0.25rem',
-          marginBottom: '2rem'
+          display: 'flex',
+          marginBottom: '1.5rem'
         }}>
           <button
             type="button"
             onClick={() => {
               setIsLogin(true);
               setError('');
-              setFormData({ ...formData, name: '', role: 'Team Member' });
             }}
             style={{
               flex: 1,
@@ -194,47 +202,90 @@ const LoginPage = ({ onLogin }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Name Field - Only for Registration */}
+          {/* Name Fields - Only for Registration - Split into First and Last */}
           {!isLogin && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151',
-                marginBottom: '0.5rem'
-              }}>
-                Full Name
-              </label>
-              <div style={{ position: 'relative' }}>
-                <User size={18} style={{
-                  position: 'absolute',
-                  left: '1rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#9ca3af'
-                }} />
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="Enter your full name"
-                  style={{
-                    width: '100%',
-                    padding: '0.75rem 1rem 0.75rem 3rem',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0.5rem',
+            <>
+              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
                     fontSize: '0.875rem',
-                    outline: 'none',
-                    transition: 'border-color 0.2s',
-                    boxSizing: 'border-box'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#2563eb'}
-                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                />
+                    fontWeight: '500',
+                    color: '#374151',
+                    marginBottom: '0.5rem'
+                  }}>
+                    First Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <User size={18} style={{
+                      position: 'absolute',
+                      left: '1rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#9ca3af'
+                    }} />
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      placeholder="Enter your first name"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 1rem 0.75rem 3rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    />
+                  </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    color: '#374151',
+                    marginBottom: '0.5rem'
+                  }}>
+                    Last Name
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <User size={18} style={{
+                      position: 'absolute',
+                      left: '1rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#9ca3af'
+                    }} />
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      placeholder="Enter your last name"
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 1rem 0.75rem 3rem',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '0.5rem',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                        boxSizing: 'border-box'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = '#2563eb'}
+                      onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            </>
           )}
 
           {/* Email Field */}
@@ -343,90 +394,60 @@ const LoginPage = ({ onLogin }) => {
                 fontSize: '0.875rem',
                 fontWeight: '500',
                 color: '#374151',
-                marginBottom: '0.75rem'
+                marginBottom: '0.5rem'
               }}>
                 Choose Your Role
               </label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {roleOptions.map((option) => {
-                  const IconComponent = option.icon;
-                  const isSelected = formData.role === option.value;
-                  
-                  return (
-                    <div
-                      key={option.value}
-                      onClick={() => setFormData({ ...formData, role: option.value })}
-                      style={{
-                        padding: '1rem',
-                        border: `2px solid ${isSelected ? option.color : '#e5e7eb'}`,
-                        borderRadius: '0.75rem',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        backgroundColor: isSelected ? `${option.color}10` : 'white'
-                      }}
-                    >
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.75rem'
-                      }}>
-                        <div style={{
-                          width: '2rem',
-                          height: '2rem',
-                          backgroundColor: isSelected ? option.color : '#f3f4f6',
-                          borderRadius: '0.5rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          <IconComponent 
-                            size={16} 
-                            style={{ color: isSelected ? 'white' : '#6b7280' }} 
-                          />
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <h4 style={{
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: isSelected ? option.color : '#111827',
-                            margin: '0 0 0.25rem 0'
-                          }}>
-                            {option.label}
-                          </h4>
-                          <p style={{
-                            fontSize: '0.75rem',
-                            color: '#6b7280',
-                            margin: 0,
-                            lineHeight: '1.4'
-                          }}>
-                            {option.description}
-                          </p>
-                        </div>
-                        <div style={{
-                          width: '1.25rem',
-                          height: '1.25rem',
-                          borderRadius: '50%',
-                          border: `2px solid ${isSelected ? option.color : '#d1d5db'}`,
-                          backgroundColor: isSelected ? option.color : 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          {isSelected && (
-                            <div style={{
-                              width: '0.5rem',
-                              height: '0.5rem',
-                              backgroundColor: 'white',
-                              borderRadius: '50%'
-                            }} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  border: `2px solid ${formData.role === 'Team Member' ? '#2563eb' : '#e5e7eb'}`,
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  backgroundColor: formData.role === 'Team Member' ? '#eff6ff' : 'white',
+                  transition: 'all 0.2s'
+                }}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="Team Member"
+                    checked={formData.role === 'Team Member'}
+                    onChange={handleInputChange}
+                    style={{ marginRight: '0.75rem' }}
+                  />
+                  <User size={20} style={{ marginRight: '0.75rem', color: '#2563eb' }} />
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#111827' }}>Team Member</div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Access to assigned projects and personal development</div>
+                  </div>
+                </label>
+                
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  border: `2px solid ${formData.role === 'Executive Leader' ? '#2563eb' : '#e5e7eb'}`,
+                  borderRadius: '0.5rem',
+                  cursor: 'pointer',
+                  backgroundColor: formData.role === 'Executive Leader' ? '#eff6ff' : 'white',
+                  transition: 'all 0.2s'
+                }}>
+                  <input
+                    type="radio"
+                    name="role"
+                    value="Executive Leader"
+                    checked={formData.role === 'Executive Leader'}
+                    onChange={handleInputChange}
+                    style={{ marginRight: '0.75rem' }}
+                  />
+                  <Crown size={20} style={{ marginRight: '0.75rem', color: '#7c3aed' }} />
+                  <div>
+                    <div style={{ fontWeight: '500', color: '#111827' }}>Executive Leader</div>
+                    <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>Full organizational oversight and team management</div>
+                  </div>
+                </label>
               </div>
             </div>
           )}
@@ -436,7 +457,7 @@ const LoginPage = ({ onLogin }) => {
             <div style={{
               backgroundColor: '#fef2f2',
               border: '1px solid #fecaca',
-              color: '#991b1b',
+              color: '#dc2626',
               padding: '0.75rem',
               borderRadius: '0.5rem',
               fontSize: '0.875rem',
@@ -452,41 +473,25 @@ const LoginPage = ({ onLogin }) => {
             disabled={isLoading}
             style={{
               width: '100%',
-              background: isLoading
-                ? 'linear-gradient(to right, #9ca3af, #6b7280)'
-                : 'linear-gradient(to right, #667eea, #764ba2)',
+              background: isLoading ? '#9ca3af' : 'linear-gradient(to right, #2563eb, #1d4ed8)',
               color: 'white',
-              padding: '0.875rem 1rem',
+              padding: '0.875rem',
               borderRadius: '0.5rem',
               border: 'none',
               fontSize: '0.875rem',
               fontWeight: '600',
               cursor: isLoading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              opacity: isLoading ? 0.8 : 1
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              boxShadow: '0 4px 6px rgba(59, 130, 246, 0.25)',
+              transition: 'all 0.2s'
             }}
           >
-            {isLoading 
-              ? (isLogin ? 'Signing In...' : 'Creating Account...') 
-              : (isLogin ? 'Sign In' : 'Create Account')
-            }
+            {isLoading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
-
-        {/* Footer Info */}
-        {!isLogin && (
-          <div style={{
-            marginTop: '1.5rem',
-            padding: '1rem',
-            backgroundColor: '#f9fafb',
-            borderRadius: '0.5rem',
-            fontSize: '0.75rem',
-            color: '#6b7280',
-            lineHeight: '1.4'
-          }}>
-            <strong>Note:</strong> When you create a project, you automatically become that project's manager with full access to all dashboard features. Executive Leaders can manage teams across multiple projects.
-          </div>
-        )}
       </div>
     </div>
   );

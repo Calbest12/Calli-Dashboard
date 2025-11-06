@@ -1,152 +1,153 @@
+// frontend/src/components/ProjectFormModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Users, Flag, FileText } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, User, Target, AlertCircle } from 'lucide-react';
+import apiService from '../services/apiService';
 
 const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
-  const availableTeamMembers = [
-    'John Doe',
-    'Jane Smith', 
-    'Mike Johnson',
-    'Alice Chen',
-    'Sarah Wilson',
-    'David Brown',
-    'Emma Davis',
-    'Chris Wilson'
-  ];
-
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     status: 'planning',
     priority: 'medium',
     deadline: '',
-    team: [],
-    progress: {
-      PM: 1,
-      Leadership: 1,
-      ChangeMgmt: 1,
-      CareerDev: 0
-    }
+    stakeholder: '', // Added stakeholder field
+    team: []
   });
 
+  const [availableMembers] = useState([
+    'John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 
+    'David Chen', 'Lisa Anderson', 'Tom Rodriguez', 'Emma Thompson'
+  ]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
-    if (project && isOpen) {
-      console.log('ðŸ”„ Populating form with project data:', project);
-      console.log('ðŸ” Raw team data:', project.team);
-      
-      let formattedDeadline = '';
-      if (project.deadline) {
-        const deadlineDate = new Date(project.deadline);
-        if (!isNaN(deadlineDate.getTime())) {
-          formattedDeadline = deadlineDate.toISOString().split('T')[0];
-        }
+    if (isOpen) {
+      if (project) {
+        console.log('🔧 Editing existing project:', project);
+        setFormData({
+          name: project.name || '',
+          description: project.description || '',
+          status: project.status || 'planning',
+          priority: project.priority || 'medium',
+          deadline: project.deadline || '',
+          stakeholder: project.stakeholder || '',
+          team: project.team || []
+        });
+      } else {
+        console.log('🆕 Creating new project');
+        setFormData({
+          name: '',
+          description: '',
+          status: 'planning',
+          priority: 'medium',
+          deadline: '',
+          stakeholder: '',
+          team: []
+        });
       }
+      setError('');
+      setFieldErrors({});
+    }
+  }, [isOpen, project]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear field error when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  const handleTeamChange = (member) => {
+    const isCurrentMember = formData.team.includes(member);
+    
+    if (isCurrentMember) {
+      // Remove member
+      setFormData(prev => ({
+        ...prev,
+        team: prev.team.filter(m => m !== member)
+      }));
+    } else {
+      // Add member
+      setFormData(prev => ({
+        ...prev,
+        team: [...prev.team, member]
+      }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!formData.name.trim()) {
+      errors.name = 'Project name is required';
+    }
+    
+    if (!formData.description.trim()) {
+      errors.description = 'Project description is required';
+    }
+
+    if (!formData.stakeholder.trim()) {
+      errors.stakeholder = 'Please specify who this project is for';
+    }
+    
+    if (formData.deadline) {
+      const deadlineDate = new Date(formData.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      let cleanTeam = [];
-      if (Array.isArray(project.team)) {
-        cleanTeam = project.team.filter(member => member && member.trim() !== '');
-      } else if (project.team && typeof project.team === 'string') {
-        cleanTeam = [project.team].filter(member => member && member.trim() !== '');
+      if (deadlineDate < today) {
+        errors.deadline = 'Deadline cannot be in the past';
       }
+    }
+    
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      setError('Please fix the highlighted errors');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      console.log('💾 Submitting project form:', formData);
+      await onSubmit(formData);
+      console.log('✅ Project submitted successfully');
       
-      setFormData({
-        name: project.name || '',
-        description: project.description || '',
-        status: project.status || 'planning',
-        priority: project.priority || 'medium',
-        deadline: formattedDeadline,
-        team: cleanTeam,
-        progress: {
-          PM: project.progress?.PM || 1,
-          Leadership: project.progress?.Leadership || 1,
-          ChangeMgmt: project.progress?.ChangeMgmt || 1,
-          CareerDev: project.progress?.CareerDev || 0
-        }
-      });
-    } else if (!project && isOpen) {
+      // Reset form
       setFormData({
         name: '',
         description: '',
         status: 'planning',
         priority: 'medium',
         deadline: '',
-        team: [],
-        progress: {
-          PM: 1,
-          Leadership: 1,
-          ChangeMgmt: 1,
-          CareerDev: 0
-        }
+        stakeholder: '',
+        team: []
       });
-    }
-  }, [project, isOpen]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleTeamChange = (memberName) => {
-    setFormData(prev => {
-      const newTeam = prev.team.includes(memberName)
-        ? prev.team.filter(member => member !== memberName)
-        : [...prev.team, memberName];
       
-      return {
-        ...prev,
-        team: newTeam
-      };
-    });
-  };
-
-  const handleProgressChange = (category, value) => {
-    setFormData(prev => ({
-      ...prev,
-      progress: {
-        ...prev.progress,
-        [category]: parseInt(value)
-      }
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      alert('Project name is required');
-      return;
-    }
-    if (!formData.description.trim()) {
-      alert('Project description is required');
-      return;
-    }
-    if (!formData.deadline) {
-      alert('Project deadline is required');
-      return;
-    }
-    if (formData.team.length === 0) {
-      alert('At least one team member must be selected');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      await onSubmit(formData);
-    } catch (error) {
-      console.error('âŒ Form submission error:', error);
+    } catch (err) {
+      console.error('❌ Project submission failed:', err);
+      setError(err.message || 'Failed to save project. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Handle modal close
-  const handleClose = () => {
-    setIsSubmitting(false);
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -168,26 +169,30 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
       <div style={{
         backgroundColor: 'white',
         borderRadius: '0.75rem',
-        boxShadow: '0 25px 50px rgba(0, 0, 0, 0.15)',
         width: '100%',
         maxWidth: '600px',
         maxHeight: '90vh',
-        overflow: 'auto'
+        overflow: 'auto',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
       }}>
         {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '1.5rem 1.5rem 0 1.5rem',
-          borderBottom: '1px solid #e5e7eb',
-          marginBottom: '1.5rem'
+          padding: '1.5rem 1.5rem 1rem',
+          borderBottom: '1px solid #e5e7eb'
         }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827', margin: 0 }}>
+          <h2 style={{
+            fontSize: '1.5rem',
+            fontWeight: '700',
+            color: '#111827',
+            margin: 0
+          }}>
             {project ? 'Edit Project' : 'Create New Project'}
           </h2>
           <button
-            onClick={handleClose}
+            onClick={onClose}
             disabled={isSubmitting}
             style={{
               padding: '0.5rem',
@@ -195,99 +200,172 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
               border: 'none',
               borderRadius: '0.375rem',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              color: '#6b7280'
+              color: '#6b7280',
+              transition: 'color 0.2s'
             }}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '0 1.5rem 1.5rem' }}>
-          {/* Project Name */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#374151', 
-              marginBottom: '0.5rem' 
+        <form onSubmit={handleSubmit} style={{ padding: '1.5rem' }}>
+          {/* Error Display */}
+          {error && (
+            <div style={{
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#dc2626',
+              padding: '0.75rem',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem',
+              marginBottom: '1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
             }}>
-              <FileText size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          {/* Project Name */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '0.5rem'
+            }}>
               Project Name *
             </label>
             <input
               type="text"
-              name="name"
               value={formData.name}
-              onChange={handleInputChange}
+              onChange={(e) => handleInputChange('name', e.target.value)}
               disabled={isSubmitting}
+              placeholder="Enter project name"
               style={{
                 width: '100%',
                 padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
+                border: `1px solid ${fieldErrors.name ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
                 fontSize: '0.875rem',
-                boxSizing: 'border-box'
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                opacity: isSubmitting ? 0.6 : 1
               }}
-              placeholder="Enter project name"
+              onFocus={(e) => !fieldErrors.name && (e.target.style.borderColor = '#2563eb')}
+              onBlur={(e) => !fieldErrors.name && (e.target.style.borderColor = '#d1d5db')}
             />
+            {fieldErrors.name && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
+                {fieldErrors.name}
+              </p>
+            )}
           </div>
 
-          {/* Description */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#374151', 
-              marginBottom: '0.5rem' 
+          {/* Project Description */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '0.5rem'
             }}>
               Description *
             </label>
             <textarea
-              name="description"
               value={formData.description}
-              onChange={handleInputChange}
+              onChange={(e) => handleInputChange('description', e.target.value)}
               disabled={isSubmitting}
+              placeholder="Describe the project goals and scope"
               rows={3}
               style={{
                 width: '100%',
                 padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
+                border: `1px solid ${fieldErrors.description ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
                 fontSize: '0.875rem',
-                boxSizing: 'border-box',
-                resize: 'vertical'
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                opacity: isSubmitting ? 0.6 : 1,
+                resize: 'vertical',
+                fontFamily: 'inherit'
               }}
-              placeholder="Enter project description"
+              onFocus={(e) => !fieldErrors.description && (e.target.style.borderColor = '#2563eb')}
+              onBlur={(e) => !fieldErrors.description && (e.target.style.borderColor = '#d1d5db')}
             />
+            {fieldErrors.description && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
+                {fieldErrors.description}
+              </p>
+            )}
           </div>
 
-          {/* Status and Priority Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+          {/* Stakeholder Field */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '0.5rem'
+            }}>
+              Who the project is for (Stakeholder) *
+            </label>
+            <input
+              type="text"
+              value={formData.stakeholder}
+              onChange={(e) => handleInputChange('stakeholder', e.target.value)}
+              disabled={isSubmitting}
+              placeholder="e.g., Marketing Team, External Client, CEO Office"
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: `1px solid ${fieldErrors.stakeholder ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
+                fontSize: '0.875rem',
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                opacity: isSubmitting ? 0.6 : 1
+              }}
+              onFocus={(e) => !fieldErrors.stakeholder && (e.target.style.borderColor = '#2563eb')}
+              onBlur={(e) => !fieldErrors.stakeholder && (e.target.style.borderColor = '#d1d5db')}
+            />
+            {fieldErrors.stakeholder && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
+                {fieldErrors.stakeholder}
+              </p>
+            )}
+          </div>
+
+          {/* Status and Priority */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
             <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '0.875rem', 
-                fontWeight: '600', 
-                color: '#374151', 
-                marginBottom: '0.5rem' 
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '0.5rem'
               }}>
                 Status
               </label>
               <select
-                name="status"
                 value={formData.status}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('status', e.target.value)}
                 disabled={isSubmitting}
                 style={{
                   width: '100%',
                   padding: '0.75rem',
                   border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
+                  borderRadius: '0.5rem',
                   fontSize: '0.875rem',
-                  boxSizing: 'border-box'
+                  outline: 'none',
+                  backgroundColor: 'white',
+                  opacity: isSubmitting ? 0.6 : 1
                 }}
               >
                 <option value="planning">Planning</option>
@@ -298,28 +376,28 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
             </div>
 
             <div>
-              <label style={{ 
-                display: 'block', 
-                fontSize: '0.875rem', 
-                fontWeight: '600', 
-                color: '#374151', 
-                marginBottom: '0.5rem' 
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '0.5rem'
               }}>
-                <Flag size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
                 Priority
               </label>
               <select
-                name="priority"
                 value={formData.priority}
-                onChange={handleInputChange}
+                onChange={(e) => handleInputChange('priority', e.target.value)}
                 disabled={isSubmitting}
                 style={{
                   width: '100%',
                   padding: '0.75rem',
                   border: '1px solid #d1d5db',
-                  borderRadius: '0.375rem',
+                  borderRadius: '0.5rem',
                   fontSize: '0.875rem',
-                  boxSizing: 'border-box'
+                  outline: 'none',
+                  backgroundColor: 'white',
+                  opacity: isSubmitting ? 0.6 : 1
                 }}
               >
                 <option value="low">Low</option>
@@ -331,84 +409,69 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
           </div>
 
           {/* Deadline */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#374151', 
-              marginBottom: '0.5rem' 
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '0.5rem'
             }}>
               <Calendar size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-              Deadline *
+              Deadline (Optional)
             </label>
             <input
               type="date"
-              name="deadline"
               value={formData.deadline}
-              onChange={handleInputChange}
+              onChange={(e) => handleInputChange('deadline', e.target.value)}
               disabled={isSubmitting}
               style={{
                 width: '100%',
                 padding: '0.75rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
+                border: `1px solid ${fieldErrors.deadline ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
                 fontSize: '0.875rem',
-                boxSizing: 'border-box'
+                outline: 'none',
+                opacity: isSubmitting ? 0.6 : 1
               }}
             />
+            {fieldErrors.deadline && (
+              <p style={{ color: '#ef4444', fontSize: '0.75rem', margin: '0.25rem 0 0 0' }}>
+                {fieldErrors.deadline}
+              </p>
+            )}
           </div>
 
-          {/* Team Members */}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#374151', 
-              marginBottom: '0.5rem' 
+          {/* Team Selection */}
+          <div style={{ marginBottom: '2rem' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              color: '#374151',
+              marginBottom: '0.5rem'
             }}>
-              <Users size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
-              Team Members * ({formData.team.length} selected)
+              <User size={16} style={{ display: 'inline', marginRight: '0.5rem' }} />
+              Team Members
             </label>
-            
-            {/* Show current team members if editing and team exists */}
-            {project && formData.team && formData.team.length > 0 && (
-              <div style={{
-                backgroundColor: '#f0f9ff',
-                border: '1px solid #bae6fd',
-                borderRadius: '0.375rem',
-                padding: '0.75rem',
-                marginBottom: '0.5rem'
-              }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#0369a1', marginBottom: '0.5rem' }}>
-                  Current Team Members:
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#0369a1' }}>
-                  {formData.team.filter(member => member && member.trim() !== '').join(', ') || 'No team members assigned'}
-                </div>
-              </div>
-            )}
-            
             <div style={{
               border: '1px solid #d1d5db',
-              borderRadius: '0.375rem',
-              padding: '0.75rem',
+              borderRadius: '0.5rem',
+              padding: '1rem',
+              backgroundColor: '#f9fafb',
               maxHeight: '150px',
-              overflow: 'auto'
+              overflowY: 'auto'
             }}>
-              {availableTeamMembers.map(member => {
-                const isCurrentMember = formData.team && formData.team.includes(member);
-                
+              {availableMembers.map(member => {
+                const isCurrentMember = formData.team.includes(member);
                 return (
                   <label key={member} style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.5rem',
+                    gap: '0.75rem',
                     padding: '0.5rem',
-                    cursor: 'pointer',
                     borderRadius: '0.25rem',
-                    fontSize: '0.875rem',
+                    cursor: 'pointer',
                     backgroundColor: isCurrentMember ? '#f0f9ff' : 'transparent',
                     marginBottom: '0.25rem'
                   }}>
@@ -446,82 +509,55 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
                 marginTop: '0.5rem',
                 fontStyle: 'italic'
               }}>
-                ðŸ’¡ Tip: Current team members are highlighted in blue. Uncheck to remove, check others to add.
+                💡 Tip: Current team members are highlighted in blue. Uncheck to remove, check others to add.
               </div>
             )}
           </div>
 
-          {/* Progress Sliders */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ 
-              display: 'block', 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              color: '#374151', 
-              marginBottom: '0.75rem' 
-            }}>
-              Progress Levels
-            </label>
-            {Object.entries(formData.progress).map(([category, value]) => (
-              <div key={category} style={{ marginBottom: '0.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                    {category === 'ChangeMgmt' ? 'Change Mgmt' : category}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                    {value}/7
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="7"
-                  value={value}
-                  onChange={(e) => handleProgressChange(category, e.target.value)}
-                  disabled={isSubmitting}
-                  style={{
-                    width: '100%',
-                    height: '6px',
-                    borderRadius: '3px',
-                    backgroundColor: '#e5e7eb'
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Submit Buttons */}
-          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+          {/* Action Buttons */}
+          <div style={{
+            display: 'flex',
+            gap: '0.75rem',
+            justifyContent: 'flex-end',
+            borderTop: '1px solid #e5e7eb',
+            paddingTop: '1.5rem'
+          }}>
             <button
               type="button"
-              onClick={handleClose}
+              onClick={onClose}
               disabled={isSubmitting}
               style={{
                 padding: '0.75rem 1.5rem',
+                backgroundColor: 'white',
                 border: '1px solid #d1d5db',
                 borderRadius: '0.5rem',
-                backgroundColor: 'white',
-                color: '#374151',
                 fontSize: '0.875rem',
                 fontWeight: '500',
+                color: '#374151',
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting ? 0.5 : 1
+                transition: 'all 0.2s',
+                opacity: isSubmitting ? 0.6 : 1
               }}
             >
               Cancel
             </button>
+            
             <button
               type="submit"
               disabled={isSubmitting}
               style={{
                 padding: '0.75rem 1.5rem',
+                background: isSubmitting ? '#9ca3af' : 'linear-gradient(to right, #2563eb, #1d4ed8)',
+                color: 'white',
                 border: 'none',
                 borderRadius: '0.5rem',
-                backgroundColor: isSubmitting ? '#9ca3af' : '#2563eb',
-                color: 'white',
                 fontSize: '0.875rem',
                 fontWeight: '600',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
               }}
             >
               {isSubmitting ? 'Saving...' : (project ? 'Update Project' : 'Create Project')}
