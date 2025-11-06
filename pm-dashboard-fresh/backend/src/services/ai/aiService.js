@@ -8,6 +8,8 @@ class AIService {
   
     this.openaiApiKey = process.env.OPENAI_API_KEY;
     this.documentsLoaded = false;
+    
+    // Database connection
     this.dbPool = new Pool({
       user: process.env.DB_USER || 'postgres',
       host: process.env.DB_HOST || 'localhost',
@@ -16,7 +18,7 @@ class AIService {
       port: process.env.DB_PORT || 5432,
     });
     
-    console.log('🤖 Enhanced AI Service initializing...');
+    console.log('🤖 Intelligent AI Service initializing...');
     console.log('🔑 OpenAI API Key present:', !!this.openaiApiKey);
     console.log('🔑 API Key valid format:', this.openaiApiKey?.startsWith('sk-') || false);
     
@@ -51,279 +53,291 @@ class AIService {
     }
   }
 
-  async searchDatabaseKnowledge(query, userId = null, projectId = null) {
+  // NEW: Intelligent query intent classification
+  analyzeQueryIntent(message) {
+    const lowerMessage = message.toLowerCase();
+    const intents = [];
+
+    // Project-related intent detection
+    const projectKeywords = ['project', 'projects', 'progress', 'deadline', 'status', 'team members', 'budget', 'milestone', 'deliverable', 'scope', 'schedule', 'task', 'work', 'assignment'];
+    const projectScore = projectKeywords.reduce((score, keyword) => {
+      return score + (lowerMessage.includes(keyword) ? 1 : 0);
+    }, 0);
+    if (projectScore > 0) intents.push({ type: 'projects', score: projectScore, priority: 1 });
+
+    // Career-related intent detection
+    const careerKeywords = ['career', 'goal', 'goals', 'development', 'skill', 'skills', 'growth', 'learning', 'certification', 'training', 'advancement', 'promotion'];
+    const careerScore = careerKeywords.reduce((score, keyword) => {
+      return score + (lowerMessage.includes(keyword) ? 1 : 0);
+    }, 0);
+    if (careerScore > 0) intents.push({ type: 'career', score: careerScore, priority: 2 });
+
+    // Leadership/Assessment intent detection
+    const leadershipKeywords = ['leadership', 'assessment', 'diamond', 'value', 'vision', 'ethics', 'reality', 'courage', 'task', 'team', 'individual', 'organization'];
+    const leadershipScore = leadershipKeywords.reduce((score, keyword) => {
+      return score + (lowerMessage.includes(keyword) ? 1 : 0);
+    }, 0);
+    if (leadershipScore > 0) intents.push({ type: 'leadership', score: leadershipScore, priority: 3 });
+
+    // Team-related intent detection
+    const teamKeywords = ['team', 'member', 'members', 'colleague', 'coworker', 'collaboration', 'communication', 'feedback', 'performance', 'role', 'responsibility'];
+    const teamScore = teamKeywords.reduce((score, keyword) => {
+      return score + (lowerMessage.includes(keyword) ? 1 : 0);
+    }, 0);
+    if (teamScore > 0) intents.push({ type: 'team', score: teamScore, priority: 4 });
+
+    // General/multiple intent detection
+    const generalKeywords = ['overview', 'summary', 'everything', 'all', 'status', 'update', 'what', 'how', 'help'];
+    const generalScore = generalKeywords.reduce((score, keyword) => {
+      return score + (lowerMessage.includes(keyword) ? 1 : 0);
+    }, 0);
+    if (generalScore > 0 || intents.length === 0) intents.push({ type: 'general', score: generalScore, priority: 5 });
+
+    // Sort by score (highest first) and then by priority (lowest first for ties)
+    intents.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.priority - b.priority;
+    });
+
+    console.log(`🧠 Query intent analysis for "${message}":`, intents);
+    return intents;
+  }
+
+  // Enhanced method to fetch ALL relevant data based on intent
+  async fetchContextualData(userId, intents, message) {
+    const data = {
+      projects: [],
+      careerGoals: [],
+      assessments: [],
+      team: [],
+      feedback: [],
+      history: []
+    };
+
+    if (!userId) {
+      console.warn('⚠️ No user ID provided for contextual data fetch');
+      return data;
+    }
+
     try {
-      const searchResults = {
-        projects: [],
-        users: [],
-        assessments: [],
-        goals: [],
-        interactions: []
-      };
+      // Always fetch some basic user context
+      console.log('🔍 Fetching contextual data based on intents:', intents.map(i => i.type));
 
-      // Search projects
-      const projectQuery = `
-        SELECT p.*, u.name as creator_name, u.role as creator_role
-        FROM projects p
-        LEFT JOIN users u ON p.user_id = u.id
-        WHERE p.name ILIKE $1 OR p.description ILIKE $1
-        ${projectId ? 'OR p.id = $2' : ''}
-        ORDER BY p.updated_at DESC
-        LIMIT 10
-      `;
-      const projectParams = [`%${query}%`];
-      if (projectId) projectParams.push(projectId);
-      
-      const projectResults = await this.dbPool.query(projectQuery, projectParams);
-      searchResults.projects = projectResults.rows;
+      // Determine which data to fetch based on intents
+      const shouldFetchProjects = intents.some(i => ['projects', 'general'].includes(i.type));
+      const shouldFetchCareer = intents.some(i => ['career', 'general'].includes(i.type));
+      const shouldFetchLeadership = intents.some(i => ['leadership', 'general'].includes(i.type));
+      const shouldFetchTeam = intents.some(i => ['team', 'projects', 'general'].includes(i.type));
 
-      // Search users and team information
-      if (userId) {
-        const userQuery = `
-          SELECT u.*, COUNT(p.id) as project_count
-          FROM users u
-          LEFT JOIN projects p ON u.id = p.user_id
-          WHERE u.name ILIKE $1 OR u.email ILIKE $1 OR u.role ILIKE $1
-          GROUP BY u.id
+      const promises = [];
+
+      // Fetch projects data
+      if (shouldFetchProjects) {
+        console.log('📂 Fetching projects data...');
+        const projectsQuery = `
+          SELECT 
+            p.id,
+            p.name,
+            p.description,
+            p.status,
+            p.priority,
+            p.deadline,
+            p.pm_progress,
+            p.leadership_progress,
+            p.change_mgmt_progress,
+            p.career_dev_progress,
+            p.last_update,
+            p.created_at,
+            p.updated_at,
+            COUNT(DISTINCT ptm.user_id) as team_size,
+            COUNT(DISTINCT pf.id) as feedback_count,
+            COALESCE(AVG(pf.overall_average), 0) as avg_rating
+          FROM projects p
+          LEFT JOIN project_team_members ptm ON p.id = ptm.project_id
+          LEFT JOIN project_feedback pf ON p.id = pf.project_id
+          WHERE p.id IN (
+            SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $1
+            UNION
+            SELECT id FROM projects WHERE id IN (SELECT project_id FROM project_ownership WHERE user_id = $1)
+          )
+          OR p.name ILIKE $2
+          OR p.description ILIKE $2
+          GROUP BY p.id
+          ORDER BY p.updated_at DESC
+          LIMIT 10
+        `;
+        promises.push(
+          this.dbPool.query(projectsQuery, [userId, `%${message}%`])
+            .then(result => { data.projects = result.rows; })
+            .catch(err => console.error('❌ Projects query error:', err.message))
+        );
+      }
+
+      // Fetch career goals data
+      if (shouldFetchCareer) {
+        console.log('🎯 Fetching career goals data...');
+        const careerQuery = `
+          SELECT 
+            id,
+            title,
+            description,
+            category,
+            current_level,
+            target_level,
+            priority,
+            current_progress,
+            status,
+            target_date,
+            notes,
+            created_at,
+            updated_at
+          FROM career_development_goals 
+          WHERE user_id = $1 
+          AND status != 'cancelled'
+          ORDER BY 
+            CASE WHEN status = 'active' THEN 0 ELSE 1 END,
+            priority DESC,
+            created_at DESC
+          LIMIT 10
+        `;
+        promises.push(
+          this.dbPool.query(careerQuery, [userId])
+            .then(result => { data.careerGoals = result.rows; })
+            .catch(err => console.error('❌ Career goals query error:', err.message))
+        );
+      }
+
+      // Fetch assessments data
+      if (shouldFetchLeadership) {
+        console.log('📊 Fetching assessment data...');
+        const assessmentQuery = `
+          SELECT 'leadership_diamond' as type, 
+                 task_score, team_score, individual_score, organization_score,
+                 created_at
+          FROM leadership_diamond_assessments 
+          WHERE user_id = $1
+          UNION ALL
+          SELECT 'value' as type,
+                 vision_score, alignment_score, understanding_score, enactment_score,
+                 created_at
+          FROM value_assessments 
+          WHERE user_id = $1
+          ORDER BY created_at DESC
           LIMIT 5
         `;
-        const userResults = await this.dbPool.query(userQuery, [`%${query}%`]);
-        searchResults.users = userResults.rows;
+        promises.push(
+          this.dbPool.query(assessmentQuery, [userId])
+            .then(result => { data.assessments = result.rows; })
+            .catch(err => console.error('❌ Assessments query error:', err.message))
+        );
       }
 
-      // Search assessment data for leadership insights
-      const assessmentQuery = `
-        SELECT 'leadership_diamond' as type, ld.*, u.name, u.role
-        FROM leadership_diamond_assessments ld
-        JOIN users u ON ld.user_id = u.id
-        ${userId ? 'WHERE ld.user_id = $1' : ''}
-        UNION ALL
-        SELECT 'value' as type, va.*, u.name, u.role
-        FROM value_assessments va
-        JOIN users u ON va.user_id = u.id
-        ${userId ? 'WHERE va.user_id = $1' : ''}
-        ORDER BY created_at DESC
-        LIMIT 10
-      `;
-      const assessmentParams = userId ? [userId] : [];
-      const assessmentResults = await this.dbPool.query(assessmentQuery, assessmentParams);
-      searchResults.assessments = assessmentResults.rows;
-
-      // Search career development goals
-      const goalQuery = `
-        SELECT cg.*, u.name, u.role
-        FROM career_development_goals cg
-        JOIN users u ON cg.user_id = u.id
-        WHERE cg.description ILIKE $1 OR cg.notes ILIKE $1
-        ${userId ? 'OR cg.user_id = $2' : ''}
-        ORDER BY cg.updated_at DESC
-        LIMIT 10
-      `;
-      const goalParams = [`%${query}%`];
-      if (userId) goalParams.push(userId);
-      const goalResults = await this.dbPool.query(goalQuery, goalParams);
-      searchResults.goals = goalResults.rows;
-
-      // Search previous AI interactions for context
-      const interactionQuery = `
-        SELECT ai.query, ai.response, ai.context_data, ai.created_at, u.name, u.role
-        FROM ai_interactions ai
-        JOIN users u ON ai.user_id = u.id
-        WHERE ai.query ILIKE $1 OR ai.response ILIKE $1
-        ${userId ? 'AND ai.user_id = $2' : ''}
-        ORDER BY ai.created_at DESC
-        LIMIT 5
-      `;
-      const interactionParams = [`%${query}%`];
-      if (userId) interactionParams.push(userId);
-      const interactionResults = await this.dbPool.query(interactionQuery, interactionParams);
-      searchResults.interactions = interactionResults.rows;
-
-      return searchResults;
-    } catch (error) {
-      console.error('❌ Database search error:', error.message);
-      return {
-        projects: [],
-        users: [],
-        assessments: [],
-        goals: [],
-        interactions: []
-      };
-    }
-  }
-
-  async searchTrainingDocuments(query, limit = 5) {
-    try {
-      let relevantDocs = [];
-      let documentLoader;
-      
-      try {
-        documentLoader = require('../documentLoader');
-        relevantDocs = documentLoader.searchDocuments(query, limit);
-      } catch (error) {
-        console.warn('⚠️ Document loader not available:', error.message);
-        
-        // Fallback: Search database stored training documents
-        const docQuery = `
-          SELECT td.filename, td.content, td.metadata, dc.content as chunk_content
-          FROM training_documents td
-          LEFT JOIN document_chunks dc ON td.id = dc.document_id
-          WHERE td.content ILIKE $1 OR dc.content ILIKE $1
-          ORDER BY td.updated_at DESC
-          LIMIT $2
+      // Fetch team data
+      if (shouldFetchTeam) {
+        console.log('👥 Fetching team data...');
+        const teamQuery = `
+          SELECT DISTINCT 
+            u.id,
+            u.name,
+            u.email,
+            u.role,
+            u.avatar,
+            ptm.role_in_project,
+            ptm.contribution_percentage,
+            ptm.tasks_completed,
+            p.name as project_name
+          FROM users u
+          JOIN project_team_members ptm ON u.id = ptm.user_id
+          JOIN projects p ON ptm.project_id = p.id
+          WHERE p.id IN (
+            SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $1
+          )
+          AND u.id != $1
+          ORDER BY u.name
+          LIMIT 15
         `;
-        const docResults = await this.dbPool.query(docQuery, [`%${query}%`, limit]);
-        relevantDocs = docResults.rows.map(row => ({
-          source: row.filename,
-          content: row.chunk_content || row.content,
-          metadata: row.metadata || {},
-          score: 1
-        }));
+        promises.push(
+          this.dbPool.query(teamQuery, [userId])
+            .then(result => { data.team = result.rows; })
+            .catch(err => console.error('❌ Team query error:', err.message))
+        );
       }
 
-      return relevantDocs;
+      // Wait for all queries to complete
+      await Promise.all(promises);
+
+      // Log what we found
+      console.log(`📊 Contextual data gathered:`, {
+        projects: data.projects.length,
+        careerGoals: data.careerGoals.length,
+        assessments: data.assessments.length,
+        team: data.team.length
+      });
+
+      return data;
+
     } catch (error) {
-      console.error('❌ Document search error:', error.message);
-      return [];
+      console.error('❌ Error fetching contextual data:', error.message);
+      return data;
     }
-  }
-
-  buildComprehensiveContext(query, databaseResults, documentResults, userContext = {}) {
-    const contextParts = [];
-
-    // Add user context
-    if (userContext.user) {
-      contextParts.push(`User Context: ${userContext.user.name} (${userContext.user.role}) is asking about: ${query}`);
-    }
-
-    // Add project context
-    if (databaseResults.projects.length > 0) {
-      const projectInfo = databaseResults.projects.map(p => 
-        `Project "${p.name}": ${p.description} (Status: ${p.status}, Created by: ${p.creator_name})`
-      ).join('\n');
-      contextParts.push(`Relevant Projects:\n${projectInfo}`);
-    }
-
-    // Add assessment insights
-    if (databaseResults.assessments.length > 0) {
-      const assessmentInfo = databaseResults.assessments.map(a => {
-        if (a.type === 'leadership_diamond') {
-          return `Leadership Assessment for ${a.name}: Task(${a.task_score}/10), Team(${a.team_score}/10), Individual(${a.individual_score}/10), Organization(${a.organization_score}/10)`;
-        } else if (a.type === 'value') {
-          return `Value Assessment for ${a.name}: Vision(${a.vision_score}/10), Alignment(${a.alignment_score}/10), Understanding(${a.understanding_score}/10), Enactment(${a.enactment_score}/10)`;
-        }
-        return `Assessment for ${a.name}`;
-      }).join('\n');
-      contextParts.push(`Assessment Data:\n${assessmentInfo}`);
-    }
-
-    // Add career development context
-    if (databaseResults.goals.length > 0) {
-      const goalInfo = databaseResults.goals.map(g => 
-        `Goal: ${g.description} (Progress: ${g.progress}%, Priority: ${g.priority}, Status: ${g.status})`
-      ).join('\n');
-      contextParts.push(`Career Development Goals:\n${goalInfo}`);
-    }
-
-    // Add team insights
-    if (databaseResults.users.length > 0) {
-      const teamInfo = databaseResults.users.map(u => 
-        `Team Member: ${u.name} (${u.role}) - ${u.project_count} projects`
-      ).join('\n');
-      contextParts.push(`Team Information:\n${teamInfo}`);
-    }
-
-    // Add document knowledge
-    if (documentResults.length > 0) {
-      const docInfo = documentResults.map(doc => 
-        `Knowledge: ${doc.content.substring(0, 200)}...`
-      ).join('\n');
-      contextParts.push(`Professional Knowledge Base:\n${docInfo}`);
-    }
-
-    // Add conversation history for continuity
-    if (databaseResults.interactions.length > 0) {
-      const historyInfo = databaseResults.interactions.slice(0, 2).map(i => 
-        `Previous Context: Q: "${i.query.substring(0, 100)}" A: "${i.response.substring(0, 100)}..."`
-      ).join('\n');
-      contextParts.push(`Recent Conversation Context:\n${historyInfo}`);
-    }
-
-    return contextParts.join('\n\n');
   }
 
   async processChat(message, context = {}) {
     try {
-      console.log('🔍 Starting comprehensive knowledge search...');
+      console.log('🧠 Processing intelligent chat request...');
+      console.log('📝 Message:', message.substring(0, 100));
+      console.log('👤 User:', context.user?.name, context.user?.id);
       
+      // Step 1: Analyze query intent
+      const intents = this.analyzeQueryIntent(message);
+      const primaryIntent = intents[0]?.type || 'general';
+      
+      // Step 2: Fetch relevant training documents
+      let relevantDocs = [];
+      try {
+        const documentLoader = require('../documentLoader');
+        relevantDocs = documentLoader.searchDocuments(message, 3);
+      } catch (error) {
+        console.warn('⚠️ Document loader not available:', error.message);
+      }
+
+      // Step 3: Fetch contextual data based on intent
       const userId = context.user?.id;
-      const projectId = context.projectId;
+      const contextualData = await this.fetchContextualData(userId, intents, message);
 
-      // Search all available data sources
-      const [databaseResults, documentResults] = await Promise.all([
-        this.searchDatabaseKnowledge(message, userId, projectId),
-        this.searchTrainingDocuments(message, 5)
-      ]);
-
-      // Build comprehensive context from all sources
-      const comprehensiveContext = this.buildComprehensiveContext(
+      // Step 4: Build comprehensive context
+      const comprehensiveContext = this.buildIntelligentContext(
         message, 
-        databaseResults, 
-        documentResults, 
+        intents, 
+        contextualData, 
+        relevantDocs, 
         context
       );
 
-      console.log(`📊 Knowledge gathered: ${databaseResults.projects.length} projects, ${databaseResults.assessments.length} assessments, ${documentResults.length} documents`);
+      console.log(`🎯 Primary intent: ${primaryIntent}, Context length: ${comprehensiveContext.length} chars`);
 
-      let enhancedMessage = message;
-      
-      if (comprehensiveContext.trim().length > 0) {
-        enhancedMessage = `You are a senior project management consultant with access to comprehensive organizational data. Use all available context to provide the most relevant, personalized advice. Do NOT mention data sources, databases, or technical systems in your response.
-
-COMPREHENSIVE CONTEXT:
-${comprehensiveContext}
-
-USER QUESTION: ${message}
-
-INSTRUCTIONS:
-- Provide specific, actionable advice based on all available context
-- Reference relevant projects, assessments, and team dynamics when helpful
-- Use concrete data points and metrics from the context
-- Maintain professional consultant tone
-- Focus on practical solutions tailored to this specific situation
-- Do not mention technical systems, databases, or data sources
-- Present insights as your professional analysis`;
-      }
-
-      if (this.openaiApiKey) {
-        console.log('🚀 Using OpenAI with comprehensive context');
-        const response = await this.callOpenAI(enhancedMessage, context);
+      if (this.openaiApiKey && comprehensiveContext.trim().length > 0) {
+        console.log('🚀 Using OpenAI with intelligent context');
+        const response = await this.callOpenAI(comprehensiveContext, context, primaryIntent);
         
         const cleanedResponse = this.cleanResponse(response);
         
-        // Log this interaction for future context
-        await this.logInteraction(userId, projectId, message, cleanedResponse, {
-          documentsUsed: documentResults.length,
-          projectsReferenced: databaseResults.projects.length,
-          assessmentsUsed: databaseResults.assessments.length,
-          contextLength: comprehensiveContext.length
-        });
-        
         return {
           content: cleanedResponse,
-          model: 'gpt-3.5-turbo-enhanced',
-          tokensUsed: this.estimateTokens(enhancedMessage + response),
-          documentsUsed: documentResults.length,
+          model: 'gpt-3.5-turbo-intelligent',
+          tokensUsed: this.estimateTokens(comprehensiveContext + response),
+          primaryIntent: primaryIntent,
           dataSourcesUsed: {
-            projects: databaseResults.projects.length,
-            assessments: databaseResults.assessments.length,
-            goals: databaseResults.goals.length,
-            documents: documentResults.length
+            projects: contextualData.projects.length,
+            careerGoals: contextualData.careerGoals.length,
+            assessments: contextualData.assessments.length,
+            team: contextualData.team.length,
+            documents: relevantDocs.length
           }
         };
       } else {
-        console.log('🔧 Using enhanced fallback with context');
-        return this.getContextualFallbackResponse(message, context, databaseResults, documentResults);
+        console.log('🔧 Using intelligent fallback');
+        return this.getIntelligentFallbackResponse(message, primaryIntent, contextualData, context);
       }
       
     } catch (error) {
@@ -332,89 +346,221 @@ INSTRUCTIONS:
     }
   }
 
-  async logInteraction(userId, projectId, query, response, metadata = {}) {
-    try {
-      if (!userId) return;
-      
-      await this.dbPool.query(
-        `INSERT INTO ai_interactions (user_id, project_id, query, response, model_used, context_data)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [userId, projectId, query, response, 'enhanced-ai-service', metadata]
-      );
-    } catch (error) {
-      console.warn('⚠️ Failed to log interaction:', error.message);
+  buildIntelligentContext(message, intents, contextualData, relevantDocs, userContext) {
+    const contextParts = [];
+
+    // Add user context
+    if (userContext.user) {
+      contextParts.push(`User: ${userContext.user.name} (${userContext.user.role})`);
     }
+
+    // Add context based on primary intent and available data
+    const primaryIntent = intents[0]?.type || 'general';
+
+    if (primaryIntent === 'projects' && contextualData.projects.length > 0) {
+      const projectsContext = contextualData.projects.map(proj => 
+        `- ${proj.name}: ${proj.description || 'No description'} (Status: ${proj.status}, Priority: ${proj.priority}, Team: ${proj.team_size} members, PM Progress: ${proj.pm_progress}/7, Leadership: ${proj.leadership_progress}/7)`
+      ).join('\n');
+      contextParts.push(`CURRENT PROJECTS:\n${projectsContext}`);
+    }
+
+    if ((primaryIntent === 'career' || primaryIntent === 'general') && contextualData.careerGoals.length > 0) {
+      const goalsContext = contextualData.careerGoals.map(goal => 
+        `- ${goal.title}: ${goal.description} (Category: ${goal.category}, Status: ${goal.status}, Progress: ${goal.current_progress}%, Priority: ${goal.priority}, Target: ${goal.target_date})`
+      ).join('\n');
+      contextParts.push(`CAREER DEVELOPMENT GOALS:\n${goalsContext}`);
+    }
+
+    if ((primaryIntent === 'leadership' || primaryIntent === 'general') && contextualData.assessments.length > 0) {
+      const assessmentContext = contextualData.assessments.map(assess => {
+        if (assess.type === 'leadership_diamond') {
+          return `Leadership Diamond Assessment: Task(${assess.task_score}/10), Team(${assess.team_score}/10), Individual(${assess.individual_score}/10), Organization(${assess.organization_score}/10)`;
+        } else {
+          return `VALUE Assessment: Vision(${assess.vision_score}/10), Alignment(${assess.alignment_score}/10), Understanding(${assess.understanding_score}/10), Enactment(${assess.enactment_score}/10)`;
+        }
+      }).join('\n');
+      contextParts.push(`ASSESSMENT RESULTS:\n${assessmentContext}`);
+    }
+
+    if ((primaryIntent === 'team' || primaryIntent === 'projects') && contextualData.team.length > 0) {
+      const teamContext = contextualData.team.slice(0, 10).map(member => 
+        `- ${member.name} (${member.role}) - Role in project: ${member.role_in_project || 'Team Member'}, Project: ${member.project_name}`
+      ).join('\n');
+      contextParts.push(`TEAM MEMBERS:\n${teamContext}`);
+    }
+
+    // Add document context if relevant
+    if (relevantDocs.length > 0) {
+      const documentContext = relevantDocs.map(doc => doc.content.substring(0, 200)).join('\n');
+      contextParts.push(`RELEVANT KNOWLEDGE:\n${documentContext}`);
+    }
+
+    const comprehensiveContext = contextParts.join('\n\n');
+
+    const prompt = `You are a senior project management and leadership consultant. Provide personalized, actionable advice based on the specific data provided. Do NOT mention databases, data sources, or technical systems.
+
+CONTEXT:
+${comprehensiveContext}
+
+USER QUESTION: ${message}
+
+PRIMARY FOCUS: ${intents[0]?.type?.toUpperCase() || 'GENERAL'}
+
+INSTRUCTIONS:
+- Focus your response on the primary intent area (${intents[0]?.type || 'general information'})
+- Use specific data from the context (actual project names, goal titles, progress percentages, team members)
+- Provide actionable recommendations based on the user's actual situation
+- Reference real deadlines, priorities, and status information when relevant
+- Keep responses professional and encouraging
+- Structure information clearly with bullet points or sections when helpful`;
+
+    return prompt;
   }
 
-  getContextualFallbackResponse(message, context, databaseResults, documentResults) {
-    const user = context?.user || { name: 'there' };
+  getIntelligentFallbackResponse(message, primaryIntent, contextualData, userContext) {
+    const user = userContext?.user || { name: 'there' };
     const userName = user.name === 'there' ? 'there' : user.name;
     
     let response = `Hello ${userName}! `;
 
-    // Use actual project data if available
-    if (databaseResults.projects.length > 0) {
-      const currentProject = databaseResults.projects[0];
-      response += `I can see you're working with "${currentProject.name}". Based on the project status (${currentProject.status}), `;
-    }
+    // Respond based on primary intent and available data
+    switch (primaryIntent) {
+      case 'projects':
+        if (contextualData.projects.length > 0) {
+          response += `Here are your current projects:\n\n`;
+          contextualData.projects.slice(0, 5).forEach(project => {
+            response += `**${project.name}**\n`;
+            response += `- Status: ${project.status}\n`;
+            response += `- Priority: ${project.priority}\n`;
+            if (project.deadline) response += `- Deadline: ${new Date(project.deadline).toLocaleDateString()}\n`;
+            response += `- PM Progress: ${project.pm_progress}/7\n`;
+            response += `- Leadership Progress: ${project.leadership_progress}/7\n`;
+            if (project.team_size > 0) response += `- Team Size: ${project.team_size} members\n`;
+            if (project.avg_rating > 0) response += `- Average Rating: ${Math.round(project.avg_rating * 10) / 10}/7\n`;
+            response += `\n`;
+          });
+        } else {
+          response += `I don't see any projects associated with your account. Projects help you track progress, manage teams, and achieve organizational goals. Would you like guidance on starting a new project?`;
+        }
+        break;
 
-    // Use assessment data for personalized advice
-    if (databaseResults.assessments.length > 0) {
-      const assessment = databaseResults.assessments[0];
-      if (assessment.type === 'leadership_diamond') {
-        response += `considering your leadership profile shows strengths in areas scoring ${Math.max(assessment.task_score, assessment.team_score, assessment.individual_score, assessment.organization_score)}/10, `;
-      }
-    }
+      case 'career':
+        if (contextualData.careerGoals.length > 0) {
+          response += `Based on your career development goals:\n\n`;
+          contextualData.careerGoals.slice(0, 5).forEach(goal => {
+            response += `**${goal.title}** (${goal.category})\n`;
+            response += `- Progress: ${goal.current_progress}%\n`;
+            response += `- Priority: ${goal.priority}\n`;
+            response += `- Status: ${goal.status}\n`;
+            if (goal.target_date) response += `- Target: ${new Date(goal.target_date).toLocaleDateString()}\n`;
+            response += `\n`;
+          });
+          
+          // Add intelligent recommendations
+          const activeGoals = contextualData.careerGoals.filter(g => g.status === 'active');
+          const highPriorityGoals = contextualData.careerGoals.filter(g => g.priority === 'high' || g.priority === 'critical');
+          
+          if (highPriorityGoals.length > 0) {
+            response += `**Focus Areas:** ${highPriorityGoals.map(g => g.title).join(', ')}\n\n`;
+          }
+        } else {
+          response += `I notice you don't have any career development goals set up yet. Career goals help track your professional growth and guide your development journey. Would you like help creating your first career goal?`;
+        }
+        break;
 
-    // Use document knowledge if available
-    if (documentResults.length > 0) {
-      const docContent = documentResults[0].content.toLowerCase();
-      if (docContent.includes('project management')) {
-        response += `based on established project management principles, `;
-      } else if (docContent.includes('leadership')) {
-        response += `applying proven leadership strategies, `;
-      }
-    }
+      case 'leadership':
+        if (contextualData.assessments.length > 0) {
+          response += `Based on your leadership assessments:\n\n`;
+          contextualData.assessments.slice(0, 2).forEach(assessment => {
+            if (assessment.type === 'leadership_diamond') {
+              response += `**Leadership Diamond Assessment:**\n`;
+              response += `- Task Focus: ${assessment.task_score}/10\n`;
+              response += `- Team Focus: ${assessment.team_score}/10\n`;
+              response += `- Individual Focus: ${assessment.individual_score}/10\n`;
+              response += `- Organization Focus: ${assessment.organization_score}/10\n\n`;
+            } else if (assessment.type === 'value') {
+              response += `**VALUE Assessment:**\n`;
+              response += `- Vision: ${assessment.vision_score}/10\n`;
+              response += `- Alignment: ${assessment.alignment_score}/10\n`;
+              response += `- Understanding: ${assessment.understanding_score}/10\n`;
+              response += `- Enactment: ${assessment.enactment_score}/10\n\n`;
+            }
+          });
+        } else {
+          response += `I don't see any completed leadership assessments. These assessments provide valuable insights into your leadership style and development areas. Would you like to learn about available assessments?`;
+        }
+        break;
 
-    // Enhanced fallback responses with context
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('project') && lowerMessage.includes('progress')) {
-      response += `I recommend implementing weekly status reviews with specific KPIs. Track completion percentages, identify blockers early, and maintain stakeholder alignment through regular communication.`;
-    } else if (lowerMessage.includes('team') || lowerMessage.includes('member')) {
-      response += `effective team dynamics require clear role definition and regular feedback loops. Focus on establishing psychological safety, recognition systems, and collaborative decision-making processes.`;
-    } else if (lowerMessage.includes('deadline') || lowerMessage.includes('timeline')) {
-      response += `successful deadline management involves backward planning, critical path identification, and buffer time allocation. Monitor milestone completion rates and escalate risks proactively.`;
-    } else if (lowerMessage.includes('leadership') || lowerMessage.includes('manage')) {
-      response += `strong leadership combines vision communication, team empowerment, and strategic decision-making. Focus on developing emotional intelligence, active listening, and adaptive management styles.`;
-    } else if (lowerMessage.includes('goal') || lowerMessage.includes('career')) {
-      response += `career development requires systematic goal-setting, skill gap analysis, and continuous learning. Create specific, measurable objectives with clear timelines and accountability measures.`;
-    } else {
-      response += `I'd be happy to provide specific guidance tailored to your situation. Consider sharing more details about your current challenges, team dynamics, or project objectives for more targeted recommendations.`;
+      case 'team':
+        if (contextualData.team.length > 0) {
+          response += `Your team members:\n\n`;
+          contextualData.team.slice(0, 8).forEach(member => {
+            response += `**${member.name}** (${member.role})\n`;
+            if (member.role_in_project) response += `- Project Role: ${member.role_in_project}\n`;
+            if (member.project_name) response += `- Current Project: ${member.project_name}\n`;
+            response += `\n`;
+          });
+        } else {
+          response += `I don't see team member information available. Effective team management involves clear communication, defined roles, and regular feedback. What specific team management guidance can I provide?`;
+        }
+        break;
+
+      default:
+        // General response with overview of available data
+        response += `Here's an overview of your information:\n\n`;
+        if (contextualData.projects.length > 0) {
+          response += `📂 **Projects:** ${contextualData.projects.length} active projects\n`;
+        }
+        if (contextualData.careerGoals.length > 0) {
+          response += `🎯 **Career Goals:** ${contextualData.careerGoals.length} development goals\n`;
+        }
+        if (contextualData.assessments.length > 0) {
+          response += `📊 **Assessments:** ${contextualData.assessments.length} completed assessments\n`;
+        }
+        if (contextualData.team.length > 0) {
+          response += `👥 **Team:** ${contextualData.team.length} team members\n`;
+        }
+        
+        response += `\nI can help you with specific questions about any of these areas. What would you like to focus on?`;
     }
 
     return {
       content: response,
-      model: 'enhanced-professional-consultant',
+      model: 'intelligent-database-consultant',
       tokensUsed: 0,
-      documentsUsed: documentResults.length,
+      primaryIntent: primaryIntent,
       dataSourcesUsed: {
-        projects: databaseResults.projects.length,
-        assessments: databaseResults.assessments.length,
-        goals: databaseResults.goals.length,
-        documents: documentResults.length
+        projects: contextualData.projects.length,
+        careerGoals: contextualData.careerGoals.length,
+        assessments: contextualData.assessments.length,
+        team: contextualData.team.length,
+        documents: 0
       }
     };
   }
 
-  async callOpenAI(message, context) {
+  async callOpenAI(message, context, primaryIntent) {
     if (!this.openaiApiKey) {
       throw new Error('OpenAI API key not available');
     }
   
     try {
-      console.log('📡 Calling OpenAI API with comprehensive context...');
+      console.log('📡 Calling OpenAI API with intelligent context...');
       
+      const systemPrompt = `You are a senior project management and leadership consultant. You provide personalized advice based on specific user data and context.
+
+Primary Focus Area: ${primaryIntent?.toUpperCase() || 'GENERAL'}
+
+Key Guidelines:
+- Focus primarily on the ${primaryIntent} area while being comprehensive
+- Use specific data from the context (project names, goal titles, progress percentages, dates)
+- Provide concrete, actionable recommendations
+- Reference actual team members, deadlines, and priorities when available
+- Use professional, encouraging language
+- Structure responses clearly with sections or bullet points
+- Use **bold text** for key points and names
+- Do not mention databases, technical systems, or data sources`;
+
       const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
@@ -422,26 +568,7 @@ INSTRUCTIONS:
           messages: [
             {
               role: 'system',
-              content: `You are a senior project management consultant with access to comprehensive organizational data including projects, team assessments, career goals, and professional knowledge. 
-
-              Your expertise includes:
-              - Project planning, execution, and monitoring
-              - Team leadership and development
-              - Performance assessment and improvement
-              - Career development and goal setting
-              - Risk management and stakeholder communication
-              - Organizational development and change management
-
-              Key Guidelines:
-              - Provide specific, actionable recommendations based on available context
-              - Reference relevant data points and metrics when helpful
-              - Use professional, friendly language with concrete examples
-              - Focus on practical solutions tailored to the specific situation
-              - Structure responses clearly with bullet points for action items
-              - Use **bold text** for key recommendations
-              - Include relevant metrics and timelines when appropriate
-              - Do not mention technical systems, databases, or data sources
-              - Present all information as your professional analysis and expertise`
+              content: systemPrompt
             },
             {
               role: 'user',
@@ -496,7 +623,7 @@ INSTRUCTIONS:
       .trim();
 
     if (cleaned.length < 30) {
-      return 'Thank you for your question. I\'d be happy to help you with project management guidance. Could you provide more specific details about what you\'d like assistance with?';
+      return 'Thank you for your question. I\'d be happy to help you with project management, career development, or leadership guidance. Could you provide more specific details about what you\'d like assistance with?';
     }
 
     return cleaned;
@@ -538,6 +665,7 @@ INSTRUCTIONS:
       hasOpenAIKey: !!this.openaiApiKey,
       documentsLoaded: this.documentsLoaded,
       databaseConnected: this.dbPool ? true : false,
+      intelligent: true,
       timestamp: new Date().toISOString()
     };
   }

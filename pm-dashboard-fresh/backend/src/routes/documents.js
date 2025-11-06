@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const documentManager = require('../services/ai/comprehensive-documentManager');
-const { authenticateToken } = require('../middleware/auth');
+const auth = require('../middleware/auth');
 
 // Apply authentication to all routes
-router.use(authenticateToken);
+router.use(auth);
 
 // Upload middleware
 const upload = documentManager.getUploadMiddleware();
