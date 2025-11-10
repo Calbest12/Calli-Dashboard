@@ -1,4 +1,6 @@
-// backend/controllers/leadershipController.js
+// backend/src/controllers/leadershipController.js
+// CLEAN VERSION - Node.js only, no JSX code
+
 const { query } = require('../config/database');
 
 /**
@@ -20,8 +22,9 @@ const getLeadershipAssessments = async (req, res) => {
     let assessmentsQuery = `
       SELECT 
         la.*,
-        p.title as project_title,
+        p.name as project_name,
         p.description as project_description,
+        p.status as project_status,
         u.name as user_name,
         u.role as user_role
       FROM leadership_assessments la
@@ -185,6 +188,7 @@ const submitLeadershipAssessment = async (req, res) => {
 const getLeadershipAssessmentById = async (req, res) => {
   try {
     const userId = req.user.id;
+    const userRole = req.user.role;
     const assessmentId = parseInt(req.params.id);
 
     if (isNaN(assessmentId)) {
@@ -194,24 +198,34 @@ const getLeadershipAssessmentById = async (req, res) => {
       });
     }
 
-    const assessmentQuery = `
+    let assessmentQuery = `
       SELECT 
         la.*,
-        p.title as project_title,
+        p.name as project_name,
         p.description as project_description,
-        u.name as user_name
+        p.status as project_status,
+        u.name as user_name,
+        u.role as user_role
       FROM leadership_assessments la
       LEFT JOIN projects p ON la.project_id = p.id
       LEFT JOIN users u ON la.user_id = u.id
-      WHERE la.id = $1 AND (la.user_id = $2 OR $3 = 'Executive Leader')
+      WHERE la.id = $1
     `;
 
-    const result = await query(assessmentQuery, [assessmentId, userId, req.user.role]);
+    const queryParams = [assessmentId];
+
+    // Only allow users to see their own assessments unless they're Executive Leaders
+    if (userRole !== 'Executive Leader') {
+      assessmentQuery += ` AND la.user_id = $2`;
+      queryParams.push(userId);
+    }
+
+    const result = await query(assessmentQuery, queryParams);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Assessment not found or access denied'
+        error: 'Leadership assessment not found'
       });
     }
 
@@ -222,16 +236,18 @@ const getLeadershipAssessmentById = async (req, res) => {
         : result.rows[0].responses
     };
 
+    console.log(`✅ Found leadership assessment: ID ${assessmentId}`);
+
     res.json({
       success: true,
       assessment
     });
 
   } catch (error) {
-    console.error('❌ Error getting leadership assessment:', error);
+    console.error('❌ Error fetching leadership assessment by ID:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to retrieve assessment'
+      error: 'Failed to fetch leadership assessment'
     });
   }
 };
@@ -243,87 +259,75 @@ const getLeadershipAssessmentById = async (req, res) => {
 const getLeadershipMetrics = async (req, res) => {
   try {
     const userId = req.user.id;
+    const userRole = req.user.role;
     const { project_id, user_id } = req.query;
-    
-    // Use provided user_id if user has permission, otherwise use authenticated user
-    const targetUserId = user_id && (req.user.role === 'Executive Leader' || user_id === userId.toString()) 
-      ? user_id : userId;
 
-    console.log(`📈 Calculating leadership metrics for user ${targetUserId}`);
+    console.log(`📊 Fetching leadership metrics for user ${userId}, role: ${userRole}`);
+
+    // Use provided user_id if user has permission, otherwise use authenticated user
+    const targetUserId = user_id && userRole === 'Executive Leader' ? user_id : userId;
 
     let metricsQuery = `
       SELECT 
-        COUNT(*) as total_assessments,
-        AVG(vision_score) as avg_vision,
-        AVG(reality_score) as avg_reality,
-        AVG(ethics_score) as avg_ethics,
-        AVG(courage_score) as avg_courage,
-        AVG(overall_score) as avg_overall,
-        MAX(created_at) as latest_assessment
-      FROM leadership_assessments 
-      WHERE user_id = $1
+        COUNT(la.id) as total_assessments,
+        AVG(la.vision_score) as avg_vision_score,
+        AVG(la.reality_score) as avg_reality_score,
+        AVG(la.ethics_score) as avg_ethics_score,
+        AVG(la.courage_score) as avg_courage_score,
+        AVG(la.overall_score) as avg_overall_score,
+        MIN(la.created_at) as first_assessment,
+        MAX(la.created_at) as latest_assessment
+      FROM leadership_assessments la
+      WHERE la.user_id = $1
     `;
 
     const queryParams = [targetUserId];
 
     if (project_id && project_id !== 'all') {
-      metricsQuery += ` AND project_id = $${queryParams.length + 1}`;
+      metricsQuery += ` AND la.project_id = $${queryParams.length + 1}`;
       queryParams.push(project_id);
     }
 
     const result = await query(metricsQuery, queryParams);
     const metrics = result.rows[0];
 
-    // Get trend data (last 6 assessments)
-    const trendQuery = `
-      SELECT 
-        vision_score,
-        reality_score,
-        ethics_score,
-        courage_score,
-        overall_score,
-        created_at
-      FROM leadership_assessments 
-      WHERE user_id = $1
-      ${project_id && project_id !== 'all' ? `AND project_id = $2` : ''}
-      ORDER BY created_at DESC 
-      LIMIT 6
-    `;
+    // Convert numeric strings to numbers and handle nulls
+    const processedMetrics = {
+      total_assessments: parseInt(metrics.total_assessments) || 0,
+      avg_vision_score: parseFloat(metrics.avg_vision_score) || 0,
+      avg_reality_score: parseFloat(metrics.avg_reality_score) || 0,
+      avg_ethics_score: parseFloat(metrics.avg_ethics_score) || 0,
+      avg_courage_score: parseFloat(metrics.avg_courage_score) || 0,
+      avg_overall_score: parseFloat(metrics.avg_overall_score) || 0,
+      first_assessment: metrics.first_assessment,
+      latest_assessment: metrics.latest_assessment
+    };
 
-    const trendParams = project_id && project_id !== 'all' ? [targetUserId, project_id] : [targetUserId];
-    const trendResult = await query(trendQuery, trendParams);
+    console.log(`✅ Leadership metrics calculated: ${processedMetrics.total_assessments} assessments`);
 
     res.json({
       success: true,
-      metrics: {
-        ...metrics,
-        avg_vision: parseFloat((metrics.avg_vision || 0).toFixed(2)),
-        avg_reality: parseFloat((metrics.avg_reality || 0).toFixed(2)),
-        avg_ethics: parseFloat((metrics.avg_ethics || 0).toFixed(2)),
-        avg_courage: parseFloat((metrics.avg_courage || 0).toFixed(2)),
-        avg_overall: parseFloat((metrics.avg_overall || 0).toFixed(2)),
-      },
-      trends: trendResult.rows.reverse() // Reverse to get chronological order
+      metrics: processedMetrics
     });
 
   } catch (error) {
-    console.error('❌ Error calculating leadership metrics:', error);
+    console.error('❌ Error fetching leadership metrics:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to calculate metrics'
+      error: 'Failed to fetch leadership metrics'
     });
   }
 };
 
 /**
- * Delete leadership assessment
+ * Delete a leadership assessment
  * DELETE /api/leadership/assessments/:id
  */
 const deleteLeadershipAssessment = async (req, res) => {
   try {
     const userId = req.user.id;
-    const assessmentId = parseInt(req.params.id);
     const userRole = req.user.role;
+    const assessmentId = parseInt(req.params.id);
 
     if (isNaN(assessmentId)) {
       return res.status(400).json({
@@ -332,38 +336,42 @@ const deleteLeadershipAssessment = async (req, res) => {
       });
     }
 
-    console.log(`🗑️ Deleting leadership assessment ${assessmentId} for user ${userId}`);
-
-    // Check if assessment exists and user has permission to delete
-    const checkQuery = `
-      SELECT user_id FROM leadership_assessments 
-      WHERE id = $1 AND (user_id = $2 OR $3 = 'Executive Leader')
+    let deleteQuery = `
+      DELETE FROM leadership_assessments 
+      WHERE id = $1
     `;
-    
-    const checkResult = await query(checkQuery, [assessmentId, userId, userRole]);
 
-    if (checkResult.rows.length === 0) {
+    const queryParams = [assessmentId];
+
+    // Only allow users to delete their own assessments unless they're Executive Leaders
+    if (userRole !== 'Executive Leader') {
+      deleteQuery += ` AND user_id = $2`;
+      queryParams.push(userId);
+    }
+
+    deleteQuery += ` RETURNING id`;
+
+    const result = await query(deleteQuery, queryParams);
+
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        error: 'Assessment not found or access denied'
+        error: 'Leadership assessment not found or access denied'
       });
     }
 
-    const deleteQuery = `DELETE FROM leadership_assessments WHERE id = $1`;
-    await query(deleteQuery, [assessmentId]);
-
-    console.log(`✅ Leadership assessment ${assessmentId} deleted successfully`);
+    console.log(`✅ Leadership assessment deleted: ID ${assessmentId}`);
 
     res.json({
       success: true,
-      message: 'Assessment deleted successfully'
+      message: 'Leadership assessment deleted successfully'
     });
 
   } catch (error) {
     console.error('❌ Error deleting leadership assessment:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to delete assessment'
+      error: 'Failed to delete leadership assessment'
     });
   }
 };

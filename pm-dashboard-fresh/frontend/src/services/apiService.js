@@ -1,12 +1,10 @@
-// frontend/services/apiService.js
-// FINAL CORRECTED VERSION - Fixes all 3 issues found in your codebase
+// frontend/src/services/apiService.js
+// Corrected API service that preserves your original authentication and adds leadership functionality
 
 class ApiService {
   constructor() {
-    // FIX 1: Correct port - your backend runs on 5001, not 3001
     this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
     this.token = localStorage.getItem('token');
-    console.log('🔧 API Service initialized with correct baseURL:', this.baseURL);
   }
 
   // Helper method to get headers
@@ -31,7 +29,7 @@ class ApiService {
     return await response.json();
   }
 
-  // FIX 2 & 3: Corrected login method to match your LoginPage call format and backend response
+  // AUTHENTICATION METHODS - RESTORED TO ORIGINAL FORMAT
   async login(loginData) {
     try {
       console.log('🔄 Login attempt with data:', { email: loginData.email, password: '***' });
@@ -51,20 +49,20 @@ class ApiService {
       const data = await this.handleResponse(response);
       console.log('📄 Backend response:', data);
       
-      // Your backend returns: { success: true, user: {...}, message: "Login successful" }
-      if (data.success && data.user) {
+      // Your backend returns: { success: true, data: {...}, message: "Login successful" }
+      if (data.success && data.data) {
         // Create a simple token from user ID since your backend doesn't use JWT
-        this.token = `user_${data.user.id}`;
+        this.token = `user_${data.data.id}`;
         localStorage.setItem('token', this.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('user', JSON.stringify(data.data));
         
         console.log('✅ Login successful');
-        console.log('👤 User:', data.user.name, `(${data.user.role})`);
+        console.log('👤 User:', data.data.name, `(${data.data.role})`);
         
         // Return the exact format your LoginPage expects
         return {
           success: true,
-          user: data.user,
+          user: data.data,
           message: data.message
         };
       } else {
@@ -109,17 +107,13 @@ class ApiService {
   isAuthenticated() {
     const hasToken = !!this.token && !!localStorage.getItem('token');
     const hasUser = !!localStorage.getItem('user');
-    const isAuth = hasToken && hasUser;
-    console.log('🔐 Authentication check:', isAuth);
-    return isAuth;
+    return hasToken && hasUser;
   }
 
-  // ========== PROJECT METHODS ==========
-
+  // PROJECT MANAGEMENT METHODS
   async getProjects() {
     try {
       const response = await fetch(`${this.baseURL}/api/projects`, {
-        method: 'GET',
         headers: this.getHeaders(),
       });
 
@@ -174,12 +168,23 @@ class ApiService {
     }
   }
 
-  // ========== USER METHODS ==========
+  async getProjectHistory(projectId) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/history`, {
+        headers: this.getHeaders(),
+      });
 
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('Error fetching project history:', error);
+      throw error;
+    }
+  }
+
+  // USER MANAGEMENT METHODS
   async getUsers() {
     try {
       const response = await fetch(`${this.baseURL}/api/users`, {
-        method: 'GET',
         headers: this.getHeaders(),
       });
 
@@ -193,7 +198,6 @@ class ApiService {
   async getUserProfile() {
     try {
       const response = await fetch(`${this.baseURL}/api/users/profile`, {
-        method: 'GET',
         headers: this.getHeaders(),
       });
 
@@ -219,8 +223,7 @@ class ApiService {
     }
   }
 
-  // ========== LEADERSHIP DIAMOND ASSESSMENT METHODS ==========
-
+  // LEADERSHIP DIAMOND ASSESSMENT METHODS
   async getLeadershipAssessments(params = {}) {
     try {
       const queryParams = new URLSearchParams();
@@ -298,40 +301,10 @@ class ApiService {
     }
   }
 
-  async deleteLeadershipAssessment(assessmentId) {
-    try {
-      const response = await fetch(`${this.baseURL}/api/leadership/assessments/${assessmentId}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error deleting leadership assessment:', error);
-      throw error;
-    }
-  }
-
-  async getLeadershipFramework() {
-    try {
-      const response = await fetch(`${this.baseURL}/api/leadership/framework`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error fetching leadership framework:', error);
-      throw error;
-    }
-  }
-
-  // ========== OTHER METHODS ==========
-
+  // TEAM MANAGEMENT METHODS (for Executive Leaders)
   async getTeamMembers() {
     try {
-      const response = await fetch(`${this.baseURL}/api/teams/members`, {
-        method: 'GET',
+      const response = await fetch(`${this.baseURL}/api/team-management/members`, {
         headers: this.getHeaders(),
       });
 
@@ -342,141 +315,48 @@ class ApiService {
     }
   }
 
-  async getCareerAssessments() {
+  async assignTeamMember(assignmentData) {
     try {
-      const response = await fetch(`${this.baseURL}/api/career/assessments`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error fetching career assessments:', error);
-      throw error;
-    }
-  }
-
-  async submitCareerAssessment(assessmentData) {
-    try {
-      const response = await fetch(`${this.baseURL}/api/career/assessments`, {
+      const response = await fetch(`${this.baseURL}/api/team-management/assign`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(assessmentData),
+        body: JSON.stringify(assignmentData),
       });
 
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error submitting career assessment:', error);
+      console.error('Error assigning team member:', error);
       throw error;
     }
   }
 
-  async getValueAssessments() {
+  async removeTeamMember(teamMemberId) {
     try {
-      const response = await fetch(`${this.baseURL}/api/value/assessments`, {
-        method: 'GET',
+      const response = await fetch(`${this.baseURL}/api/team-management/remove/${teamMemberId}`, {
+        method: 'DELETE',
         headers: this.getHeaders(),
       });
 
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error fetching value assessments:', error);
+      console.error('Error removing team member:', error);
       throw error;
     }
   }
 
-  async submitValueAssessment(assessmentData) {
+  async getTeamMetrics() {
     try {
-      const response = await fetch(`${this.baseURL}/api/value/assessments`, {
-        method: 'POST',
+      const response = await fetch(`${this.baseURL}/api/team-management/metrics`, {
         headers: this.getHeaders(),
-        body: JSON.stringify(assessmentData),
       });
 
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error submitting value assessment:', error);
-      throw error;
-    }
-  }
-
-  // Health checks
-  async healthCheck() {
-    try {
-      const response = await fetch(`${this.baseURL}/health`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Health check failed:', error);
+      console.error('Error fetching team metrics:', error);
       throw error;
     }
   }
 }
-
-// Helper functions for leadership assessments
-export const calculateDiamondMetrics = (assessments, selectedProject = 'all') => {
-  if (!assessments || assessments.length === 0) {
-    return {
-      vision: 0,
-      reality: 0,
-      ethics: 0,
-      courage: 0,
-      overall: 0,
-      count: 0
-    };
-  }
-
-  let filteredAssessments = assessments;
-  if (selectedProject !== 'all') {
-    filteredAssessments = assessments.filter(assessment => 
-      assessment.project_id === parseInt(selectedProject)
-    );
-  }
-
-  if (filteredAssessments.length === 0) {
-    return {
-      vision: 0,
-      reality: 0,
-      ethics: 0,
-      courage: 0,
-      overall: 0,
-      count: 0
-    };
-  }
-
-  // Get the most recent assessment for current metrics
-  const latestAssessment = filteredAssessments.reduce((latest, current) => {
-    return new Date(current.created_at) > new Date(latest.created_at) ? current : latest;
-  });
-
-  return {
-    vision: latestAssessment.vision_score || 0,
-    reality: latestAssessment.reality_score || 0,
-    ethics: latestAssessment.ethics_score || 0,
-    courage: latestAssessment.courage_score || 0,
-    overall: latestAssessment.overall_score || 0,
-    count: filteredAssessments.length
-  };
-};
-
-// Helper function to get score color based on value
-export const getScoreColor = (score) => {
-  if (score >= 6) return '#22c55e'; // green - excellent
-  if (score >= 4) return '#eab308'; // yellow - good
-  if (score >= 2) return '#f97316'; // orange - developing
-  return '#ef4444'; // red - needs improvement
-};
-
-// Helper function to get score label
-export const getScoreLabel = (score) => {
-  if (score >= 6) return 'Excellent';
-  if (score >= 4) return 'Good';
-  if (score >= 2) return 'Developing';
-  return 'Needs Improvement';
-};
 
 // Create and export a singleton instance
 const apiService = new ApiService();
