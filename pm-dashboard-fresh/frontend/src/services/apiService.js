@@ -356,6 +356,148 @@ class ApiService {
       throw error;
     }
   }
+  // MINIMAL PATCH for apiService.js
+// Add this BEFORE the closing bracket and export statement
+// DO NOT replace the file - only add these methods
+
+  // BASIC HTTP METHODS - ADD THESE ONLY
+  async get(endpoint) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with GET ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async post(endpoint, data) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with POST ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async put(endpoint, data) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with PUT ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async delete(endpoint) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with DELETE ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  // CAREER METHODS - ADD THESE ONLY
+  async getCareerGoals(userId = null) {
+    try {
+      const currentUser = this.getCurrentUser();
+      const targetUserId = userId || currentUser?.id;
+      
+      if (!targetUserId) {
+        return { success: false, error: 'No user ID available', data: [] };
+      }
+      
+      return this.get(`/api/career/goals/${targetUserId}`);
+    } catch (error) {
+      console.error('Error getting career goals:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
+  async getUserCompletedGoals(userId = null) {
+    try {
+      const currentUser = this.getCurrentUser();
+      const targetUserId = userId || currentUser?.id;
+      
+      if (!targetUserId) {
+        return { success: false, error: 'No user ID available', completedGoals: [] };
+      }
+      
+      return this.get(`/api/career/completed/${targetUserId}`);
+    } catch (error) {
+      console.error('Error getting completed goals:', error);
+      return { success: false, error: error.message, completedGoals: [] };
+    }
+  }
+
+  async getCareerStats(userId = null) {
+    try {
+      const currentUser = this.getCurrentUser();
+      const targetUserId = userId || currentUser?.id;
+      
+      if (!targetUserId) {
+        return { success: false, error: 'No user ID available', data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+      }
+      
+      return this.get(`/api/career/stats/${targetUserId}`);
+    } catch (error) {
+      console.error('Error getting career stats:', error);
+      return { success: false, error: error.message, data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+    }
+  }
+
+  // PROJECT METHOD - ADD ONLY THIS ONE
+  async getUserProjects() {
+    try {
+      const result = await this.get('/api/projects');
+      return {
+        success: true,
+        projects: result.data || result.projects || []
+      };
+    } catch (error) {
+      console.error('Error getting user projects:', error);
+      return { success: false, error: error.message, projects: [] };
+    }
+  }
+
+  // EXECUTIVE METHODS - ADD THESE ONLY
+  async getExecutiveTeam() {
+    try {
+      return this.get('/api/team/executive');
+    } catch (error) {
+      console.error('Error getting executive team:', error);
+      return { success: false, error: error.message, data: { teamMembers: [], unassignedMembers: [], totalTeamSize: 0 } };
+    }
+  }
+
+  async getExecutiveDashboard() {
+    try {
+      return this.get('/api/team/executive/dashboard');
+    } catch (error) {
+      console.error('Error getting executive dashboard:', error);
+      return { success: false, error: error.message, data: { teamSize: 0, totalProjects: 0, averageProgress: 0 } };
+    }
+  }
+
+// END OF ADDITIONS - Add these methods right before the closing } of the class
 }
 
 // Create and export a singleton instance

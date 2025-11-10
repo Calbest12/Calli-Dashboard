@@ -1180,4 +1180,336 @@
   .goal-summary-grid {
     grid-template-columns: 1fr;
   }
+
+/* IMPORTANT: Simple Completed Goal Modal Styles - FIXED VERSION */
+.modal-overlay .modal-content.completed-modal-simple {
+  max-width: 600px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+/* Goal Header Section */
+.completed-modal-simple .completed-goal-header-section {
+  background: #fef7e0 !important;
+  padding: 20px !important;
+  border-radius: 8px !important;
+  margin-bottom: 24px !important;
+}
+
+.completed-modal-simple .goal-icon-and-title {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+}
+
+.completed-modal-simple .goal-trophy-icon {
+  width: 32px !important;
+  height: 32px !important;
+  color: #d97706 !important;
+  flex-shrink: 0 !important;
+  margin-top: 4px !important;
+}
+
+.completed-modal-simple .goal-title-info {
+  flex: 1 !important;
+}
+
+.completed-modal-simple .goal-main-title {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.completed-modal-simple .goal-subtitle {
+  font-size: 16px !important;
+  color: #6b7280 !important;
+  margin: 0 0 12px 0 !important;
+  line-height: 1.4 !important;
+}
+
+.completed-modal-simple .goal-completion-tags {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+}
+
+.completed-modal-simple .completion-tag {
+  background: #e0e7ff !important;
+  color: #3730a3 !important;
+  padding: 4px 12px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.completed-modal-simple .completion-date {
+  color: #6b7280 !important;
+  font-size: 14px !important;
+}
+
+/* Goal Summary Section */
+.completed-modal-simple .goal-summary-section {
+  margin-bottom: 32px !important;
+}
+
+.completed-modal-simple .goal-summary-section h3 {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+  margin: 0 0 16px 0 !important;
+}
+
+.completed-modal-simple .summary-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+.completed-modal-simple .summary-row {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 24px !important;
+}
+
+.completed-modal-simple .summary-item {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.completed-modal-simple .summary-label {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+.completed-modal-simple .summary-value {
+  font-size: 14px !important;
+  color: #6b7280 !important;
+}
+
+.completed-modal-simple .priority-tag {
+  padding: 4px 8px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  width: fit-content !important;
+}
+
+.completed-modal-simple .description-section {
+  margin-top: 20px !important;
+  padding-top: 16px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.completed-modal-simple .description-label {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+  margin-bottom: 8px !important;
+}
+
+.completed-modal-simple .description-text {
+  font-size: 14px !important;
+  color: #374151 !important;
+  line-height: 1.5 !important;
+}
+
+/* Progress Notes History Section */
+.completed-modal-simple .progress-notes-section {
+  margin-bottom: 24px !important;
+}
+
+.completed-modal-simple .progress-notes-section h3 {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+  margin: 0 0 16px 0 !important;
+}
+
+.completed-modal-simple .no-progress-notes {
+  padding: 32px !important;
+  text-align: center !important;
+  color: #6b7280 !important;
+  font-style: italic !important;
+}
+
+.completed-modal-simple .progress-history-timeline {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+.completed-modal-simple .progress-history-entry {
+  display: flex !important;
+  gap: 16px !important;
+  padding: 16px !important;
+  background: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-radius: 8px !important;
+}
+
+.completed-modal-simple .progress-entry-left {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  min-width: 160px !important;
+  flex-shrink: 0 !important;
+}
+
+.completed-modal-simple .progress-change-badge {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  padding: 6px 12px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+}
+
+.completed-modal-simple .progress-change-badge.completed {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.completed-modal-simple .progress-entry-date {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  text-align: center !important;
+}
+
+.completed-modal-simple .progress-entry-content {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.completed-modal-simple .progress-notes-text {
+  font-size: 14px !important;
+  color: #374151 !important;
+  line-height: 1.5 !important;
+  margin-bottom: 8px !important;
+}
+
+.completed-modal-simple .progress-update-number {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  border-top: 1px solid #f3f4f6 !important;
+  padding-top: 8px !important;
+  margin-top: 4px !important;
+}
+
+/* Simple Progress Notes Modal */
+.modal-overlay .modal-content.progress-notes-modal-simple {
+  max-width: 600px !important;
+  max-height: 90vh !important;
+  overflow-y: auto !important;
+}
+
+/* Goal Header in Notes Modal */
+.progress-notes-modal-simple .notes-goal-header {
+  background: #f9fafb !important;
+  padding: 20px !important;
+  border-radius: 8px !important;
+  margin-bottom: 24px !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.progress-notes-modal-simple .notes-goal-title {
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  color: #1f2937 !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.progress-notes-modal-simple .notes-goal-subtitle {
+  font-size: 14px !important;
+  color: #6b7280 !important;
+  margin: 0 0 12px 0 !important;
+}
+
+.progress-notes-modal-simple .notes-goal-tags {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.progress-notes-modal-simple .category-tag {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  padding: 4px 12px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* Notes History List */
+.progress-notes-modal-simple .notes-history-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+}
+
+.progress-notes-modal-simple .notes-entry-simple {
+  display: flex !important;
+  gap: 16px !important;
+  padding: 16px !important;
+  background: white !important;
+  border: 1px solid #e5e7eb !important;
+  border-left: 4px solid #3b82f6 !important;
+  border-radius: 8px !important;
+}
+
+.progress-notes-modal-simple .notes-entry-left {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  min-width: 140px !important;
+  flex-shrink: 0 !important;
+}
+
+.progress-notes-modal-simple .notes-progress-badge {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  padding: 6px 12px !important;
+  border-radius: 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+}
+
+.progress-notes-modal-simple .notes-progress-badge.completed {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+}
+
+.progress-notes-modal-simple .notes-entry-date {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  text-align: center !important;
+}
+
+.progress-notes-modal-simple .notes-entry-content {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+.progress-notes-modal-simple .notes-text {
+  font-size: 14px !important;
+  color: #374151 !important;
+  line-height: 1.5 !important;
+}
+
+.progress-notes-modal-simple .notes-update-number {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+  border-top: 1px solid #f3f4f6 !important;
+  padding-top: 8px !important;
+  margin-top: 8px !important;
+}
 }

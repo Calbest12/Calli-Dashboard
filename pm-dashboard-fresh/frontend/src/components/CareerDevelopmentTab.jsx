@@ -445,45 +445,170 @@ const ProgressUpdateModal = React.memo(({ isOpen, goal, onClose, onUpdate }) => 
 const GoalNotesModal = React.memo(({ isOpen, goal, onClose }) => {
   if (!isOpen || !goal) return null;
 
-  const progressHistory = Array.isArray(goal.goal_progress_history) ? goal.goal_progress_history : [];
-  const hasNotes = progressHistory.some(entry => entry.notes && entry.notes.trim());
+  const progressHistory = Array.isArray(goal.goal_progress_history) 
+    ? goal.goal_progress_history 
+    : (typeof goal.goal_progress_history === 'string' 
+       ? JSON.parse(goal.goal_progress_history) 
+       : []);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content notes-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-content notes-modal-fixed" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Progress Notes: {goal.title}</h3>
+          <h3>Progress Notes History</h3>
           <button onClick={onClose} className="modal-close">×</button>
         </div>
 
         <div className="modal-body">
-          {!hasNotes ? (
-            <div className="empty-notes">
-              <StickyNote />
-              <p>No progress notes yet. Add notes when updating your progress to track your journey!</p>
+          {/* Goal Header Info */}
+          <div style={{
+            background: '#f9fafb',
+            padding: '20px',
+            borderRadius: '8px',
+            marginBottom: '24px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <h2 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#1f2937',
+              margin: '0 0 8px 0'
+            }}>{goal.title}</h2>
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              margin: '0 0 12px 0'
+            }}>
+              {goal.current_level || goal.target_level} → {goal.target_level}
+            </p>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{
+                background: '#f3f4f6',
+                color: '#374151',
+                padding: '4px 12px',
+                borderRadius: '12px',
+                fontSize: '12px',
+                fontWeight: '500'
+              }}>
+                {goal.category}
+              </span>
+              <span style={{
+                padding: '4px 8px',
+                borderRadius: '12px',
+                fontSize: '12px',
+                fontWeight: '500',
+                background: goal.priority === 'high' ? '#fef2f2' : goal.priority === 'low' ? '#f0fdf4' : '#fef3c7',
+                color: goal.priority === 'high' ? '#dc2626' : goal.priority === 'low' ? '#16a34a' : '#d97706'
+              }}>
+                {goal.priority || 'medium'}
+              </span>
             </div>
-          ) : (
-            <div className="notes-timeline">
-              {progressHistory
-                .filter(entry => entry.notes && entry.notes.trim())
+          </div>
+
+          {/* Progress Notes List */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {progressHistory.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '48px',
+                color: '#6b7280'
+              }}>
+                <StickyNote style={{
+                  width: '48px',
+                  height: '48px',
+                  color: '#d1d5db',
+                  margin: '0 auto 16px'
+                }} />
+                <p style={{ margin: 0, lineHeight: '1.5' }}>
+                  No progress notes yet. Add notes when updating your progress to track your journey!
+                </p>
+              </div>
+            ) : (
+              progressHistory
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-                .map((entry, index) => (
-                  <div key={index} className="notes-entry">
-                    <div className="notes-entry-header">
-                      <span className="notes-progress-badge">
-                        {entry.new_progress}%
-                      </span>
-                      <span className="notes-date">
-                        {formatDate(entry.created_at)}
-                      </span>
+                .map((entry, index) => {
+                  const isCompleted = entry.new_progress >= 100;
+                  
+                  return (
+                    <div key={entry.id || index} style={{
+                      display: 'flex',
+                      gap: '16px',
+                      padding: '16px',
+                      background: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderLeft: '4px solid #3b82f6',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        minWidth: '140px',
+                        flexShrink: 0
+                      }}>
+                        <div style={{
+                          background: isCompleted ? '#dcfce7' : '#dbeafe',
+                          color: isCompleted ? '#166534' : '#1e40af',
+                          padding: '6px 12px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textAlign: 'center'
+                        }}>
+                          {entry.previous_progress || 0}% → {entry.new_progress}%
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          textAlign: 'center'
+                        }}>
+                          {formatDate(entry.created_at)}
+                        </div>
+                      </div>
+                      
+                      <div style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                      }}>
+                        {entry.notes && entry.notes.trim() ? (
+                          <div style={{
+                            fontSize: '14px',
+                            color: '#374151',
+                            lineHeight: '1.5'
+                          }}>{entry.notes}</div>
+                        ) : (
+                          <div style={{
+                            fontSize: '14px',
+                            color: '#9ca3af',
+                            fontStyle: 'italic'
+                          }}>No notes provided for this update</div>
+                        )}
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          borderTop: '1px solid #f3f4f6',
+                          paddingTop: '8px',
+                          marginTop: '8px'
+                        }}>
+                          Progress Update #{progressHistory.length - index}
+                          {isCompleted && ' (COMPLETED)'}
+                        </div>
+                      </div>
                     </div>
-                    <div className="notes-entry-content">
-                      <p>{entry.notes}</p>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )}
+                  );
+                })
+            )}
+          </div>
         </div>
 
         <div className="modal-footer">
@@ -494,68 +619,303 @@ const GoalNotesModal = React.memo(({ isOpen, goal, onClose }) => {
   );
 });
 
+// Enhanced CompletedGoalDetailsModal - Add this to your CareerDevelopmentTab.jsx
+
 const CompletedGoalDetailsModal = React.memo(({ isOpen, goal, onClose }) => {
   if (!isOpen || !goal) return null;
 
+  const progressHistory = Array.isArray(goal.goal_progress_history) 
+    ? goal.goal_progress_history 
+    : (typeof goal.goal_progress_history === 'string' 
+       ? JSON.parse(goal.goal_progress_history) 
+       : []);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content completed-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-content completed-goal-modal-fixed" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Completed: {goal.title}</h3>
+          <h3>Completed Goal Details</h3>
           <button onClick={onClose} className="modal-close">×</button>
         </div>
 
         <div className="modal-body">
-          <div className="goal-summary-grid">
-            <div className="summary-item">
-              <label>Category</label>
-              <span>{goal.category}</span>
-            </div>
-            <div className="summary-item">
-              <label>Completed Date</label>
-              <span>{formatDate(goal.completed_date)}</span>
-            </div>
-            <div className="summary-item">
-              <label>Progress</label>
-              <span>{goal.current_level} → {goal.target_level}</span>
-            </div>
-            <div className="summary-item">
-              <label>Priority</label>
-              <span className={`priority-badge priority-${goal.priority}`}>
-                {goal.priority}
-              </span>
+          {/* Goal Header with Trophy and Title */}
+          <div style={{
+            background: '#fef7e0',
+            padding: '20px',
+            borderRadius: '8px',
+            marginBottom: '24px'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '16px'
+            }}>
+              <Trophy style={{
+                width: '32px',
+                height: '32px',
+                color: '#d97706',
+                flexShrink: 0,
+                marginTop: '4px'
+              }} />
+              <div style={{ flex: 1 }}>
+                <h2 style={{
+                  fontSize: '24px',
+                  fontWeight: '600',
+                  color: '#1f2937',
+                  margin: '0 0 8px 0'
+                }}>{goal.title}</h2>
+                <p style={{
+                  fontSize: '16px',
+                  color: '#6b7280',
+                  margin: '0 0 12px 0',
+                  lineHeight: '1.4'
+                }}>{goal.description}</p>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px'
+                }}>
+                  <span style={{
+                    background: '#e0e7ff',
+                    color: '#3730a3',
+                    padding: '4px 12px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '500'
+                  }}>completed goal</span>
+                  <span style={{
+                    color: '#6b7280',
+                    fontSize: '14px'
+                  }}>Completed on {formatDate(goal.completed_date)}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {goal.description && (
-            <div className="summary-section">
-              <label>Description</label>
-              <p>{goal.description}</p>
-            </div>
-          )}
-
-          {goal.notes && (
-            <div className="summary-section">
-              <label>Notes</label>
-              <p>{goal.notes}</p>
-            </div>
-          )}
-
-          {goal.resources && goal.resources.length > 0 && (
-            <div className="summary-section">
-              <label>Resources Used</label>
-              <div className="resources-list">
-                {goal.resources.map((resource, index) => (
-                  <div key={index} className="resource-link">
-                    <ExternalLink size={14} />
-                    <a href={resource.url} target="_blank" rel="noopener noreferrer">
-                      {resource.name}
-                    </a>
-                  </div>
-                ))}
+          {/* Goal Summary Section */}
+          <div style={{ marginBottom: '32px' }}>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#1f2937',
+              margin: '0 0 16px 0'
+            }}>Goal Summary</h3>
+            
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '24px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151'
+                  }}>Skill Level:</span>
+                  <span style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>
+                    {goal.current_level || goal.target_level} → {goal.target_level}
+                  </span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151'
+                  }}>Priority:</span>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    width: 'fit-content',
+                    background: goal.priority === 'high' ? '#fef2f2' : goal.priority === 'low' ? '#f0fdf4' : '#fef3c7',
+                    color: goal.priority === 'high' ? '#dc2626' : goal.priority === 'low' ? '#16a34a' : '#d97706'
+                  }}>
+                    {goal.priority || 'medium'}
+                  </span>
+                </div>
+              </div>
+              
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '24px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151'
+                  }}>Target Date:</span>
+                  <span style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>{formatDate(goal.target_date)}</span>
+                </div>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151'
+                  }}>Final Progress:</span>
+                  <span style={{
+                    fontSize: '14px',
+                    color: '#6b7280'
+                  }}>100%</span>
+                </div>
               </div>
             </div>
-          )}
+
+            {goal.description && (
+              <div style={{
+                marginTop: '20px',
+                paddingTop: '16px',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#1f2937',
+                  marginBottom: '8px'
+                }}>Description:</div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#374151',
+                  lineHeight: '1.5'
+                }}>{goal.description}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Progress Notes History Section */}
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#1f2937',
+              margin: '0 0 16px 0'
+            }}>Progress Notes History</h3>
+            
+            {progressHistory.length === 0 ? (
+              <div style={{
+                padding: '32px',
+                textAlign: 'center',
+                color: '#6b7280',
+                fontStyle: 'italic'
+              }}>
+                <p>No progress notes were recorded for this goal.</p>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                {progressHistory
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                  .map((entry, index) => {
+                    const isCompleted = entry.new_progress >= 100;
+                    
+                    return (
+                      <div key={entry.id || index} style={{
+                        display: 'flex',
+                        gap: '16px',
+                        padding: '16px',
+                        background: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderLeft: '4px solid #3b82f6',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          minWidth: '160px',
+                          flexShrink: 0
+                        }}>
+                          <div style={{
+                            background: isCompleted ? '#dcfce7' : '#dbeafe',
+                            color: isCompleted ? '#166534' : '#1e40af',
+                            padding: '6px 12px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            textAlign: 'center'
+                          }}>
+                            {entry.previous_progress || 0}% → {entry.new_progress}%
+                            {isCompleted && ' (COMPLETED)'}
+                          </div>
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#6b7280',
+                            textAlign: 'center'
+                          }}>
+                            {formatDate(entry.created_at)}
+                          </div>
+                        </div>
+                        
+                        <div style={{
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px'
+                        }}>
+                          {entry.notes && entry.notes.trim() ? (
+                            <div style={{
+                              fontSize: '14px',
+                              color: '#374151',
+                              lineHeight: '1.5',
+                              marginBottom: '8px'
+                            }}>{entry.notes}</div>
+                          ) : (
+                            <div style={{
+                              fontSize: '14px',
+                              color: '#9ca3af',
+                              fontStyle: 'italic'
+                            }}>No notes provided for this update</div>
+                          )}
+                          <div style={{
+                            fontSize: '12px',
+                            color: '#6b7280',
+                            borderTop: '1px solid #f3f4f6',
+                            paddingTop: '8px',
+                            marginTop: '4px'
+                          }}>
+                            Progress Update #{progressHistory.length - index}
+                            {isCompleted && ' (COMPLETED)'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="modal-footer">
@@ -705,72 +1065,7 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [aiInsightsError, setAiInsightsError] = useState(null);
 
-  // Generate AI insights
-  const generateAIInsights = useCallback(async () => {
-    if (!apiService) {
-      console.log('No apiService provided, using fallback insights');
-      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
-      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
-      const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
-      setInsights(fallbackInsights);
-      return;
-    }
-
-    try {
-      setInsightsLoading(true);
-      setAiInsightsError(null);
-
-      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
-      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
-
-      const prompt = `Analyze career development progress and provide 2-3 specific insights.
-
-Current Status:
-- Active Goals: ${activeGoals.length}
-- Completed Goals: ${completedGoals.length}
-- Categories: ${[...new Set(activeGoals.map(g => g.category))].join(', ')}
-
-Active Goals Summary:
-${activeGoals.map(goal => `• ${goal.title} (${goal.category}): ${goal.current_progress || 0}% progress, Priority: ${goal.priority}`).join('\n')}
-
-Provide insights as JSON:
-{
-  "insights": [
-    {"type": "success|warning|info", "message": "specific insight about progress/focus areas"},
-    {"type": "success|warning|info", "message": "actionable recommendation"}
-  ]
-}`;
-
-      const result = await apiService.post('/api/ai/analyze', {
-        prompt: prompt,
-        context: 'career_insights',
-        user_id: currentUser?.id
-      });
-
-      if (result.success && result.response) {
-        const aiInsights = parseAIInsights(result.response);
-        if (aiInsights.length > 0) {
-          setInsights(aiInsights);
-        } else {
-          const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
-          setInsights(fallbackInsights);
-        }
-      } else {
-        const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
-        setInsights(fallbackInsights);
-      }
-
-    } catch (error) {
-      console.error('Error generating AI insights:', error);
-      setAiInsightsError('Unable to generate insights');
-      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
-      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
-      const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
-      setInsights(fallbackInsights);
-    } finally {
-      setInsightsLoading(false);
-    }
-  }, [careerGoals, apiService, currentUser?.id]);
+  // Career insights are generated inline when needed
 
   // Load career data - FIXED API ENDPOINT
   const loadCareerData = useCallback(async () => {
@@ -835,9 +1130,13 @@ Provide insights as JSON:
   // Generate insights when goals change
   useEffect(() => {
     if (careerGoals.length > 0) {
-      generateAIInsights();
+      console.log('🎯 Generating career insights from goals...');
+      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
+      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
+      const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+      setInsights(fallbackInsights);
     }
-  }, [careerGoals, generateAIInsights]);
+  }, [careerGoals]);
 
   // All original handlers
   const handleCloseAddModal = useCallback(() => {
@@ -1065,7 +1364,12 @@ Provide insights as JSON:
                 <h3>Career Insights</h3>
                 {!insightsLoading && (
                   <button 
-                    onClick={generateAIInsights} 
+                    onClick={() => {
+                      const activeGoals = careerGoals.filter(goal => goal.status !== 'completed');
+                      const completedGoals = careerGoals.filter(goal => goal.status === 'completed');
+                      const fallbackInsights = generateCareerInsights(activeGoals, completedGoals);
+                      setInsights(fallbackInsights);
+                    }} 
                     className="refresh-insights-btn"
                     title="Refresh insights"
                   >
