@@ -1,103 +1,87 @@
+// backend/src/routes/iincRoutes.js
 const express = require('express');
-const careerController = require('../controllers/careerController');
-const { asyncHandler } = require('../middleware/errorHandler');
-const { query } = require('../config/database');
-
+const pool = require('../config/database');
 const router = express.Router();
 
-const careerAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+// Middleware to ensure authentication
+const requireAuth = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+  next();
+};
+
+// Middleware to ensure executive access for viewing others' data
+const requireExecutiveForOthers = (req, res, next) => {
+  const { user_id } = req.params;
   
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    
-    if (!isNaN(token)) {
-      query('SELECT id, name, email, role FROM users WHERE id = $1', [parseInt(token)])
-        .then(result => {
-          if (result.rows.length > 0) {
-            req.user = result.rows[0];
-            console.log('ðŸ”’ Career auth successful for:', req.user.name);
-            next();
-          } else {
-            getFallbackUser(req, res, next);
-          }
-        })
-        .catch(error => {
-          console.warn('Auth error, using fallback:', error.message);
-          getFallbackUser(req, res, next);
-        });
-    } else {
-      getFallbackUser(req, res, next);
-    }
-  } else {
-    getFallbackUser(req, res, next);
+  // Users can always access their own data
+  if (parseInt(user_id) === req.user.id) {
+    return next();
   }
+  
+  // Executive Leaders can access anyone's data
+  if (req.user.role === 'Executive Leader') {
+    return next();
+  }
+  
+  return res.status(403).json({ 
+    success: false, 
+    error: 'Access denied. Only Executive Leaders can view other users\' I, Inc. assessments.' 
+  });
 };
 
-const getFallbackUser = async (req, res, next) => {
+// Database initialization - create tables if they don't exist
+const initializeTables = async () => {
   try {
-    const userResult = await query("SELECT id, name, email, role FROM users WHERE name = 'Calli Best' OR email = 'bcalli@umich.edu' LIMIT 1");
-    
-    if (userResult.rows.length > 0) {
-      req.user = userResult.rows[0];
-      console.log('ðŸ”’ Using specific user for career:', req.user.name);
-    } else {
-      const fallbackResult = await query('SELECT id, name, email, role FROM users ORDER BY id LIMIT 1');
-      if (fallbackResult.rows.length > 0) {
-        req.user = fallbackResult.rows[0];
-        console.log('ðŸ”’ Using fallback user for career:', req.user.name);
-      } else {
-        return res.status(500).json({
-          success: false,
-          error: 'No users found in system'
-        });
-      }
-    }
-    next();
+    // I, Inc. responses table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS iinc_responses (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        module_key VARCHAR(50) NOT NULL,
+        section_key VARCHAR(50) NOT NULL,
+        response_text TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, module_key, section_key)
+      )
+    `);
+
+    // I, Inc. submissions history table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS iinc_submissions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        responses JSONB NOT NULL DEFAULT '{}',
+        focus_area VARCHAR(50),
+        completion_percentage INTEGER DEFAULT 0,
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create indexes for better performance
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_iinc_responses_user_id ON iinc_responses(user_id);
+      CREATE INDEX IF NOT EXISTS idx_iinc_responses_module ON iinc_responses(module_key);
+      CREATE INDEX IF NOT EXISTS idx_iinc_submissions_user_id ON iinc_submissions(user_id);
+    `);
+
+    console.log('✅ I, Inc. database tables initialized successfully');
   } catch (error) {
-    console.error('Fallback auth error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Authentication failed'
-    });
+    console.error('❌ Error initializing I, Inc. tables:', error);
   }
 };
 
-router.get('/goals', careerAuth, asyncHandler(careerController.getCareerGoals));
-router.get('/goals/:userId', careerAuth, asyncHandler(careerController.getCareerGoals));
-router.post('/goals', careerAuth, asyncHandler(careerController.createCareerGoal));
-router.put('/goals/:id', careerAuth, asyncHandler(careerController.updateCareerGoal));
-router.delete('/goals/:id', careerAuth, asyncHandler(careerController.deleteCareerGoal));
-router.put('/goals/:id/progress', careerAuth, asyncHandler(careerController.updateGoalProgress));
-
-router.get('/goals/:id/progress-history', careerAuth, asyncHandler(careerController.getGoalProgressHistory));
-
-router.get('/completed', careerAuth, asyncHandler(careerController.getUserCompletedGoals));
-router.get('/completed/:userId', careerAuth, asyncHandler(careerController.getUserCompletedGoals));
-router.delete('/completed/:id', careerAuth, asyncHandler(careerController.deleteCompletedGoal));
-
-router.get('/stats', careerAuth, asyncHandler(careerController.getCareerStats));
-router.get('/stats/:userId', careerAuth, asyncHandler(careerController.getCareerStats));
-
-// Add these routes to your existing backend/src/routes/career.js file
-
-// I, Inc. Routes - Add these to your existing career.js file
-// Just add these route handlers to the existing career.js router
+// Initialize tables on module load
+initializeTables();
 
 // GET /api/career/iinc-responses/:user_id - Get latest responses for a user
-router.get('/iinc-responses/:user_id', async (req, res) => {
+router.get('/iinc-responses/:user_id', requireAuth, requireExecutiveForOthers, async (req, res) => {
   try {
     const { user_id } = req.params;
 
-    // Users can access their own data, Executive Leaders can access anyone's data
-    if (parseInt(user_id) !== req.user?.id && req.user?.role !== 'Executive Leader') {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied. Only Executive Leaders can view other users\' I, Inc. assessments.'
-      });
-    }
-
-    console.log(`📖 Loading I, Inc. responses for user ${user_id} (requested by ${req.user?.id})`);
+    console.log(`📖 Loading I, Inc. responses for user ${user_id} (requested by ${req.user.id})`);
 
     // Get the latest responses for each module/section combination
     const result = await pool.query(`
@@ -124,6 +108,8 @@ router.get('/iinc-responses/:user_id', async (req, res) => {
       structuredResponses[row.module_key][row.section_key] = row.response_text;
     });
 
+    console.log(`✅ Found responses for ${result.rows.length} sections across ${Object.keys(structuredResponses).length} modules`);
+
     res.json({
       success: true,
       data: structuredResponses
@@ -139,34 +125,38 @@ router.get('/iinc-responses/:user_id', async (req, res) => {
 });
 
 // GET /api/career/iinc-history/:user_id - Get submission history for a user
-router.get('/iinc-history/:user_id', async (req, res) => {
+router.get('/iinc-history/:user_id', requireAuth, requireExecutiveForOthers, async (req, res) => {
   try {
     const { user_id } = req.params;
     const limit = parseInt(req.query.limit) || 10;
 
-    // Check permissions
-    if (parseInt(user_id) !== req.user?.id && req.user?.role !== 'Executive Leader') {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
+    console.log(`📚 Loading I, Inc. submission history for user ${user_id}`);
 
     const result = await pool.query(`
       SELECT 
         id,
         focus_area,
         completion_percentage,
-        submitted_at
+        submitted_at,
+        responses
       FROM iinc_submissions 
       WHERE user_id = $1
       ORDER BY submitted_at DESC
       LIMIT $2
     `, [user_id, limit]);
 
+    console.log(`✅ Found ${result.rows.length} I, Inc. submissions`);
+
     res.json({
       success: true,
-      data: result.rows
+      data: result.rows.map(row => ({
+        id: row.id,
+        focus_area: row.focus_area,
+        completion_percentage: row.completion_percentage,
+        submitted_at: row.submitted_at,
+        // Don't send full responses in history list for performance
+        has_responses: Object.keys(row.responses || {}).length > 0
+      }))
     });
 
   } catch (error) {
@@ -179,12 +169,12 @@ router.get('/iinc-history/:user_id', async (req, res) => {
 });
 
 // POST /api/career/iinc-responses - Save or update a response
-router.post('/iinc-responses', async (req, res) => {
+router.post('/iinc-responses', requireAuth, async (req, res) => {
   try {
     const { user_id, responses, module_key, section_key } = req.body;
 
     // Users can only save their own responses
-    if (parseInt(user_id) !== req.user?.id) {
+    if (parseInt(user_id) !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'You can only save your own responses'
@@ -200,19 +190,7 @@ router.post('/iinc-responses', async (req, res) => {
 
     const responseText = responses[module_key]?.[section_key] || '';
 
-    // Create table if it doesn't exist
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS iinc_responses (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        module_key VARCHAR(50) NOT NULL,
-        section_key VARCHAR(50) NOT NULL,
-        response_text TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, module_key, section_key)
-      )
-    `);
+    console.log(`💾 Saving I, Inc. response: user ${user_id}, ${module_key}.${section_key}`);
 
     // Upsert the response
     const result = await pool.query(`
@@ -225,6 +203,8 @@ router.post('/iinc-responses', async (req, res) => {
       RETURNING id
     `, [user_id, module_key, section_key, responseText]);
 
+    console.log(`✅ I, Inc. response saved with ID ${result.rows[0]?.id}`);
+
     res.json({
       success: true,
       data: { id: result.rows[0]?.id }
@@ -232,6 +212,32 @@ router.post('/iinc-responses', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error saving I, Inc. response:', error);
+    
+    // Check if it's a constraint error
+    if (error.code === '23505') { // Unique constraint violation
+      // Try updating instead
+      try {
+        const { user_id, responses, module_key, section_key } = req.body;
+        const responseText = responses[module_key]?.[section_key] || '';
+        
+        const updateResult = await pool.query(`
+          UPDATE iinc_responses 
+          SET response_text = $1, updated_at = CURRENT_TIMESTAMP
+          WHERE user_id = $2 AND module_key = $3 AND section_key = $4
+          RETURNING id
+        `, [responseText, user_id, module_key, section_key]);
+
+        if (updateResult.rows.length > 0) {
+          return res.json({
+            success: true,
+            data: { id: updateResult.rows[0].id }
+          });
+        }
+      } catch (updateError) {
+        console.error('❌ Error updating I, Inc. response:', updateError);
+      }
+    }
+
     res.status(500).json({
       success: false,
       error: 'Failed to save I, Inc. response'
@@ -240,7 +246,7 @@ router.post('/iinc-responses', async (req, res) => {
 });
 
 // POST /api/career/iinc-submit - Submit a complete assessment
-router.post('/iinc-submit', async (req, res) => {
+router.post('/iinc-submit', requireAuth, async (req, res) => {
   const client = await pool.connect();
   
   try {
@@ -249,7 +255,7 @@ router.post('/iinc-submit', async (req, res) => {
     const { user_id, responses } = req.body;
 
     // Users can only submit their own assessments
-    if (parseInt(user_id) !== req.user?.id) {
+    if (parseInt(user_id) !== req.user.id) {
       return res.status(403).json({
         success: false,
         error: 'You can only submit your own assessments'
@@ -263,20 +269,10 @@ router.post('/iinc-submit', async (req, res) => {
       });
     }
 
-    // Create submissions table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS iinc_submissions (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        responses JSONB NOT NULL DEFAULT '{}',
-        focus_area VARCHAR(50),
-        completion_percentage INTEGER DEFAULT 0,
-        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    console.log(`🚀 Submitting I, Inc. assessment for user ${user_id}`);
 
     // Calculate completion percentage
-    const totalSections = 13; // 4 modules with different section counts
+    const totalSections = 13; // passion(3) + sweetspot(3) + story(3) + entrepreneurial(4) sections
     let completedSections = 0;
 
     Object.values(responses).forEach(moduleResponses => {
@@ -329,6 +325,8 @@ router.post('/iinc-submit', async (req, res) => {
 
     await client.query('COMMIT');
 
+    console.log(`✅ I, Inc. assessment submitted successfully: ${completionPercentage}% complete`);
+
     res.json({
       success: true,
       data: {
@@ -341,6 +339,7 @@ router.post('/iinc-submit', async (req, res) => {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('❌ Error submitting I, Inc. assessment:', error);
+    
     res.status(500).json({
       success: false,
       error: 'Failed to submit I, Inc. assessment'
@@ -351,15 +350,17 @@ router.post('/iinc-submit', async (req, res) => {
 });
 
 // GET /api/career/iinc-summary - Get I, Inc. summary for executives (all users)
-router.get('/iinc-summary', async (req, res) => {
+router.get('/iinc-summary', requireAuth, async (req, res) => {
   try {
     // Only Executive Leaders can access summary
-    if (req.user?.role !== 'Executive Leader') {
+    if (req.user.role !== 'Executive Leader') {
       return res.status(403).json({
         success: false,
         error: 'Access denied. Only Executive Leaders can access I, Inc. summary.'
       });
     }
+
+    console.log(`📊 Loading I, Inc. summary for executive ${req.user.id}`);
 
     // Get latest submission for each user
     const result = await pool.query(`
@@ -383,6 +384,8 @@ router.get('/iinc-summary', async (req, res) => {
       ORDER BY u.name
     `);
 
+    console.log(`✅ Found I, Inc. data for ${result.rows.length} users`);
+
     res.json({
       success: true,
       data: result.rows
@@ -395,13 +398,6 @@ router.get('/iinc-summary', async (req, res) => {
       error: 'Failed to load I, Inc. summary'
     });
   }
-});
-router.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Career routes are working',
-    timestamp: new Date().toISOString()
-  });
 });
 
 module.exports = router;
