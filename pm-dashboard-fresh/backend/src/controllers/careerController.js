@@ -1,6 +1,12 @@
 // backend/src/controllers/careerController.js
 const { query } = require('../config/database');
 
+// Valid level and category options based on database schema
+const VALID_LEVELS = ['beginner', 'intermediate', 'advanced', 'expert'];
+const VALID_CATEGORIES = ['technical', 'management', 'communication', 'design', 'analytics', 'business strategy', 'team building', 'leadership', 'innovation'];
+const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
+const VALID_STATUSES = ['active', 'completed', 'paused', 'cancelled'];
+
 const getCareerGoals = async (req, res) => {
   try {
     const userId = req.params.userId || req.user?.id;
@@ -43,7 +49,11 @@ const createCareerGoal = async (req, res) => {
   try {
     const userId = req.user?.id;
 
+    console.log('🎯 createCareerGoal called by user:', userId);
+    console.log('📝 Request body:', req.body);
+
     if (!userId) {
+      console.log('❌ No user ID found');
       return res.status(400).json({ 
         success: false, 
         error: 'User authentication required' 
@@ -57,49 +67,72 @@ const createCareerGoal = async (req, res) => {
       currentLevel,
       targetLevel,
       priority,
-      targetDate,
+      target_date,
       notes,
       resources
     } = req.body;
 
+    console.log('🔍 Extracted fields:', {
+      title: title?.substring(0, 20) + '...',
+      category,
+      currentLevel,
+      targetLevel,
+      priority,
+      target_date
+    });
+
     // Validation
     if (!title || !title.trim()) {
+      console.log('❌ Title validation failed');
       return res.status(400).json({ 
         success: false, 
         error: 'Goal title is required' 
       });
     }
 
-    if (!category) {
+    if (!category || !VALID_CATEGORIES.includes(category)) {
+      console.log('❌ Category validation failed:', category, 'Valid:', VALID_CATEGORIES);
       return res.status(400).json({ 
         success: false, 
-        error: 'Category is required' 
+        error: `Category is required and must be one of: ${VALID_CATEGORIES.join(', ')}` 
       });
     }
 
-    const currentLevelNum = parseInt(currentLevel);
-    const targetLevelNum = parseInt(targetLevel);
-
-    if (!currentLevelNum || currentLevelNum < 1 || currentLevelNum > 10) {
+    if (!currentLevel || !VALID_LEVELS.includes(currentLevel)) {
+      console.log('❌ Current level validation failed:', currentLevel, 'Valid:', VALID_LEVELS);
       return res.status(400).json({ 
         success: false, 
-        error: 'Current level must be between 1-10' 
+        error: `Current level is required and must be one of: ${VALID_LEVELS.join(', ')}` 
       });
     }
 
-    if (!targetLevelNum || targetLevelNum < 1 || targetLevelNum > 10) {
+    if (!targetLevel || !VALID_LEVELS.includes(targetLevel)) {
+      console.log('❌ Target level validation failed:', targetLevel, 'Valid:', VALID_LEVELS);
       return res.status(400).json({ 
         success: false, 
-        error: 'Target level must be between 1-10' 
+        error: `Target level is required and must be one of: ${VALID_LEVELS.join(', ')}` 
       });
     }
 
-    if (targetLevelNum <= currentLevelNum) {
+    // Level progression validation
+    const levelValues = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+    if (levelValues[targetLevel] <= levelValues[currentLevel]) {
+      console.log('❌ Level progression validation failed');
       return res.status(400).json({ 
         success: false, 
         error: 'Target level must be higher than current level' 
       });
     }
+
+    if (priority && !VALID_PRIORITIES.includes(priority)) {
+      console.log('❌ Priority validation failed:', priority);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Priority must be one of: ${VALID_PRIORITIES.join(', ')}` 
+      });
+    }
+
+    console.log('✅ All validation passed, inserting into database...');
 
     const insertQuery = `
       INSERT INTO career_development_goals (
@@ -117,17 +150,21 @@ const createCareerGoal = async (req, res) => {
       title.trim(),
       description ? description.trim() : null,
       category,
-      currentLevelNum,
-      targetLevelNum,
+      currentLevel,
+      targetLevel,
       priority || 'medium',
       0, // initial progress
       'active',
-      targetDate || null,
+      target_date || null,
       notes ? notes.trim() : null,
       typeof resources === 'string' ? resources : JSON.stringify(resources || [])
     ];
 
+    console.log('📊 Inserting values:', values);
+
     const result = await query(insertQuery, values);
+
+    console.log('✅ Goal created successfully:', result.rows[0]?.id);
 
     res.status(201).json({
       success: true,
@@ -136,7 +173,8 @@ const createCareerGoal = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating goal:', error);
+    console.error('❌ Error creating goal:', error);
+    console.error('Error stack:', error.stack);
     
     if (error.code === '23505') {
       return res.status(409).json({
@@ -149,6 +187,13 @@ const createCareerGoal = async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'Invalid user ID or related data'
+      });
+    }
+    
+    if (error.code === '23514') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid category, level, or priority value'
       });
     }
     
@@ -192,7 +237,7 @@ const updateCareerGoal = async (req, res) => {
       currentLevel,
       targetLevel,
       priority,
-      targetDate,
+      target_date,
       notes,
       resources
     } = req.body;
@@ -205,10 +250,40 @@ const updateCareerGoal = async (req, res) => {
       });
     }
 
-    if (!category) {
+    if (!category || !VALID_CATEGORIES.includes(category)) {
       return res.status(400).json({
         success: false,
-        error: 'Category is required'
+        error: `Category is required and must be one of: ${VALID_CATEGORIES.join(', ')}`
+      });
+    }
+
+    if (!currentLevel || !VALID_LEVELS.includes(currentLevel)) {
+      return res.status(400).json({
+        success: false,
+        error: `Current level is required and must be one of: ${VALID_LEVELS.join(', ')}`
+      });
+    }
+
+    if (!targetLevel || !VALID_LEVELS.includes(targetLevel)) {
+      return res.status(400).json({
+        success: false,
+        error: `Target level is required and must be one of: ${VALID_LEVELS.join(', ')}`
+      });
+    }
+
+    // Level progression validation
+    const levelValues = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+    if (levelValues[targetLevel] <= levelValues[currentLevel]) {
+      return res.status(400).json({
+        success: false,
+        error: 'Target level must be higher than current level'
+      });
+    }
+
+    if (priority && !VALID_PRIORITIES.includes(priority)) {
+      return res.status(400).json({
+        success: false,
+        error: `Priority must be one of: ${VALID_PRIORITIES.join(', ')}`
       });
     }
 
@@ -225,10 +300,10 @@ const updateCareerGoal = async (req, res) => {
       title.trim(),
       description ? description.trim() : null,
       category,
-      parseInt(currentLevel),
-      parseInt(targetLevel),
+      currentLevel,
+      targetLevel,
       priority || 'medium',
-      targetDate || null,
+      target_date || null,
       notes ? notes.trim() : null,
       typeof resources === 'string' ? resources : JSON.stringify(resources || []),
       goalId,
@@ -236,6 +311,13 @@ const updateCareerGoal = async (req, res) => {
     ];
 
     const result = await query(updateQuery, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Goal not found or update failed'
+      });
+    }
 
     res.json({
       success: true,
@@ -245,6 +327,21 @@ const updateCareerGoal = async (req, res) => {
 
   } catch (error) {
     console.error('Error updating goal:', error);
+    
+    if (error.code === '23505') {
+      return res.status(409).json({
+        success: false,
+        error: 'A goal with this title already exists'
+      });
+    }
+    
+    if (error.code === '23514') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid category, level, or priority value'
+      });
+    }
+    
     res.status(500).json({ 
       success: false, 
       error: 'Failed to update goal',
@@ -296,121 +393,10 @@ const deleteCareerGoal = async (req, res) => {
   }
 };
 
-const updateGoalProgress = async (req, res) => {
+const getCompletedGoals = async (req, res) => {
   try {
-    const goalId = parseInt(req.params.id);
-    const userId = req.user?.id;
-    const { progress, notes } = req.body;
-
-    if (!goalId || isNaN(goalId)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Valid goal ID is required'
-      });
-    }
-
-    if (progress === undefined || progress < 0 || progress > 100) {
-      return res.status(400).json({
-        success: false,
-        error: 'Progress must be between 0-100'
-      });
-    }
-
-    // Get current goal info
-    const currentGoal = await query(
-      'SELECT current_progress, title FROM career_development_goals WHERE id = $1 AND user_id = $2', 
-      [goalId, userId]
-    );
-
-    if (currentGoal.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Goal not found or access denied'
-      });
-    }
-
-    // Update goal progress
-    const updateQuery = `
-      UPDATE career_development_goals 
-      SET current_progress = $1, 
-          status = CASE 
-            WHEN $1 >= 100 THEN 'completed'
-            WHEN $1 > 0 THEN 'active'
-            ELSE status
-          END,
-          completed_date = CASE 
-            WHEN $1 >= 100 THEN CURRENT_DATE
-            ELSE completed_date
-          END,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2 AND user_id = $3
-      RETURNING *
-    `;
-
-    const updateResult = await query(updateQuery, [progress, goalId, userId]);
-
-    res.json({
-      success: true,
-      data: updateResult.rows[0],
-      message: 'Progress updated successfully'
-    });
-
-  } catch (error) {
-    console.error('Error updating progress:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to update progress',
-      details: error.message
-    });
-  }
-};
-
-const getGoalProgressHistory = async (req, res) => {
-  try {
-    const goalId = parseInt(req.params.id);
-    const userId = req.user?.id;
-
-    // Check if goal exists and user has access
-    const goalCheck = await query(
-      'SELECT title, user_id FROM career_development_goals WHERE id = $1', 
-      [goalId]
-    );
-
-    if (goalCheck.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Goal not found'
-      });
-    }
-
-    // Authorization check
-    if (goalCheck.rows[0].user_id !== userId && req.user.role !== 'Executive Leader') {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
-    }
-
-    // Return empty history for now (progress history table may not exist)
-    res.json({
-      success: true,
-      data: [],
-      goalTitle: goalCheck.rows[0].title
-    });
-
-  } catch (error) {
-    console.error('Error getting progress history:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to get progress history',
-      details: error.message
-    });
-  }
-};
-
-const getUserCompletedGoals = async (req, res) => {
-  try {
-    const requestedUserId = req.params.userId ? parseInt(req.params.userId) : req.user?.id;
+    const requestedUserId = req.params.userId ? 
+      parseInt(req.params.userId) : req.user?.id;
 
     // Authorization check
     if (requestedUserId !== req.user?.id && req.user?.role !== 'Executive Leader') {
@@ -483,7 +469,8 @@ const deleteCompletedGoal = async (req, res) => {
 
 const getCareerStats = async (req, res) => {
   try {
-    const requestedUserId = req.params.userId ? parseInt(req.params.userId) : req.user?.id;
+    const requestedUserId = req.params.userId ? 
+      parseInt(req.params.userId) : req.user?.id;
 
     // Authorization check
     if (requestedUserId !== req.user?.id && req.user?.role !== 'Executive Leader') {
@@ -495,32 +482,33 @@ const getCareerStats = async (req, res) => {
 
     const statsQuery = `
       SELECT 
-        COUNT(*) FILTER (WHERE status = 'active' OR status IS NULL) as active_goals,
-        COUNT(*) FILTER (WHERE status = 'completed') as completed_goals,
-        COALESCE(AVG(current_progress) FILTER (WHERE status = 'active' OR status IS NULL), 0) as avg_progress,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_goals,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_goals,
+        COALESCE(AVG(CASE WHEN status = 'active' THEN current_progress END), 0) as avg_progress,
         COUNT(*) as total_goals
       FROM career_development_goals 
-      WHERE user_id = $1 AND (status IS NULL OR status != 'cancelled')
+      WHERE user_id = $1 AND status != 'cancelled'
     `;
 
     const result = await query(statsQuery, [requestedUserId]);
-    const stats = result.rows[0];
+
+    const stats = result.rows[0] || {};
 
     res.json({
       success: true,
       data: {
-        activeGoals: parseInt(stats.active_goals),
-        completedGoals: parseInt(stats.completed_goals),
-        avgProgress: Math.round(parseFloat(stats.avg_progress)),
-        totalGoals: parseInt(stats.total_goals)
+        activeGoals: parseInt(stats.active_goals) || 0,
+        completedGoals: parseInt(stats.completed_goals) || 0,
+        avgProgress: Math.round(parseFloat(stats.avg_progress) || 0),
+        totalGoals: parseInt(stats.total_goals) || 0
       }
     });
 
   } catch (error) {
-    console.error('Error getting career statistics:', error);
+    console.error('Error getting career stats:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to get career statistics',
+      error: 'Failed to get career stats',
       details: error.message
     });
   }
@@ -531,9 +519,7 @@ module.exports = {
   createCareerGoal,
   updateCareerGoal,
   deleteCareerGoal,
-  updateGoalProgress,
-  getGoalProgressHistory,
-  getUserCompletedGoals,
+  getCompletedGoals,
   deleteCompletedGoal,
   getCareerStats
 };

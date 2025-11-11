@@ -1,6 +1,6 @@
 // backend/src/routes/iincRoutes.js
 const express = require('express');
-const pool = require('../config/database');
+const { query } = require('../config/database');
 const router = express.Router();
 
 // Middleware to ensure authentication
@@ -13,10 +13,10 @@ const requireAuth = (req, res, next) => {
 
 // Middleware to ensure executive access for viewing others' data
 const requireExecutiveForOthers = (req, res, next) => {
-  const { user_id } = req.params;
+  const { userId } = req.params;
   
   // Users can always access their own data
-  if (parseInt(user_id) === req.user.id) {
+  if (parseInt(userId) === req.user.id) {
     return next();
   }
   
@@ -32,10 +32,10 @@ const requireExecutiveForOthers = (req, res, next) => {
 };
 
 // Database initialization - create tables if they don't exist
-const initializeTables = async () => {
+const initializeIIncTables = async () => {
   try {
     // I, Inc. responses table
-    await pool.query(`
+    await query(`
       CREATE TABLE IF NOT EXISTS iinc_responses (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -49,7 +49,7 @@ const initializeTables = async () => {
     `);
 
     // I, Inc. submissions history table
-    await pool.query(`
+    await query(`
       CREATE TABLE IF NOT EXISTS iinc_submissions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -61,7 +61,7 @@ const initializeTables = async () => {
     `);
 
     // Create indexes for better performance
-    await pool.query(`
+    await query(`
       CREATE INDEX IF NOT EXISTS idx_iinc_responses_user_id ON iinc_responses(user_id);
       CREATE INDEX IF NOT EXISTS idx_iinc_responses_module ON iinc_responses(module_key);
       CREATE INDEX IF NOT EXISTS idx_iinc_submissions_user_id ON iinc_submissions(user_id);
@@ -74,17 +74,17 @@ const initializeTables = async () => {
 };
 
 // Initialize tables on module load
-initializeTables();
+initializeIIncTables();
 
-// GET /api/career/iinc-responses/:user_id - Get latest responses for a user
-router.get('/iinc-responses/:user_id', requireAuth, requireExecutiveForOthers, async (req, res) => {
+// GET /iinc-responses/:userId - Get latest responses for a user
+router.get('/iinc-responses/:userId', requireAuth, requireExecutiveForOthers, async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const { userId } = req.params;
 
-    console.log(`📖 Loading I, Inc. responses for user ${user_id} (requested by ${req.user.id})`);
+    console.log(`📖 Loading I, Inc. responses for user ${userId} (requested by ${req.user.id})`);
 
     // Get the latest responses for each module/section combination
-    const result = await pool.query(`
+    const result = await query(`
       WITH latest_responses AS (
         SELECT DISTINCT ON (module_key, section_key)
           module_key,
@@ -97,7 +97,7 @@ router.get('/iinc-responses/:user_id', requireAuth, requireExecutiveForOthers, a
       )
       SELECT * FROM latest_responses
       ORDER BY module_key, section_key
-    `, [user_id]);
+    `, [userId]);
 
     // Structure the responses by module and section
     const structuredResponses = {};
@@ -124,15 +124,15 @@ router.get('/iinc-responses/:user_id', requireAuth, requireExecutiveForOthers, a
   }
 });
 
-// GET /api/career/iinc-history/:user_id - Get submission history for a user
-router.get('/iinc-history/:user_id', requireAuth, requireExecutiveForOthers, async (req, res) => {
+// GET /iinc-history/:userId - Get submission history for a user
+router.get('/iinc-history/:userId', requireAuth, requireExecutiveForOthers, async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const { userId } = req.params;
     const limit = parseInt(req.query.limit) || 10;
 
-    console.log(`📚 Loading I, Inc. submission history for user ${user_id}`);
+    console.log(`📚 Loading I, Inc. submission history for user ${userId}`);
 
-    const result = await pool.query(`
+    const result = await query(`
       SELECT 
         id,
         focus_area,
@@ -143,7 +143,7 @@ router.get('/iinc-history/:user_id', requireAuth, requireExecutiveForOthers, asy
       WHERE user_id = $1
       ORDER BY submitted_at DESC
       LIMIT $2
-    `, [user_id, limit]);
+    `, [userId, limit]);
 
     console.log(`✅ Found ${result.rows.length} I, Inc. submissions`);
 
@@ -168,7 +168,7 @@ router.get('/iinc-history/:user_id', requireAuth, requireExecutiveForOthers, asy
   }
 });
 
-// POST /api/career/iinc-responses - Save or update a response
+// POST /iinc-responses - Save or update a response
 router.post('/iinc-responses', requireAuth, async (req, res) => {
   try {
     const { user_id, responses, module_key, section_key } = req.body;
@@ -193,7 +193,7 @@ router.post('/iinc-responses', requireAuth, async (req, res) => {
     console.log(`💾 Saving I, Inc. response: user ${user_id}, ${module_key}.${section_key}`);
 
     // Upsert the response
-    const result = await pool.query(`
+    const result = await query(`
       INSERT INTO iinc_responses (user_id, module_key, section_key, response_text, updated_at)
       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
       ON CONFLICT (user_id, module_key, section_key) 
@@ -220,7 +220,7 @@ router.post('/iinc-responses', requireAuth, async (req, res) => {
         const { user_id, responses, module_key, section_key } = req.body;
         const responseText = responses[module_key]?.[section_key] || '';
         
-        const updateResult = await pool.query(`
+        const updateResult = await query(`
           UPDATE iinc_responses 
           SET response_text = $1, updated_at = CURRENT_TIMESTAMP
           WHERE user_id = $2 AND module_key = $3 AND section_key = $4
@@ -245,13 +245,9 @@ router.post('/iinc-responses', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/career/iinc-submit - Submit a complete assessment
+// POST /iinc-submit - Submit a complete assessment
 router.post('/iinc-submit', requireAuth, async (req, res) => {
-  const client = await pool.connect();
-  
   try {
-    await client.query('BEGIN');
-
     const { user_id, responses } = req.body;
 
     // Users can only submit their own assessments
@@ -292,7 +288,7 @@ router.post('/iinc-submit', requireAuth, async (req, res) => {
       if (moduleResponses && typeof moduleResponses === 'object') {
         for (const [sectionKey, responseText] of Object.entries(moduleResponses)) {
           if (responseText && responseText.trim().length > 0) {
-            await client.query(`
+            await query(`
               INSERT INTO iinc_responses (user_id, module_key, section_key, response_text, updated_at)
               VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
               ON CONFLICT (user_id, module_key, section_key) 
@@ -306,7 +302,7 @@ router.post('/iinc-submit', requireAuth, async (req, res) => {
     }
 
     // Create submission record
-    const submissionResult = await client.query(`
+    const submissionResult = await query(`
       INSERT INTO iinc_submissions (
         user_id, 
         responses, 
@@ -323,8 +319,6 @@ router.post('/iinc-submit', requireAuth, async (req, res) => {
       completionPercentage
     ]);
 
-    await client.query('COMMIT');
-
     console.log(`✅ I, Inc. assessment submitted successfully: ${completionPercentage}% complete`);
 
     res.json({
@@ -337,19 +331,16 @@ router.post('/iinc-submit', requireAuth, async (req, res) => {
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('❌ Error submitting I, Inc. assessment:', error);
     
     res.status(500).json({
       success: false,
       error: 'Failed to submit I, Inc. assessment'
     });
-  } finally {
-    client.release();
   }
 });
 
-// GET /api/career/iinc-summary - Get I, Inc. summary for executives (all users)
+// GET /iinc-summary - Get I, Inc. summary for executives (all users)
 router.get('/iinc-summary', requireAuth, async (req, res) => {
   try {
     // Only Executive Leaders can access summary
@@ -363,7 +354,7 @@ router.get('/iinc-summary', requireAuth, async (req, res) => {
     console.log(`📊 Loading I, Inc. summary for executive ${req.user.id}`);
 
     // Get latest submission for each user
-    const result = await pool.query(`
+    const result = await query(`
       WITH latest_submissions AS (
         SELECT DISTINCT ON (user_id)
           user_id,

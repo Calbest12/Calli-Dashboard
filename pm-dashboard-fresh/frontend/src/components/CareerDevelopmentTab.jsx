@@ -131,16 +131,19 @@ const validateFormData = (formData) => {
     errors.push('Please select a category');
   }
   
-  if (!formData.currentLevel || formData.currentLevel < 1 || formData.currentLevel > 10) {
-    errors.push('Current skill level must be between 1-10');
+  const validLevels = ['beginner', 'intermediate', 'advanced', 'expert'];
+  
+  if (!formData.currentLevel || !validLevels.includes(formData.currentLevel)) {
+    errors.push('Please select a valid current skill level');
   }
   
-  if (!formData.targetLevel || formData.targetLevel < 1 || formData.targetLevel > 10) {
-    errors.push('Target skill level must be between 1-10');
+  if (!formData.targetLevel || !validLevels.includes(formData.targetLevel)) {
+    errors.push('Please select a valid target skill level');
   }
   
+  const levelValues = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
   if (formData.currentLevel && formData.targetLevel && 
-      parseInt(formData.targetLevel) <= parseInt(formData.currentLevel)) {
+      levelValues[formData.targetLevel] <= levelValues[formData.currentLevel]) {
     errors.push('Target level must be higher than current level');
   }
   
@@ -174,8 +177,8 @@ const initialFormState = {
   title: '',
   description: '',
   category: '',
-  currentLevel: '',
-  targetLevel: '',
+  currentLevel: 'beginner',
+  targetLevel: 'intermediate',
   targetDate: '',
   priority: 'medium',
   notes: '',
@@ -183,15 +186,22 @@ const initialFormState = {
 };
 
 const categories = [
-  'Technical Skills',
-  'Leadership',
-  'Communication',
-  'Project Management',
-  'Industry Knowledge',
-  'Personal Development',
-  'Networking',
-  'Education/Certification'
+  { value: 'technical', label: 'Technical Skills' },
+  { value: 'management', label: 'Management' },
+  { value: 'communication', label: 'Communication' },
+  { value: 'design', label: 'Design' },
+  { value: 'analytics', label: 'Analytics' },
+  { value: 'business strategy', label: 'Business Strategy' },
+  { value: 'team building', label: 'Team Building' },
+  { value: 'leadership', label: 'Leadership' },
+  { value: 'innovation', label: 'Innovation' }
 ];
+
+// Helper function to get display label for category
+const getCategoryLabel = (categoryValue) => {
+  const category = categories.find(cat => cat.value === categoryValue);
+  return category ? category.label : categoryValue;
+};
 
 const priorities = [
   { value: 'low', label: 'Low', color: '#10b981' },
@@ -262,7 +272,7 @@ const GoalFormModal = React.memo(({ isOpen, onClose, formData, setFormData, onSu
                 >
                   <option value="">Select Category</option>
                   {categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
+                    <option key={category.value} value={category.value}>{category.label}</option>
                   ))}
                 </select>
               </div>
@@ -282,25 +292,29 @@ const GoalFormModal = React.memo(({ isOpen, onClose, formData, setFormData, onSu
 
             <div className="form-grid-2">
               <div className="form-group">
-                <label>Current Skill Level (1-10) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
+                <label>Current Skill Level *</label>
+                <select
                   value={formData.currentLevel}
                   onChange={(e) => setFormData(prev => ({ ...prev, currentLevel: e.target.value }))}
-                />
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="expert">Expert</option>
+                </select>
               </div>
 
               <div className="form-group">
-                <label>Target Skill Level (1-10) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
+                <label>Target Skill Level *</label>
+                <select
                   value={formData.targetLevel}
                   onChange={(e) => setFormData(prev => ({ ...prev, targetLevel: e.target.value }))}
-                />
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="expert">Expert</option>
+                </select>
               </div>
             </div>
 
@@ -494,7 +508,7 @@ const GoalNotesModal = React.memo(({ isOpen, goal, onClose }) => {
                 fontSize: '12px',
                 fontWeight: '500'
               }}>
-                {goal.category}
+                {getCategoryLabel(goal.category)}
               </span>
               <span style={{
                 padding: '4px 8px',
@@ -1004,7 +1018,7 @@ const GoalCard = React.memo(({ goal, onEdit, onDelete, onUpdateProgress, onViewN
       <div className="goal-meta">
         <span className="goal-category">
           <BookOpen size={12} />
-          {goal.category}
+          {getCategoryLabel(goal.category)}
         </span>
         {goal.resources && goal.resources.length > 0 && (
           <span className="goal-resources">
@@ -1033,7 +1047,7 @@ const CompletedGoalCard = React.memo(({ goal, onViewDetails }) => {
           </div>
           <p className="completed-goal-description">{goal.description}</p>
           <div className="completed-goal-meta">
-            <span className="completed-goal-type">{goal.category}</span>
+            <span className="completed-goal-type">{getCategoryLabel(goal.category)}</span>
             <span>Completed {formatDate(goal.completed_date)}</span>
             <span>Level {goal.current_level} → {goal.target_level}</span>
           </div>
@@ -1083,6 +1097,16 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
       
       if (result.success && Array.isArray(result.data)) {
         console.log('✅ Loaded career goals:', result.data.length);
+        
+        // Debug: Check progress history for each goal
+        result.data.forEach((goal, index) => {
+          if (index < 3) { // Only log first 3 goals to avoid spam
+            console.log(`📊 Goal "${goal.title}" progress history:`, {
+              historyCount: goal.goal_progress_history?.length || 0,
+              history: goal.goal_progress_history
+            });
+          }
+        });
         
         const processedGoals = result.data.map(goal => ({
           ...goal,
@@ -1157,16 +1181,16 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
         title: formData.title.trim(),
         description: formData.description.trim(),
         category: formData.category,
-        current_level: formData.currentLevel,
-        target_level: formData.targetLevel,
+        currentLevel: formData.currentLevel,
+        targetLevel: formData.targetLevel,
         target_date: formData.targetDate || null,
         priority: formData.priority,
         notes: formData.notes.trim(),
         resources: JSON.stringify(formData.resources || []),
-        user_id: currentUser.id,
-        current_progress: 0,
-        status: 'active'
+        user_id: currentUser.id
       };
+
+      console.log('🚀 Sending goal data:', goalData);
 
       let result;
       if (editingGoal) {
@@ -1175,16 +1199,20 @@ const CareerDevelopmentTab = ({ currentUser, apiService, onDataChange }) => {
         result = await apiService.post('/api/career/goals', goalData);
       }
 
+      console.log('📥 API Response:', result);
+
       if (result.success) {
         await loadCareerData();
         handleCloseAddModal();
         if (onDataChange) onDataChange();
       } else {
+        console.error('❌ API Error:', result.error, result.details);
         alert(result.error || 'Failed to save goal');
       }
     } catch (error) {
-      console.error('Error saving goal:', error);
-      alert('Error saving goal. Please try again.');
+      console.error('❌ Error saving goal:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      alert(`Error saving goal: ${error.response?.data?.error || error.message || 'Please try again.'}`);
     }
   };
 
