@@ -21,26 +21,45 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
   }, [project?.id]);
 
   const loadTeamMembers = async () => {
-    try {
-      setLoading(true);
-      console.log('📡 Loading team members for project:', project.id);
-      
-      const response = await apiService.getProjectTeam(project.id);
-      
-      if (response && response.success) {
-        console.log('✅ Team members loaded:', response.team);
-        setTeamMembers(response.team || []);
-      } else {
-        console.warn('⚠️ Team loading response:', response);
+      try {
+        setLoading(true);
+        console.log('📡 Loading team members for project:', project.id);
+        
+        // SAFE CHECK: Verify user authentication
+        const currentUser = apiService.getCurrentUser();
+        console.log('🔍 Current user check:', {
+          exists: !!currentUser,
+          hasId: !!currentUser?.id,
+          hasRole: !!currentUser?.role,
+          role: currentUser?.role
+        });
+        
+        // If user has no role, still try the API but log the issue
+        if (!currentUser?.role) {
+          console.warn('⚠️ User has no role defined - this may cause display issues');
+        }
+        
+        const response = await apiService.getProjectTeam(project.id);
+        
+        if (response && response.success) {
+          console.log('✅ Team members loaded:', response.team);
+          
+          // SAFE FIX: Always use response.team or response.data
+          const teamData = response.team || response.data || [];
+          setTeamMembers(teamData);
+          
+          console.log('👥 Team members set:', teamData.length);
+        } else {
+          console.warn('⚠️ Team loading response:', response);
+          setTeamMembers([]);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load team members:', error);
         setTeamMembers([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('❌ Failed to load team members:', error);
-      setTeamMembers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   const loadAllUsers = async () => {
     try {
@@ -64,7 +83,7 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
     try {
       console.log('➕ Adding team member:', memberData);
       
-      const response = await apiService.addProjectTeamMember(project.id, {
+      const response = await apiService.addTeamMember(project.id, {
         user_id: memberData.id,
         name: memberData.name,
         email: memberData.email,
@@ -89,7 +108,7 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
     try {
       console.log('📝 Updating team member:', memberData);
       
-      const response = await apiService.updateProjectTeamMember(project.id, memberData.id, {
+      const response = await apiService.updateTeamMember(project.id, memberData.id, {
         name: memberData.name,
         email: memberData.email,
         role_in_project: memberData.role || 'Team Member',
@@ -113,7 +132,7 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
     try {
       console.log('🗑️ Removing team member:', memberId);
       
-      const response = await apiService.removeProjectTeamMember(project.id, memberId);
+      const response = await apiService.removeTeamMember(project.id, memberId);
       
       if (response && response.success) {
         console.log('✅ Team member removed successfully');

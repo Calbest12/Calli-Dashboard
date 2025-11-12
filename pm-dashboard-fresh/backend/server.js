@@ -16,6 +16,7 @@ const leadershipRoutes = require('./src/routes/leadership');
 const aiRoutes = require('./src/routes/ai');
 // Add to backend/src/app.js or server.js
 const documentsRoutes = require('./src/routes/documents');
+const organizationalChangeRoutes = require('./src/routes/organizationalChange');
 
 
 // Import middleware - FIXED TYPO AND DESTRUCTURING
@@ -179,6 +180,17 @@ try {
 } catch (e) {
   console.log('❌ Leadership routes error:', e.message);
 }
+
+try {
+    if (organizationalChangeRoutes && typeof organizationalChangeRoutes === 'function') {
+      app.use('/api/organizational-change', organizationalChangeRoutes);
+      console.log('✅ Organizational change routes loaded');
+    } else {
+      console.log('❌ Organizational change routes invalid:', typeof organizationalChangeRoutes);
+    }
+  } catch (e) {
+    console.log('❌ Organizational change routes error:', e.message);
+  }
 
 try {
   if (aiRoutes && typeof aiRoutes === 'function') {

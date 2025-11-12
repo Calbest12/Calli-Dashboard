@@ -615,21 +615,42 @@ router.post('/iinc-submit', careerAuth, asyncHandler(async (req, res) => {
 
     console.log(`🚀 Submitting I, Inc. assessment for user ${user_id}`);
 
-    // Calculate completion percentage
-    const totalSections = 13;
-    let completedSections = 0;
-
-    Object.values(responses).forEach(moduleResponses => {
-      if (moduleResponses && typeof moduleResponses === 'object') {
-        Object.values(moduleResponses).forEach(response => {
-          if (response && response.trim().length > 0) {
-            completedSections++;
-          }
-        });
-      }
-    });
-
-    const completionPercentage = Math.round((completedSections / totalSections) * 100);
+    const expectedModules = {
+            passion: ['skills_knowledge', 'track_record', 'relationships'],
+            sweetspot: ['personal_brand', 'value_proposition', 'underserved_need'], 
+            story: ['compelling', 'valuable', 'engaging'],
+            entrepreneur: ['survive', 'adapt', 'flourish', 'goals']
+          };
+      
+          const totalSections = Object.values(expectedModules).reduce((total, sections) => 
+            total + sections.length, 0
+          ); // This will be 13: 3+3+3+4
+      
+          let completedSections = 0;
+          Object.entries(expectedModules).forEach(([moduleKey, sections]) => {
+            sections.forEach(sectionKey => {
+              if (responses[moduleKey] && 
+                  responses[moduleKey][sectionKey] && 
+                  responses[moduleKey][sectionKey].trim().length > 0) {
+                completedSections++;
+              }
+            });
+          });
+      
+          const completionPercentage = Math.round((completedSections / totalSections) * 100);
+      
+          console.log(`📊 Calculation Debug:`, {
+            totalSections,
+            completedSections,
+            completionPercentage,
+            modules: Object.keys(expectedModules).map(key => ({
+              module: key,
+              expected: expectedModules[key].length,
+              filled: expectedModules[key].filter(section => 
+                responses[key] && responses[key][section] && responses[key][section].trim().length > 0
+              ).length
+            }))
+          });
 
     // Save individual responses
     for (const [moduleKey, moduleResponses] of Object.entries(responses)) {

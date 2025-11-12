@@ -1,91 +1,63 @@
-// frontend/src/services/apiService.js
-// Corrected API service that preserves your original authentication and adds leadership functionality
-
+// frontend/src/services/apiService.js - COMPLETE VERSION WITH ALL METHODS
 class ApiService {
   constructor() {
     this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:5001';
     this.token = localStorage.getItem('token');
   }
 
-  // Helper method to get headers
   getHeaders() {
     const headers = {
       'Content-Type': 'application/json',
     };
-    
+
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
-    
+
     return headers;
   }
 
-  // Helper method to handle responses
   async handleResponse(response) {
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      const error = await response.json().catch(() => ({ message: 'Network error' }));
+      throw new Error(error.message || `HTTP ${response.status}`);
     }
     return await response.json();
   }
 
-  // AUTHENTICATION METHODS - RESTORED TO ORIGINAL FORMAT
-  async login(loginData) {
+  // AUTHENTICATION METHODS
+  async login(credentials) {
     try {
-      console.log('🔄 Login attempt with data:', { email: loginData.email, password: '***' });
-      console.log('🌐 Full URL:', `${this.baseURL}/api/auth/login`);
-      
       const response = await fetch(`${this.baseURL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: loginData.email,
-          password: loginData.password
-        }),
+        body: JSON.stringify(credentials),
       });
 
-      console.log('📡 Response status:', response.status);
-      
       const data = await this.handleResponse(response);
-      console.log('📄 Backend response:', data);
       
-      // Your backend returns: { success: true, data: {...}, message: "Login successful" }
-      if (data.success && data.data) {
-        // Create a simple token from user ID since your backend doesn't use JWT
-        this.token = `user_${data.data.id}`;
-        localStorage.setItem('token', this.token);
-        localStorage.setItem('user', JSON.stringify(data.data));
-        
-        console.log('✅ Login successful');
-        console.log('👤 User:', data.data.name, `(${data.data.role})`);
-        
-        // Return the exact format your LoginPage expects
-        return {
-          success: true,
-          user: data.data,
-          message: data.message
-        };
-      } else {
-        throw new Error(data.message || 'Login failed');
-      }
-      
+      if (data.success && (data.user || data.data)) {
+          // Handle both response formats: { user: ... } or { data: ... }
+          const userData = data.user || data.data;
+         
+          // Create a simple token from user ID since your backend doesn't use JWT
+          this.token = `user_${userData.id}`;
+          localStorage.setItem('token', this.token);
+          localStorage.setItem('user', JSON.stringify(userData));
+          
+          console.log('✅ Login successful');
+          console.log('👤 User:', userData.name, `(${userData.role})`);
+          
+          return {
+            success: true,
+            user: userData,
+            message: data.message
+          };
+        } else {
+          throw new Error(data.message || 'Login failed');
+        }
     } catch (error) {
-      console.error('❌ Login error:', error);
-      throw error;
-    }
-  }
-
-  async register(userData) {
-    try {
-      const response = await fetch(`${this.baseURL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Registration error:', error);
+      console.error('Login error:', error);
       throw error;
     }
   }
@@ -94,7 +66,6 @@ class ApiService {
     this.token = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    console.log('🚪 Logged out');
   }
 
   getCurrentUser() {
@@ -110,6 +81,61 @@ class ApiService {
     return hasToken && hasUser;
   }
 
+  // BASIC HTTP METHODS
+  async get(endpoint) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with GET ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async post(endpoint, data) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with POST ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async put(endpoint, data) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(data),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with PUT ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
+  async delete(endpoint) {
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+      return this.handleResponse(response);
+    } catch (error) {
+      console.error(`Error with DELETE ${endpoint}:`, error);
+      throw error;
+    }
+  }
+
   // PROJECT MANAGEMENT METHODS
   async getProjects() {
     try {
@@ -121,6 +147,30 @@ class ApiService {
     } catch (error) {
       console.error('Error fetching projects:', error);
       throw error;
+    }
+  }
+
+  async getAllProjects() {
+    try {
+      console.log('📡 Fetching all projects...');
+      const response = await fetch(`${this.baseURL}/api/projects`, {
+        headers: this.getHeaders(),
+      });
+
+      const result = await this.handleResponse(response);
+      
+      return {
+        success: true,
+        data: result.data || result.projects || result || []
+      };
+      
+    } catch (error) {
+      console.error('❌ Error fetching all projects:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: []
+      };
     }
   }
 
@@ -181,6 +231,147 @@ class ApiService {
     }
   }
 
+  // PROJECT TEAM METHODS - FIXED: These were missing!
+  async getProjectTeam(projectId) {
+    try {
+      console.log('📡 Fetching project team for project:', projectId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
+        headers: this.getHeaders(),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error fetching project team:', error);
+      return {
+        success: false,
+        error: error.message,
+        team: []
+      };
+    }
+  }
+
+  async addProjectTeamMember(projectId, memberData) {
+    try {
+      console.log('➕ Adding team member to project:', projectId, memberData);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(memberData),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error adding project team member:', error);
+      throw error;
+    }
+  }
+
+  async removeProjectTeamMember(projectId, memberId) {
+    try {
+      console.log('➖ Removing team member from project:', projectId, memberId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error removing project team member:', error);
+      throw error;
+    }
+  }
+
+  async updateProjectTeamMember(projectId, memberId, memberData) {
+    try {
+      console.log('✏️ Updating team member in project:', projectId, memberId, memberData);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(memberData),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error updating project team member:', error);
+      throw error;
+    }
+  }
+
+  // PROJECT COMMENT METHODS
+  async getProjectComments(projectId) {
+    try {
+      console.log('📡 Fetching comments for project:', projectId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/comments`, {
+        headers: this.getHeaders(),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error fetching project comments:', error);
+      throw error;
+    }
+  }
+
+  async addProjectComment(projectId, commentData) {
+    try {
+      console.log('💬 Adding comment to project:', projectId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/comments`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(commentData),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error adding project comment:', error);
+      throw error;
+    }
+  }
+
+  async updateProjectComment(projectId, commentId, commentData) {
+    try {
+      console.log('✏️ Updating comment:', commentId, 'in project:', projectId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/comments/${commentId}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(commentData),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error updating project comment:', error);
+      throw error;
+    }
+  }
+
+  async deleteProjectComment(projectId, commentId) {
+    try {
+      console.log('🗑️ Deleting comment:', commentId, 'from project:', projectId);
+      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/comments/${commentId}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error deleting project comment:', error);
+      throw error;
+    }
+  }
+
+  // ALIAS METHODS for backward compatibility
+  async addProjectMember(projectId, memberData) {
+    return this.addProjectTeamMember(projectId, memberData);
+  }
+
+  async removeProjectMember(projectId, memberId) {
+    return this.removeProjectTeamMember(projectId, memberId);
+  }
+
+  async updateProjectMember(projectId, memberId, memberData) {
+    return this.updateProjectTeamMember(projectId, memberId, memberData);
+  }
+
   // USER MANAGEMENT METHODS
   async getUsers() {
     try {
@@ -192,6 +383,52 @@ class ApiService {
     } catch (error) {
       console.error('Error fetching users:', error);
       throw error;
+    }
+  }
+
+  async getAllUsers() {
+    try {
+      console.log('📡 Fetching all users...');
+      const response = await fetch(`${this.baseURL}/api/users`, {
+        headers: this.getHeaders(),
+      });
+
+      const result = await this.handleResponse(response);
+      
+      return {
+        success: true,
+        users: result.data || result.users || result || []
+      };
+      
+    } catch (error) {
+      console.error('❌ Error fetching all users:', error);
+      return {
+        success: false,
+        error: error.message,
+        users: []
+      };
+    }
+  }
+
+  async getAvailableUsers(projectId = null) {
+    try {
+      console.log('📡 Fetching available users for project:', projectId);
+      const endpoint = projectId ? 
+        `/api/projects/${projectId}/users/available` : 
+        '/api/users/available';
+        
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        headers: this.getHeaders(),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error fetching available users:', error);
+      return {
+        success: false,
+        error: error.message,
+        users: []
+      };
     }
   }
 
@@ -208,12 +445,12 @@ class ApiService {
     }
   }
 
-  async updateUserProfile(userData) {
+  async updateUserProfile(profileData) {
     try {
       const response = await fetch(`${this.baseURL}/api/users/profile`, {
         method: 'PUT',
         headers: this.getHeaders(),
-        body: JSON.stringify(userData),
+        body: JSON.stringify(profileData),
       });
 
       return await this.handleResponse(response);
@@ -223,34 +460,10 @@ class ApiService {
     }
   }
 
-  // LEADERSHIP DIAMOND ASSESSMENT METHODS
-  async getLeadershipAssessments(params = {}) {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params.project_id && params.project_id !== 'all') {
-        queryParams.append('project_id', params.project_id);
-      }
-      if (params.user_id) {
-        queryParams.append('user_id', params.user_id);
-      }
-
-      const url = `${this.baseURL}/api/leadership/assessments${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error fetching leadership assessments:', error);
-      throw error;
-    }
-  }
-
+  // LEADERSHIP ASSESSMENT METHODS
   async submitLeadershipAssessment(assessmentData) {
     try {
-      const response = await fetch(`${this.baseURL}/api/leadership/assessments`, {
+      const response = await fetch(`${this.baseURL}/api/assessments/leadership`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(assessmentData),
@@ -263,31 +476,14 @@ class ApiService {
     }
   }
 
-  async getLeadershipAssessmentDetails(assessmentId) {
+  async getLeadershipMetrics(userId = null, projectId = null) {
     try {
-      const response = await fetch(`${this.baseURL}/api/leadership/assessments/${assessmentId}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error fetching leadership assessment details:', error);
-      throw error;
-    }
-  }
-
-  async getLeadershipMetrics(params = {}) {
-    try {
-      const queryParams = new URLSearchParams();
-      if (params.project_id && params.project_id !== 'all') {
-        queryParams.append('project_id', params.project_id);
-      }
-      if (params.user_id) {
-        queryParams.append('user_id', params.user_id);
-      }
-
-      const url = `${this.baseURL}/api/leadership/metrics${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+      const params = new URLSearchParams();
+      if (userId) params.append('userId', userId);
+      if (projectId) params.append('projectId', projectId);
+      
+      const url = `${this.baseURL}/api/assessments/leadership/metrics${
+        params.toString() ? '?' + params.toString() : ''}`;
       
       const response = await fetch(url, {
         method: 'GET',
@@ -356,105 +552,22 @@ class ApiService {
       throw error;
     }
   }
-  // MINIMAL PATCH for apiService.js
-// Add this BEFORE the closing bracket and export statement
-// DO NOT replace the file - only add these methods
 
-  // BASIC HTTP METHODS - ADD THESE ONLY
-  async get(endpoint) {
+  // CAREER DEVELOPMENT METHODS
+  async getCareerStats(targetUserId = null) {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-      return this.handleResponse(response);
-    } catch (error) {
-      console.error(`Error with GET ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  async post(endpoint, data) {
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(data),
-      });
-      return this.handleResponse(response);
-    } catch (error) {
-      console.error(`Error with POST ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  async put(endpoint, data) {
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        method: 'PUT',
-        headers: this.getHeaders(),
-        body: JSON.stringify(data),
-      });
-      return this.handleResponse(response);
-    } catch (error) {
-      console.error(`Error with PUT ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  async delete(endpoint) {
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(),
-      });
-      return this.handleResponse(response);
-    } catch (error) {
-      console.error(`Error with DELETE ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // CAREER METHODS - ADD THESE ONLY
-  async getCareerGoals(userId = null) {
-    try {
-      const currentUser = this.getCurrentUser();
-      const targetUserId = userId || currentUser?.id;
-      
       if (!targetUserId) {
-        return { success: false, error: 'No user ID available', data: [] };
+        const user = this.getCurrentUser();
+        if (!user?.id) {
+          console.warn('No user ID available for career stats');
+          return { success: false, error: 'No user available', data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+        }
+        targetUserId = user.id;
       }
       
-      return this.get(`/api/career/goals/${targetUserId}`);
-    } catch (error) {
-      console.error('Error getting career goals:', error);
-      return { success: false, error: error.message, data: [] };
-    }
-  }
-
-  async getUserCompletedGoals(userId = null) {
-    try {
-      const currentUser = this.getCurrentUser();
-      const targetUserId = userId || currentUser?.id;
-      
       if (!targetUserId) {
-        return { success: false, error: 'No user ID available', completedGoals: [] };
-      }
-      
-      return this.get(`/api/career/completed/${targetUserId}`);
-    } catch (error) {
-      console.error('Error getting completed goals:', error);
-      return { success: false, error: error.message, completedGoals: [] };
-    }
-  }
-
-  async getCareerStats(userId = null) {
-    try {
-      const currentUser = this.getCurrentUser();
-      const targetUserId = userId || currentUser?.id;
-      
-      if (!targetUserId) {
-        return { success: false, error: 'No user ID available', data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+        console.warn('No target user ID provided for career stats');
+        return { success: false, error: 'No user ID', data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
       }
       
       return this.get(`/api/career/stats/${targetUserId}`);
@@ -464,7 +577,6 @@ class ApiService {
     }
   }
 
-  // PROJECT METHOD - ADD ONLY THIS ONE
   async getUserProjects() {
     try {
       const result = await this.get('/api/projects');
@@ -478,7 +590,7 @@ class ApiService {
     }
   }
 
-  // EXECUTIVE METHODS - ADD THESE ONLY
+  // EXECUTIVE METHODS
   async getExecutiveTeam() {
     try {
       return this.get('/api/team/executive');
@@ -496,8 +608,6 @@ class ApiService {
       return { success: false, error: error.message, data: { teamSize: 0, totalProjects: 0, averageProgress: 0 } };
     }
   }
-
-// END OF ADDITIONS - Add these methods right before the closing } of the class
 }
 
 // Create and export a singleton instance

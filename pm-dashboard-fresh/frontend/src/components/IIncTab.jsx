@@ -70,10 +70,10 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
           placeholder: 'Describe your unique strengths and capabilities that make you valuable...'
         },
         {
-          key: 'market_position',
-          title: 'Market Position',
-          question: 'How do you position yourself in the marketplace?',
-          placeholder: 'Describe how you want to be known in your industry or field...'
+          key: 'underserved_need',
+          title: 'Underserved Need',
+          question: 'What have you found that is not served as much as it can be? (people or customers or business)',
+          placeholder: 'Identify gaps in the market or unmet needs that align with your abilities...'
         }
       ]
     },
@@ -84,22 +84,22 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
       description: 'Craft your compelling professional narrative',
       sections: [
         {
-          key: 'background',
-          title: 'Professional Background',
-          question: 'What is your professional background and journey?',
-          placeholder: 'Share your career path, key experiences, and how they shaped you...'
+          key: 'compelling',
+          title: 'Compelling',
+          question: 'What are you doing that helps you overcome challenges?',
+          placeholder: 'Share how you face and overcome obstacles in your professional life...'
         },
         {
-          key: 'achievements',
-          title: 'Key Achievements',
-          question: 'What are your most significant accomplishments?',
-          placeholder: 'Highlight your proudest moments and biggest wins...'
+          key: 'valuable',
+          title: 'Valuable',
+          question: 'What phrase helps you describe the value you bring to an employer or the marketplace?',
+          placeholder: 'Articulate your unique value proposition in a memorable way...'
         },
         {
-          key: 'vision',
-          title: 'Future Vision',
-          question: 'Where do you see yourself going in your career?',
-          placeholder: 'Describe your career aspirations and goals...'
+          key: 'engaging',
+          title: 'Engaging',
+          question: 'What are you bringing that is valuable and consistent with your authentic self?',
+          placeholder: 'Describe how your authentic self creates value for others...'
         }
       ]
     },
@@ -110,22 +110,28 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
       description: 'Develop your innovative and business-oriented thinking',
       sections: [
         {
-          key: 'innovation',
-          title: 'Innovation Approach',
-          question: 'How do you approach innovation and new ideas?',
-          placeholder: 'Describe how you generate, evaluate, and implement new ideas...'
+          key: 'survive',
+          title: 'Survive',
+          question: 'What can you do to take care of yourself? What will help you keep a good outlook?',
+          placeholder: 'Describe your strategies for maintaining resilience and a positive mindset...'
         },
         {
-          key: 'risk_taking',
-          title: 'Risk Assessment',
-          question: 'How do you evaluate and take calculated risks?',
-          placeholder: 'Share your approach to risk-taking and decision-making...'
+          key: 'adapt',
+          title: 'Adapt',
+          question: 'What changes (technology, competition, processes) can you embrace? (Strive to be open, and above all else, remain authentic to who you are.)',
+          placeholder: 'Share how you adapt to change while staying true to yourself...'
         },
         {
-          key: 'business_acumen',
-          title: 'Business Acumen',
-          question: 'What is your understanding of business operations and strategy?',
-          placeholder: 'Describe your business knowledge and strategic thinking...'
+          key: 'flourish',
+          title: 'Flourish',
+          question: 'What plans do you need to put in place so that you can be more open to positive opportunities?',
+          placeholder: 'Outline your plans for growth and seizing opportunities...'
+        },
+        {
+          key: 'goals',
+          title: 'Goals',
+          question: 'What are you finding you would like to do with your career? Your life?',
+          placeholder: 'Describe your career and life aspirations...'
         }
       ]
     }
@@ -285,6 +291,573 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
     return submissionHistory.length > 0 ? submissionHistory[0] : null;
   };
 
+  // DETAILED VIEW COMPONENT WITH FIXED SUBMISSION NUMBERING
+  const renderDetailedView = () => {
+    if (!selectedUserDetails) return null;
+
+    const { user, current_responses, submission_history, response_count } = selectedUserDetails;
+
+    return (
+      <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh' }}>
+        {/* Header */}
+        <div style={{
+          backgroundColor: 'white',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '24px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              onClick={() => setShowDetailView(false)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 16px',
+                backgroundColor: '#f3f4f6',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                color: '#374151'
+              }}
+            >
+              <ArrowLeft size={16} />
+              Back to Team Overview
+            </button>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ 
+                fontSize: '24px', 
+                fontWeight: 'bold', 
+                color: '#1f2937', 
+                margin: '0 0 4px 0' 
+              }}>
+                {user.name}'s I, Inc. Assessment
+              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '14px', color: '#6b7280' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <UserCircle size={16} />
+                  {user.role}
+                </span>
+                <span>{user.email}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '24px' }}>
+          {/* Submission History - FIXED NUMBERING */}
+          {submission_history && submission_history.length > 0 && (
+            <div style={{
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '12px',
+              padding: '24px',
+              marginBottom: '24px'
+            }}>
+              <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#1f2937', 
+                margin: '0 0 16px 0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <History size={20} />
+                Assessment History
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                {submission_history.map((submission, index) => {
+                  // FIXED: Calculate correct submission number (reverse chronological numbering)
+                  const submissionNumber = submission_history.length - index;
+                  
+                  return (
+                    <div
+                      key={submission.id}
+                      style={{
+                        backgroundColor: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        minWidth: '200px'
+                      }}
+                    >
+                      <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
+                        Assessment #{submissionNumber}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                        {new Date(submission.submitted_at).toLocaleDateString()}
+                      </div>
+                      <div style={{ 
+                        backgroundColor: '#e2e8f0', 
+                        borderRadius: '4px', 
+                        height: '6px',
+                        overflow: 'hidden',
+                        marginBottom: '4px'
+                      }}>
+                        <div style={{
+                          backgroundColor: submission.completion_percentage >= 75 ? '#10b981' : 
+                                         submission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
+                          height: '100%',
+                          width: `${Math.min(100, submission.completion_percentage)}%`,
+                          transition: 'width 0.3s ease'
+                        }} />
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#374151' }}>
+                        {Math.min(100, submission.completion_percentage)}% complete
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Current Responses by Module */}
+          <div style={{ display: 'grid', gap: '24px' }}>
+            {Object.entries(iIncModules).map(([moduleKey, module]) => {
+              const moduleResponses = current_responses[moduleKey] || {};
+              const hasResponses = Object.keys(moduleResponses).length > 0;
+
+              return (
+                <div
+                  key={moduleKey}
+                  style={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '12px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Module Header */}
+                  <div style={{
+                    backgroundColor: module.color + '10',
+                    borderBottom: '1px solid #e5e7eb',
+                    padding: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <module.icon size={24} style={{ color: module.color }} />
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '600', 
+                        color: '#1f2937', 
+                        margin: '0 0 4px 0' 
+                      }}>
+                        {module.title}
+                      </h3>
+                      <p style={{ 
+                        color: '#6b7280', 
+                        margin: 0, 
+                        fontSize: '14px' 
+                      }}>
+                        {module.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Module Content */}
+                  <div style={{ padding: '20px' }}>
+                    {hasResponses ? (
+                      <div style={{ display: 'grid', gap: '16px' }}>
+                        {module.sections.map((section) => {
+                          const response = moduleResponses[section.key];
+                          const hasText = response && (typeof response === 'string' ? response.trim() : response.text?.trim());
+                          
+                          return (
+                            <div key={section.key}>
+                              <h4 style={{
+                                fontSize: '14px',
+                                fontWeight: '600',
+                                color: '#374151',
+                                margin: '0 0 8px 0'
+                              }}>
+                                {section.title}
+                              </h4>
+                              {hasText ? (
+                                <div style={{
+                                  backgroundColor: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '6px',
+                                  padding: '12px',
+                                  fontSize: '14px',
+                                  color: '#374151',
+                                  lineHeight: '1.6'
+                                }}>
+                                  {typeof response === 'string' ? response : response.text}
+                                </div>
+                              ) : (
+                                <div style={{
+                                  backgroundColor: '#fafafa',
+                                  border: '1px dashed #d1d5db',
+                                  borderRadius: '6px',
+                                  padding: '12px',
+                                  fontSize: '14px',
+                                  color: '#9ca3af',
+                                  fontStyle: 'italic'
+                                }}>
+                                  No response provided
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{
+                        textAlign: 'center',
+                        padding: '32px',
+                        color: '#9ca3af'
+                      }}>
+                        <module.icon size={32} style={{ opacity: 0.5, marginBottom: '12px' }} />
+                        <p style={{ margin: 0, fontSize: '14px' }}>
+                          No responses in this module yet
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // OVERVIEW CONTENT COMPONENT
+  const renderOverviewContent = () => {
+    const latestSubmission = getLatestSubmission();
+
+    return (
+      <div style={{ padding: '24px' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h2 style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold', 
+            color: '#1f2937', 
+            margin: '0 0 8px 0' 
+          }}>
+            I, Inc. Career Development
+          </h2>
+          <p style={{ 
+            color: '#6b7280', 
+            margin: 0,
+            fontSize: '16px'
+          }}>
+            Create your comprehensive career development plan through structured self-assessment
+          </p>
+        </div>
+
+        {/* Assessment Status Card */}
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '24px',
+          marginBottom: '32px'
+        }}>
+          {latestSubmission ? (
+            <div>
+              <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#1f2937', 
+                margin: '0 0 16px 0' 
+              }}>
+                Your Latest Assessment
+              </h3>
+              
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '14px', color: '#374151', fontWeight: '500' }}>Completion</span>
+                  <span style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
+                    {Math.min(100, latestSubmission.completion_percentage)}%
+                  </span>
+                </div>
+                <div style={{ 
+                  backgroundColor: '#e5e7eb', 
+                  borderRadius: '8px', 
+                  height: '8px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    backgroundColor: latestSubmission.completion_percentage >= 75 ? '#10b981' : 
+                                   latestSubmission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
+                    height: '100%',
+                    width: `${Math.min(100, latestSubmission.completion_percentage)}%`,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Last submitted: {new Date(latestSubmission.submitted_at).toLocaleDateString()}
+                </div>
+                
+                <button
+                  onClick={startNewAssessment}
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Update Assessment
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center' }}>
+              <h3 style={{ 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#1f2937', 
+                margin: '0 0 12px 0' 
+              }}>
+                Start Your I, Inc. Assessment
+              </h3>
+              <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
+                Complete your comprehensive career development assessment to create your personalized growth plan.
+              </p>
+              <button
+                onClick={startNewAssessment}
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  margin: '0 auto'
+                }}
+              >
+                <Plus size={20} />
+                Begin Assessment
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Framework Overview */}
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '24px'
+        }}>
+          <h3 style={{ 
+            fontSize: '18px', 
+            fontWeight: '600', 
+            color: '#1f2937', 
+            margin: '0 0 16px 0' 
+          }}>
+            I, Inc. Framework Overview
+          </h3>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+            gap: '16px'
+          }}>
+            {Object.entries(iIncModules).map(([moduleKey, module]) => (
+              <div
+                key={moduleKey}
+                style={{
+                  padding: '16px',
+                  border: `1px solid ${module.color}30`,
+                  borderRadius: '8px',
+                  backgroundColor: module.color + '05'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <module.icon size={20} style={{ color: module.color }} />
+                  <h4 style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '600', 
+                    color: '#1f2937', 
+                    margin: 0 
+                  }}>
+                    {module.title}
+                  </h4>
+                </div>
+                <p style={{ 
+                  color: '#6b7280', 
+                  margin: 0, 
+                  fontSize: '12px',
+                  lineHeight: '1.5'
+                }}>
+                  {module.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTeamOverview = () => (
+    <div style={{ padding: '24px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{ 
+          fontSize: '24px', 
+          fontWeight: 'bold', 
+          color: '#1f2937', 
+          margin: '0 0 8px 0' 
+        }}>
+          Team I, Inc. Assessments
+        </h2>
+        <p style={{ 
+          color: '#6b7280', 
+          margin: 0,
+          fontSize: '16px'
+        }}>
+          Overview of all team member career development assessments
+        </p>
+      </div>
+
+      {/* Team Submissions */}
+      {allTeamSubmissions.length === 0 ? (
+        <div style={{
+          backgroundColor: 'white',
+          border: '1px solid #e5e7eb',
+          borderRadius: '12px',
+          padding: '48px',
+          textAlign: 'center'
+        }}>
+          <FileText style={{ color: '#6b7280', margin: '0 auto 16px auto' }} size={48} />
+          <h3 style={{ color: '#374151', margin: '0 0 8px 0' }}>No Team Assessments Yet</h3>
+          <p style={{ color: '#6b7280', margin: 0 }}>
+            Team members haven't started their I, Inc. assessments yet.
+          </p>
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gap: '16px'
+        }}>
+          {allTeamSubmissions.map((submission, index) => (
+            <div
+              key={index}
+              style={{
+                backgroundColor: 'white',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                padding: '20px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    backgroundColor: '#f3f4f6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <User size={24} style={{ color: '#6b7280' }} />
+                  </div>
+                  
+                  <div style={{ flex: 1 }}>
+                    <h4 style={{ 
+                      fontSize: '16px', 
+                      fontWeight: '600', 
+                      color: '#1f2937', 
+                      margin: '0 0 4px 0' 
+                    }}>
+                      {submission.user_name}
+                    </h4>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      color: '#6b7280', 
+                      margin: '0 0 8px 0' 
+                    }}>
+                      {submission.user_role} • {submission.user_email}
+                    </p>
+                    
+                    {submission.latest_submission ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ 
+                            backgroundColor: '#e5e7eb', 
+                            borderRadius: '4px', 
+                            height: '6px',
+                            overflow: 'hidden'
+                          }}>
+                            <div style={{
+                              backgroundColor: submission.latest_submission.completion_percentage >= 75 ? '#10b981' : 
+                                             submission.latest_submission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
+                              height: '100%',
+                              width: `${Math.min(100, submission.latest_submission.completion_percentage)}%`,
+                              transition: 'width 0.3s ease'
+                            }} />
+                          </div>
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#374151', fontWeight: '500', minWidth: '40px' }}>
+                          {Math.min(100, submission.latest_submission.completion_percentage)}%
+                        </span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                        No assessment submitted
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {submission.latest_submission && (
+                    <div style={{ textAlign: 'right', fontSize: '12px', color: '#6b7280' }}>
+                      Last updated: {new Date(submission.latest_submission.submitted_at).toLocaleDateString()}
+                    </div>
+                  )}
+                  
+                  <button
+                    onClick={() => submission.latest_submission && fetchUserDetails(submission.user_id)}
+                    disabled={!submission.latest_submission || detailsLoading}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: submission.latest_submission ? '#f8fafc' : '#f3f4f6',
+                      border: `1px solid ${submission.latest_submission ? '#e2e8f0' : '#d1d5db'}`,
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      cursor: submission.latest_submission ? 'pointer' : 'not-allowed',
+                      fontSize: '12px',
+                      color: submission.latest_submission ? '#374151' : '#9ca3af',
+                      opacity: detailsLoading ? 0.6 : 1
+                    }}
+                  >
+                    <Eye size={14} />
+                    {detailsLoading ? 'Loading...' : 'View Details'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   // UNIFIED ASSESSMENT FORM COMPONENT
   const renderAssessmentForm = () => (
     <div style={{
@@ -426,22 +999,12 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
                           style={{
                             width: '100%',
                             minHeight: '120px',
-                            padding: '16px',
-                            border: '2px solid #e5e7eb',
+                            padding: '12px',
+                            border: '1px solid #d1d5db',
                             borderRadius: '8px',
                             fontSize: '14px',
                             fontFamily: 'inherit',
-                            resize: 'vertical',
-                            outline: 'none',
-                            lineHeight: '1.6'
-                          }}
-                          onFocus={(e) => {
-                            e.target.style.borderColor = module.color;
-                            e.target.style.boxShadow = `0 0 0 3px ${module.color}20`;
-                          }}
-                          onBlur={(e) => {
-                            e.target.style.borderColor = '#e5e7eb';
-                            e.target.style.boxShadow = 'none';
+                            resize: 'vertical'
                           }}
                         />
                       </div>
@@ -451,62 +1014,44 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
               </div>
             ))}
           </div>
-        </div>
 
-        {/* Form Footer */}
-        <div style={{
-          padding: '24px',
-          borderTop: '1px solid #e5e7eb',
-          backgroundColor: '#f8fafc',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          position: 'sticky',
-          bottom: 0
-        }}>
-          <div>
-            <p style={{ 
-              margin: 0, 
-              fontSize: '14px', 
-              color: '#6b7280' 
-            }}>
-              Progress: {calculateCompletionPercentage()}% complete
-            </p>
-          </div>
-          
-          <div style={{ display: 'flex', gap: '12px' }}>
+          {/* Form Actions */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'flex-end', 
+            gap: '12px', 
+            marginTop: '32px',
+            paddingTop: '24px',
+            borderTop: '1px solid #e5e7eb'
+          }}>
             <button
-              onClick={() => {
-                setShowAssessmentForm(false);
-                setAssessmentData({});
-              }}
+              onClick={() => setShowAssessmentForm(false)}
               style={{
                 padding: '12px 24px',
                 backgroundColor: '#f3f4f6',
-                border: 'none',
-                borderRadius: '8px',
                 color: '#374151',
-                fontSize: '14px',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
                 cursor: 'pointer',
+                fontSize: '14px',
                 fontWeight: '500'
               }}
             >
               Cancel
             </button>
-            
             <button
               onClick={handleSubmitAssessment}
-              disabled={saveLoading || calculateCompletionPercentage() === 0}
+              disabled={saveLoading}
               style={{
                 padding: '12px 24px',
-                backgroundColor: saveLoading ? '#9ca3af' : '#10b981',
+                backgroundColor: '#3b82f6',
+                color: 'white',
                 border: 'none',
                 borderRadius: '8px',
-                color: 'white',
+                cursor: saveLoading ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
-                cursor: saveLoading || calculateCompletionPercentage() === 0 ? 'not-allowed' : 'pointer',
-                opacity: saveLoading || calculateCompletionPercentage() === 0 ? 0.7 : 1,
                 fontWeight: '500',
+                opacity: saveLoading ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
@@ -514,7 +1059,7 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
             >
               {saveLoading ? (
                 <>
-                  <Clock size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                  <Clock size={16} className="animate-spin" />
                   Submitting...
                 </>
               ) : (
@@ -527,638 +1072,6 @@ const IIncTab = ({ currentUser, apiService, onDataChange }) => {
           </div>
         </div>
       </div>
-    </div>
-  );
-
-  // Detailed User View Component (same as before)
-  const renderDetailedView = () => {
-    if (!selectedUserDetails) return null;
-
-    const { user, current_responses, submission_history } = selectedUserDetails;
-
-    return (
-      <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-        {/* Header with Back Button */}
-        <div style={{
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e5e7eb',
-          padding: '24px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button
-              onClick={() => {
-                setShowDetailView(false);
-                setSelectedUserDetails(null);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                color: '#374151'
-              }}
-            >
-              <ArrowLeft size={16} />
-              Back to Team Overview
-            </button>
-            <div style={{ flex: 1 }}>
-              <h2 style={{ 
-                fontSize: '24px', 
-                fontWeight: 'bold', 
-                color: '#1f2937', 
-                margin: '0 0 4px 0' 
-              }}>
-                {user.name}'s I, Inc. Assessment
-              </h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '14px', color: '#6b7280' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <UserCircle size={16} />
-                  {user.role}
-                </span>
-                <span>{user.email}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ padding: '24px' }}>
-          {/* Submission History */}
-          {submission_history && submission_history.length > 0 && (
-            <div style={{
-              backgroundColor: 'white',
-              border: '1px solid #e5e7eb',
-              borderRadius: '12px',
-              padding: '24px',
-              marginBottom: '24px'
-            }}>
-              <h3 style={{ 
-                fontSize: '18px', 
-                fontWeight: '600', 
-                color: '#1f2937', 
-                margin: '0 0 16px 0',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <History size={20} />
-                Assessment History
-              </h3>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                {submission_history.map((submission, index) => (
-                  <div
-                    key={submission.id}
-                    style={{
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      minWidth: '200px'
-                    }}
-                  >
-                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#374151', marginBottom: '4px' }}>
-                      Submission #{index + 1}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
-                      {new Date(submission.submitted_at).toLocaleDateString()}
-                    </div>
-                    <div style={{ 
-                      backgroundColor: '#e2e8f0', 
-                      borderRadius: '4px', 
-                      height: '6px',
-                      overflow: 'hidden',
-                      marginBottom: '4px'
-                    }}>
-                      <div style={{
-                        backgroundColor: submission.completion_percentage >= 75 ? '#10b981' : 
-                                       submission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
-                        height: '100%',
-                        width: `${submission.completion_percentage}%`,
-                        transition: 'width 0.3s ease'
-                      }} />
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#374151' }}>
-                      {submission.completion_percentage}% complete
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Current Responses by Module */}
-          <div style={{ display: 'grid', gap: '24px' }}>
-            {Object.entries(iIncModules).map(([moduleKey, module]) => {
-              const moduleResponses = current_responses[moduleKey] || {};
-              const hasResponses = Object.keys(moduleResponses).length > 0;
-
-              return (
-                <div
-                  key={moduleKey}
-                  style={{
-                    backgroundColor: 'white',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '12px',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {/* Module Header */}
-                  <div style={{
-                    backgroundColor: module.color + '10',
-                    borderBottom: '1px solid #e5e7eb',
-                    padding: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px'
-                  }}>
-                    <module.icon size={24} style={{ color: module.color }} />
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600', 
-                        color: '#1f2937', 
-                        margin: '0 0 4px 0' 
-                      }}>
-                        {module.title}
-                      </h3>
-                      <p style={{ 
-                        color: '#6b7280', 
-                        margin: 0, 
-                        fontSize: '14px' 
-                      }}>
-                        {module.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Module Content */}
-                  <div style={{ padding: '20px' }}>
-                    {hasResponses ? (
-                      <div style={{ display: 'grid', gap: '20px' }}>
-                        {module.sections.map(section => {
-                          const response = moduleResponses[section.key];
-                          return (
-                            <div key={section.key}>
-                              <h4 style={{
-                                fontSize: '16px',
-                                fontWeight: '500',
-                                color: '#1f2937',
-                                margin: '0 0 8px 0'
-                              }}>
-                                {section.title}
-                              </h4>
-                              <p style={{
-                                fontSize: '14px',
-                                color: '#6b7280',
-                                margin: '0 0 12px 0'
-                              }}>
-                                {section.question}
-                              </p>
-                              {response ? (
-                                <div style={{
-                                  backgroundColor: '#f8fafc',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '8px',
-                                  padding: '16px'
-                                }}>
-                                  <p style={{
-                                    margin: '0 0 8px 0',
-                                    fontSize: '14px',
-                                    color: '#374151',
-                                    lineHeight: '1.6',
-                                    whiteSpace: 'pre-wrap'
-                                  }}>
-                                    {response.text}
-                                  </p>
-                                  <div style={{
-                                    fontSize: '12px',
-                                    color: '#6b7280'
-                                  }}>
-                                    Updated: {new Date(response.updated_at).toLocaleDateString()}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div style={{
-                                  backgroundColor: '#fef3c7',
-                                  border: '1px solid #f59e0b',
-                                  borderRadius: '8px',
-                                  padding: '12px',
-                                  fontSize: '14px',
-                                  color: '#92400e'
-                                }}>
-                                  No response provided
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div style={{
-                        textAlign: 'center',
-                        padding: '40px',
-                        color: '#6b7280'
-                      }}>
-                        <AlertCircle size={24} style={{ margin: '0 auto 12px auto' }} />
-                        <p style={{ margin: 0 }}>No responses for this module yet</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderOverviewContent = () => {
-    const latestSubmission = getLatestSubmission();
-    
-    return (
-      <div style={{ padding: '24px' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '32px' }}>
-          <h2 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold', 
-            color: '#1f2937', 
-            margin: '0 0 8px 0' 
-          }}>
-            I, Inc. Career Development Framework
-          </h2>
-          <p style={{ 
-            color: '#6b7280', 
-            margin: 0,
-            fontSize: '16px'
-          }}>
-            A comprehensive approach to accelerating your career through self-awareness and strategic positioning
-          </p>
-        </div>
-
-        {/* Current Status */}
-        <div style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '24px',
-          marginBottom: '32px'
-        }}>
-          {latestSubmission ? (
-            <div>
-              <h3 style={{ 
-                fontSize: '18px', 
-                fontWeight: '600', 
-                color: '#1f2937', 
-                margin: '0 0 16px 0' 
-              }}>
-                Your Latest Assessment
-              </h3>
-              
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '14px', color: '#374151', fontWeight: '500' }}>Completion</span>
-                  <span style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
-                    {latestSubmission.completion_percentage}%
-                  </span>
-                </div>
-                <div style={{ 
-                  backgroundColor: '#e5e7eb', 
-                  borderRadius: '8px', 
-                  height: '8px',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{
-                    backgroundColor: latestSubmission.completion_percentage >= 75 ? '#10b981' : 
-                                   latestSubmission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
-                    height: '100%',
-                    width: `${latestSubmission.completion_percentage}%`,
-                    transition: 'width 0.3s ease'
-                  }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                  Last submitted: {new Date(latestSubmission.submitted_at).toLocaleDateString()}
-                </div>
-                
-                <button
-                  onClick={startNewAssessment}
-                  style={{
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}
-                >
-                  Update Assessment
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center' }}>
-              <h3 style={{ 
-                fontSize: '18px', 
-                fontWeight: '600', 
-                color: '#1f2937', 
-                margin: '0 0 12px 0' 
-              }}>
-                Start Your I, Inc. Assessment
-              </h3>
-              <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
-                Complete your comprehensive career development assessment to create your personalized growth plan.
-              </p>
-              <button
-                onClick={startNewAssessment}
-                style={{
-                  backgroundColor: '#10b981',
-                  color: 'white',
-                  padding: '12px 24px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  margin: '0 auto'
-                }}
-              >
-                <Plus size={16} />
-                Start Assessment
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Assessment History */}
-        {submissionHistory.length > 0 && (
-          <div style={{
-            backgroundColor: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '12px',
-            padding: '24px'
-          }}>
-            <h3 style={{ 
-              fontSize: '18px', 
-              fontWeight: '600', 
-              color: '#1f2937', 
-              margin: '0 0 16px 0' 
-            }}>
-              Assessment History
-            </h3>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {submissionHistory.slice(0, 5).map((submission, index) => (
-                <div
-                  key={submission.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px',
-                    backgroundColor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '14px', color: '#374151', fontWeight: '500' }}>
-                      Assessment #{submissionHistory.length - index}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                      {new Date(submission.submitted_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#374151', fontWeight: '600' }}>
-                    {submission.completion_percentage}%
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Framework Overview */}
-        <div style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '24px',
-          marginTop: '32px'
-        }}>
-          <h3 style={{ 
-            fontSize: '18px', 
-            fontWeight: '600', 
-            color: '#1f2937', 
-            margin: '0 0 16px 0' 
-          }}>
-            Framework Overview
-          </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px'
-          }}>
-            {Object.entries(iIncModules).map(([moduleKey, module]) => (
-              <div
-                key={moduleKey}
-                style={{
-                  padding: '16px',
-                  border: `1px solid ${module.color}30`,
-                  borderRadius: '8px',
-                  backgroundColor: module.color + '05'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <module.icon size={20} style={{ color: module.color }} />
-                  <h4 style={{ 
-                    fontSize: '14px', 
-                    fontWeight: '600', 
-                    color: '#1f2937', 
-                    margin: 0 
-                  }}>
-                    {module.title}
-                  </h4>
-                </div>
-                <p style={{ 
-                  color: '#6b7280', 
-                  margin: 0, 
-                  fontSize: '12px',
-                  lineHeight: '1.5'
-                }}>
-                  {module.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderTeamOverview = () => (
-    <div style={{ padding: '24px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <h2 style={{ 
-          fontSize: '24px', 
-          fontWeight: 'bold', 
-          color: '#1f2937', 
-          margin: '0 0 8px 0' 
-        }}>
-          Team I, Inc. Assessments
-        </h2>
-        <p style={{ 
-          color: '#6b7280', 
-          margin: 0,
-          fontSize: '16px'
-        }}>
-          Overview of all team member career development assessments
-        </p>
-      </div>
-
-      {/* Team Submissions */}
-      {allTeamSubmissions.length === 0 ? (
-        <div style={{
-          backgroundColor: 'white',
-          border: '1px solid #e5e7eb',
-          borderRadius: '12px',
-          padding: '48px',
-          textAlign: 'center'
-        }}>
-          <FileText style={{ color: '#6b7280', margin: '0 auto 16px auto' }} size={48} />
-          <h3 style={{ color: '#374151', margin: '0 0 8px 0' }}>No Team Assessments Yet</h3>
-          <p style={{ color: '#6b7280', margin: 0 }}>
-            Team members haven't started their I, Inc. assessments yet.
-          </p>
-        </div>
-      ) : (
-        <div style={{
-          display: 'grid',
-          gap: '16px'
-        }}>
-          {allTeamSubmissions.map((submission, index) => (
-            <div
-              key={index}
-              style={{
-                backgroundColor: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '20px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    backgroundColor: '#f3f4f6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <User size={24} style={{ color: '#6b7280' }} />
-                  </div>
-                  
-                  <div style={{ flex: 1 }}>
-                    <h4 style={{ 
-                      fontSize: '16px', 
-                      fontWeight: '600', 
-                      color: '#1f2937', 
-                      margin: '0 0 4px 0' 
-                    }}>
-                      {submission.user_name}
-                    </h4>
-                    <p style={{ 
-                      fontSize: '14px', 
-                      color: '#6b7280', 
-                      margin: '0 0 8px 0' 
-                    }}>
-                      {submission.user_role} • {submission.user_email}
-                    </p>
-                    
-                    {submission.latest_submission ? (
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '12px', color: '#6b7280' }}>Progress</span>
-                          <span style={{ fontSize: '12px', color: '#374151', fontWeight: '600' }}>
-                            {submission.latest_submission.completion_percentage}%
-                          </span>
-                        </div>
-                        <div style={{ 
-                          backgroundColor: '#e5e7eb', 
-                          borderRadius: '4px', 
-                          height: '6px',
-                          overflow: 'hidden',
-                          marginBottom: '8px'
-                        }}>
-                          <div style={{
-                            backgroundColor: submission.latest_submission.completion_percentage >= 75 ? '#10b981' : 
-                                           submission.latest_submission.completion_percentage >= 50 ? '#f59e0b' : '#3b82f6',
-                            height: '100%',
-                            width: `${submission.latest_submission.completion_percentage}%`,
-                            transition: 'width 0.3s ease'
-                          }} />
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          Last updated: {new Date(submission.latest_submission.submitted_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{
-                        backgroundColor: '#fef3c7',
-                        border: '1px solid #f59e0b',
-                        borderRadius: '6px',
-                        padding: '8px 12px',
-                        marginBottom: '12px'
-                      }}>
-                        <span style={{ fontSize: '12px', color: '#92400e' }}>
-                          No assessments completed yet
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                <div>
-                  <button
-                    onClick={() => fetchUserDetails(submission.user_id)}
-                    disabled={detailsLoading || !submission.latest_submission}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      backgroundColor: submission.latest_submission ? '#f8fafc' : '#f3f4f6',
-                      border: `1px solid ${submission.latest_submission ? '#e2e8f0' : '#d1d5db'}`,
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      cursor: submission.latest_submission ? 'pointer' : 'not-allowed',
-                      fontSize: '12px',
-                      color: submission.latest_submission ? '#374151' : '#9ca3af',
-                      opacity: detailsLoading ? 0.6 : 1
-                    }}
-                  >
-                    <Eye size={14} />
-                    {detailsLoading ? 'Loading...' : 'View Details'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 

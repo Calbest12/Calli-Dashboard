@@ -201,11 +201,30 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
   };
 
   const handleLogin = async (userData) => {
-    setCurrentUser(userData);
-    setIsAuthenticated(true);
-    if (onUserChange) onUserChange(userData);
-    await loadUserData();
-  };
+      try {
+        console.log('🔄 PMDashboard handleLogin called with:', userData);
+        console.log('👤 Setting current user:', userData.name);
+        
+        setCurrentUser(userData);
+        console.log('✅ Current user state updated');
+        
+        setIsAuthenticated(true);
+        console.log('✅ Authentication state set to true');
+        
+        if (onUserChange) {
+          console.log('📡 Calling onUserChange callback');
+          onUserChange(userData);
+        }
+        
+        console.log('🔄 Loading user data...');
+        await loadUserData();
+        console.log('✅ User data loaded');
+        
+        console.log('🎉 Login flow completed successfully');
+      } catch (error) {
+        console.error('❌ Error in handleLogin:', error);
+      }
+    };
 
   const handleLogout = () => {
     localStorage.removeItem('token');

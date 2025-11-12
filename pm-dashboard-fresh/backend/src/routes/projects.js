@@ -1,9 +1,13 @@
+// FIXED routes/projects.js - Replace your current version with this
+
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const { requireProjectAccess } = require('../middleware/rbac');
 const projectController = require('../controllers/projectController');
 const { asyncHandler } = require('../middleware/errorHandler');
+
+// FIXED: Import all necessary functions
 const {
   getAllProjects,
   getProject,
@@ -12,10 +16,13 @@ const {
   deleteProject,
   addTeamMember,
   removeTeamMember,
+  updateTeamMember,  // ADDED
+  getProjectTeam,    // ADDED
   addComment,
   getComments,
   updateComment,
-  deleteComment
+  deleteComment,
+  getProjectHistory  // ADDED
 } = require('../controllers/projectController');
 
 // Test route
@@ -29,6 +36,11 @@ router.get('/test', (req, res) => {
       'POST /api/projects',
       'PUT /api/projects/:id',
       'DELETE /api/projects/:id',
+      'GET /api/projects/:id/history',     // ADDED
+      'GET /api/projects/:id/team',        // ADDED
+      'POST /api/projects/:id/team',
+      'PUT /api/projects/:id/team/:memberId',  // ADDED
+      'DELETE /api/projects/:id/team/:userId',
       'GET /api/projects/:id/comments',
       'POST /api/projects/:id/comments',
       'PUT /api/projects/:id/comments/:commentId',
@@ -44,9 +56,16 @@ router.post('/', auth, createProject);
 router.put('/:id', auth, updateProject);
 router.delete('/:id', auth, deleteProject);
 
-// Team management
+// ADDED: History route
+router.get('/:id/history', auth, getProjectHistory);
+
+// Basic team management routes (these were already working)
 router.post('/:id/team', auth, addTeamMember);
 router.delete('/:id/team/:userId', auth, removeTeamMember);
+
+// ADDED: Missing team routes
+router.get('/:id/team', auth, getProjectTeam);
+router.put('/:id/team/:memberId', auth, updateTeamMember);
 
 // Comment routes
 router.get('/:id/comments', auth, getComments);
@@ -54,27 +73,28 @@ router.post('/:id/comments', auth, addComment);
 router.put('/:id/comments/:commentId', auth, updateComment);
 router.delete('/:id/comments/:commentId', auth, deleteComment);
 
-// TEAM MANAGEMENT ROUTES
+// Advanced team management routes with RBAC (keep the existing ones)
 router.get('/:id/team',
   requireProjectAccess('view'),
   asyncHandler(projectController.getProjectTeam)
-  );
-  router.post('/:id/team',
+);
+router.post('/:id/team',
   requireProjectAccess('manage_team'),
   asyncHandler(projectController.addTeamMember)
-  );
-  router.put('/:id/team/:memberId',
+);
+router.put('/:id/team/:memberId',
   requireProjectAccess('manage_team'),
   asyncHandler(projectController.updateTeamMember)
-  );
-  router.delete('/:id/team/:memberId',
+);
+router.delete('/:id/team/:memberId',
   requireProjectAccess('manage_team'),
   asyncHandler(projectController.removeTeamMember)
-  );
-  // ADD THIS ROUTE FOR TEAM MEMBER SELECTION
-  router.get('/users/available',
+);
+
+// Route for team member selection
+router.get('/users/available',
   auth,
   asyncHandler(projectController.getAllUsers)
-  );
+);
 
 module.exports = router;

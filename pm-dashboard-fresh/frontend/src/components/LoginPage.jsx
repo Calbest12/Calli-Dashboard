@@ -45,11 +45,16 @@ const LoginPage = ({ onLogin }) => {
         });
 
         if (response.success && response.user) {
-          console.log('✅ Login successful:', response.user.name, 'as', response.user.role);
-          onLogin(response.user);
-        } else {
-          setError(response.error || 'Login failed');
-        }
+            console.log('✅ Login successful:', response.user.name, 'as', response.user.role);
+            console.log('🔄 Calling onLogin callback with user:', response.user);
+            console.log('📡 onLogin function exists:', typeof onLogin);
+            
+            onLogin(response.user);
+            
+            console.log('✅ onLogin callback completed');
+          } else {
+            setError(response.error || 'Login failed');
+          }
 
       } else {
         // REGISTRATION

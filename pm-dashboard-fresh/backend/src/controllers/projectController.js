@@ -1115,6 +1115,8 @@ const getProjectHistory = async (req, res) => {
   try {
     const projectId = req.params.id;
     
+    console.log('📊 Loading project history for project ID:', projectId);
+    
     const historyQuery = `
       SELECT ph.*, u.name as user_name
       FROM project_history ph
@@ -1125,15 +1127,35 @@ const getProjectHistory = async (req, res) => {
     
     const result = await query(historyQuery, [projectId]);
     
-    const history = result.rows.map(row => ({
-      id: row.id,
-      user: row.user_name || 'System',
-      action: row.action,
-      description: row.description || row.action,
-      type: row.action_type || 'general',
-      details: row.details ? JSON.parse(row.details) : {},
-      timestamp: row.created_at
-    }));
+    const history = result.rows.map(row => {
+      let details = {};
+      
+      // FIXED: Safe JSON parsing for details
+      if (row.details) {
+        try {
+          if (typeof row.details === 'string') {
+            details = JSON.parse(row.details);
+          } else if (typeof row.details === 'object') {
+            details = row.details;
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Failed to parse details for history entry:', row.id, parseError.message);
+          details = {}; // fallback to empty object
+        }
+      }
+      
+      return {
+        id: row.id,
+        user: row.user_name || 'System',
+        action: row.action,
+        description: row.description || row.action,
+        type: row.action_type || 'general',
+        details: details,
+        timestamp: row.created_at
+      };
+    });
+    
+    console.log(`✅ Successfully processed ${history.length} history entries`);
     
     res.json({ success: true, data: history });
   } catch (error) {

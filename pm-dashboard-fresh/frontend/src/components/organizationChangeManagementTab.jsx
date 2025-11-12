@@ -1,174 +1,230 @@
 // frontend/src/components/OrganizationalChangeManagementTab.jsx
 import React, { useState, useEffect } from 'react';
-import { Target, History, Plus, Eye, BarChart3, AlertCircle, Filter, TrendingUp } from 'lucide-react';
+import { 
+  Award, 
+  History, 
+  Plus, 
+  Eye, 
+  BarChart3, 
+  AlertCircle, 
+  Filter, 
+  TrendingUp, 
+  Users, 
+  Target,
+  Brain,
+  CheckCircle,
+  ArrowLeft,
+  ArrowRight,
+  RefreshCw,
+  Activity,
+  Loader,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Shuffle
+} from 'lucide-react';
+import apiService from '../services/apiService';
+import {
+  RadarChart,
+  BarChart,
+  AssessmentCard,
+  HistoryModal,
+  AssessmentDetailsModal
+} from './OrganizationalChangeHistoryComponents';
+import {
+  ProgressCircle,
+  HorizontalProgressBars,
+  TrendLineChart,
+  ComparisonMatrix
+} from './EnhancedVisualizationComponents';
 
-const OrganizationalChangeManagementTab = ({ currentUser, apiService, onDataChange }) => {
+// Helper function to safely handle null/undefined values
+const safeNumber = (value, defaultValue = 0) => {
+  const num = parseFloat(value);
+  return isNaN(num) ? defaultValue : num;
+};
+
+const OrganizationalChangeManagementTab = ({ currentUser, onDataChange }) => {
   const [assessments, setAssessments] = useState([]);
+  const [teamAssessments, setTeamAssessments] = useState([]); // For team metrics calculation
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('all');
   const [showAssessmentForm, setShowAssessmentForm] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedAssessmentDetails, setSelectedAssessmentDetails] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState('progress'); // 'progress', 'bars', 'trend', 'comparison', 'chart'
   
   // Chart visibility controls
   const [chartVisibility, setChartVisibility] = useState({
     vision: true,
-    reality: true,
-    ethics: true,
-    courage: true
+    alignment: true,
+    understanding: true,
+    enactment: true
   });
   
   // Form state for multi-step Organizational Change Management assessment
   const [responses, setResponses] = useState({});
   const [currentDimension, setCurrentDimension] = useState('vision');
+  const [currentDimensionIndex, setCurrentDimensionIndex] = useState(0);
+  const [selectedProjectForAssessment, setSelectedProjectForAssessment] = useState('');
 
   // Organizational Change Management Assessment framework
   const organizationalChangeFramework = {
     vision: {
       title: 'Vision',
-      description: 'Your ability to create and communicate clear organizational direction during change',
+      description: 'Your ability to create, communicate and sustain an inspiring direction',
+      details: 'Evaluate how effectively you develop and share a compelling vision that motivates stakeholders.',
+      color: '#3b82f6',
       questions: [
         {
-          key: 'change_clarity',
-          question: 'How clear and compelling is your change vision?',
-          description: 'A strong change vision provides clear direction and inspires commitment',
-          scale: 'Rate from 1 (very unclear) to 7 (exceptionally clear and compelling)'
+          key: 'clarity_compelling',
+          question: 'How clear and compelling is your project vision?',
+          description: 'Assess the clarity, specificity, and motivational power of your project vision.',
+          scale: 'Rate from 1 (very unclear/not compelling) to 7 (exceptionally clear and compelling)'
         },
         {
-          key: 'stakeholder_communication',
-          question: 'How effectively do you communicate the change vision to stakeholders?',
-          description: 'Consider frequency, clarity, and methods of change communication',
-          scale: 'Rate from 1 (rarely communicated) to 7 (consistently and effectively communicated)'
+          key: 'communication_effectiveness',
+          question: 'How effectively do you communicate your vision?',
+          description: 'Consider your ability to articulate the vision in ways that resonate with different stakeholders.',
+          scale: 'Rate from 1 (very ineffective) to 7 (exceptionally effective)'
         },
         {
           key: 'organizational_alignment',
-          question: 'How well does your change vision align with organizational strategy?',
-          description: 'Strong alignment ensures coherent direction across all levels',
-          scale: 'Rate from 1 (misaligned) to 7 (perfectly aligned)'
+          question: 'How well does your vision align with organizational strategy?',
+          description: 'Evaluate how well your project vision connects to broader organizational goals and strategy.',
+          scale: 'Rate from 1 (very poor alignment) to 7 (excellent alignment)'
         },
         {
-          key: 'change_inspiration',
-          question: 'How inspiring and motivating is your change vision to the organization?',
-          description: 'An inspiring change vision energizes people and drives commitment',
+          key: 'inspiring_motivating',
+          question: 'How inspiring and motivating is your vision to others?',
+          description: 'Assess the degree to which your vision energizes and motivates stakeholders to action.',
           scale: 'Rate from 1 (not inspiring) to 7 (highly inspiring and motivating)'
         }
       ]
     },
-    reality: {
-      title: 'Reality',
-      description: 'Your effectiveness in assessing current state and managing change implementation',
+    alignment: {
+      title: 'Alignment',
+      description: 'Your effectiveness in creating organizational alignment to support the vision',
+      details: 'Examine how well you coordinate systems, structures, and resources to support your vision.',
+      color: '#10b981',
       questions: [
         {
-          key: 'current_assessment',
-          question: 'How accurately do you assess the current organizational state?',
-          description: 'Realistic assessment is crucial for effective change planning',
-          scale: 'Rate from 1 (poor assessment) to 7 (highly accurate assessment)'
+          key: 'process_support',
+          question: 'How well do organizational processes support your vision?',
+          description: 'Evaluate whether existing processes facilitate or hinder vision achievement.',
+          scale: 'Rate from 1 (processes hinder vision) to 7 (processes strongly support vision)'
         },
         {
-          key: 'resource_management',
-          question: 'How effectively do you manage resources during change?',
-          description: 'Consider budget, time, personnel, and other organizational resources',
-          scale: 'Rate from 1 (poor resource management) to 7 (excellent resource management)'
+          key: 'structure_enablement',
+          question: 'How well does organizational structure enable vision achievement?',
+          description: 'Assess whether the organizational structure supports or creates barriers to your vision.',
+          scale: 'Rate from 1 (structure creates barriers) to 7 (structure strongly enables vision)'
         },
         {
-          key: 'milestone_tracking',
-          question: 'How well do you track progress against change milestones?',
-          description: 'Consistent tracking enables timely adjustments and course corrections',
-          scale: 'Rate from 1 (poor tracking) to 7 (excellent milestone tracking)'
+          key: 'resource_allocation',
+          question: 'How adequately are resources allocated to support the vision?',
+          description: 'Consider the sufficiency of financial, human, and material resources dedicated to your vision.',
+          scale: 'Rate from 1 (inadequate resources) to 7 (excellent resource allocation)'
         },
         {
-          key: 'obstacle_identification',
-          question: 'How effectively do you identify and address change obstacles?',
-          description: 'Proactive obstacle management is key to successful change implementation',
-          scale: 'Rate from 1 (reactive approach) to 7 (highly proactive obstacle management)'
+          key: 'communication_systems',
+          question: 'How well do information and communication systems support alignment?',
+          description: 'Evaluate the effectiveness of communication channels and information flow for vision alignment.',
+          scale: 'Rate from 1 (poor communication systems) to 7 (excellent communication systems)'
         }
       ]
     },
-    ethics: {
-      title: 'Ethics',
-      description: 'Your commitment to ethical principles and fairness during organizational change',
+    understanding: {
+      title: 'Understanding',
+      description: 'Your grasp of stakeholder perspectives, resistance and change dynamics',
+      details: 'Assess your ability to comprehend and navigate the human and cultural aspects of change.',
+      color: '#f59e0b',
       questions: [
         {
-          key: 'stakeholder_fairness',
-          question: 'How fairly do you treat all stakeholders during change?',
-          description: 'Ethical change management ensures equitable treatment of all affected parties',
-          scale: 'Rate from 1 (unfair treatment) to 7 (consistently fair treatment)'
-        },
-        {
-          key: 'transparency',
-          question: 'How transparent are you about change impacts and decisions?',
-          description: 'Transparency builds trust and reduces resistance to change',
-          scale: 'Rate from 1 (not transparent) to 7 (highly transparent)'
-        },
-        {
-          key: 'ethical_decisions',
-          question: 'How consistently do you make ethical decisions during change?',
-          description: 'Ethical decision-making maintains organizational integrity',
-          scale: 'Rate from 1 (inconsistent ethics) to 7 (consistently ethical)'
-        },
-        {
-          key: 'social_responsibility',
-          question: 'How well do you consider broader social impacts of change?',
-          description: 'Responsible change management considers community and societal effects',
-          scale: 'Rate from 1 (no consideration) to 7 (strong social responsibility)'
-        }
-      ]
-    },
-    courage: {
-      title: 'Courage',
-      description: 'Your willingness to make difficult decisions and drive necessary change',
-      questions: [
-        {
-          key: 'difficult_decisions',
-          question: 'How willing are you to make difficult change decisions?',
-          description: 'Change often requires courage to make unpopular but necessary decisions',
-          scale: 'Rate from 1 (avoids difficult decisions) to 7 (consistently makes tough decisions)'
+          key: 'stakeholder_needs',
+          question: 'How well do you understand stakeholder needs and concerns?',
+          description: 'Evaluate your ability to identify and comprehend the various needs and concerns of stakeholders.',
+          scale: 'Rate from 1 (poor understanding) to 7 (excellent understanding)'
         },
         {
           key: 'resistance_management',
-          question: 'How effectively do you address resistance to change?',
-          description: 'Managing resistance requires courage and skilled communication',
-          scale: 'Rate from 1 (avoids resistance) to 7 (effectively addresses resistance)'
+          question: 'How well do you identify and address resistance to change?',
+          description: 'Assess your capability to recognize sources of resistance and develop strategies to address them.',
+          scale: 'Rate from 1 (poor at managing resistance) to 7 (excellent at managing resistance)'
         },
         {
-          key: 'innovation_support',
-          question: 'How willing are you to support innovative approaches during change?',
-          description: 'Courage enables leaders to embrace new and untested solutions',
-          scale: 'Rate from 1 (risk-averse) to 7 (strongly supports innovation)'
+          key: 'cultural_factors',
+          question: 'How well do you understand cultural factors affecting your vision?',
+          description: 'Consider your awareness of organizational culture and its impact on vision implementation.',
+          scale: 'Rate from 1 (poor cultural understanding) to 7 (excellent cultural understanding)'
         },
         {
-          key: 'change_persistence',
-          question: 'How persistent are you in driving change despite setbacks?',
-          description: 'Successful change requires courage to persist through challenges',
-          scale: 'Rate from 1 (gives up easily) to 7 (highly persistent)'
+          key: 'team_dynamics',
+          question: 'How well do you understand team and organizational dynamics?',
+          description: 'Evaluate your grasp of interpersonal relationships and group dynamics within the organization.',
+          scale: 'Rate from 1 (poor understanding of dynamics) to 7 (excellent understanding of dynamics)'
+        }
+      ]
+    },
+    enactment: {
+      title: 'Enactment',
+      description: 'Your consistency and effectiveness translating vision into action',
+      details: 'Measure your ability to turn vision into concrete actions and measurable results.',
+      color: '#8b5cf6',
+      questions: [
+        {
+          key: 'action_consistency',
+          question: 'How consistently do your actions align with your stated vision?',
+          description: 'Assess the degree to which your behaviors and decisions reflect your stated vision.',
+          scale: 'Rate from 1 (actions rarely align) to 7 (actions consistently align)'
+        },
+        {
+          key: 'adaptive_approach',
+          question: 'How effectively do you adapt your approach while maintaining vision integrity?',
+          description: 'Evaluate your ability to adjust tactics and methods without compromising the core vision.',
+          scale: 'Rate from 1 (poor adaptation) to 7 (excellent adaptive capability)'
+        },
+        {
+          key: 'progress_measurement',
+          question: 'How effectively do you measure progress towards your vision?',
+          description: 'Consider your ability to establish metrics and track advancement toward vision achievement.',
+          scale: 'Rate from 1 (poor measurement) to 7 (excellent progress measurement)'
+        },
+        {
+          key: 'feedback_incorporation',
+          question: 'How well do you incorporate feedback to improve your vision?',
+          description: 'Assess your openness to feedback and ability to refine your vision based on input.',
+          scale: 'Rate from 1 (poor feedback incorporation) to 7 (excellent feedback incorporation)'
         }
       ]
     }
   };
 
   useEffect(() => {
-    loadAssessments();
-    loadProjects();
+    loadData();
   }, []);
 
-  const loadAssessments = async () => {
+  useEffect(() => {
+    if (selectedProject !== null) {
+      loadAssessments();
+      loadTeamAssessmentsForMetrics();
+    }
+  }, [selectedProject]);
+
+  const loadData = async () => {
     try {
       setLoading(true);
-      console.log('📊 Loading organizational change management assessments...');
-      
-      const response = await apiService.getOrganizationalChangeAssessments();
-      
-      if (response && response.success) {
-        console.log('✅ Organizational change assessments loaded:', response.assessments);
-        setAssessments(response.assessments || []);
-      } else {
-        console.warn('⚠️ Organizational change assessments loading response:', response);
-        setAssessments([]);
-      }
+      await Promise.all([
+        loadProjects(), 
+        loadAssessments(), 
+        loadTeamAssessmentsForMetrics()
+      ]);
     } catch (error) {
-      console.error('❌ Failed to load organizational change assessments:', error);
-      setAssessments([]);
+      console.error('Error loading data:', error);
+      setError('Failed to load data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -176,659 +232,1070 @@ const OrganizationalChangeManagementTab = ({ currentUser, apiService, onDataChan
 
   const loadProjects = async () => {
     try {
-      console.log('📊 Loading projects for filtering...');
+      console.log('📊 Loading projects for organizational change assessment...');
       
-      const response = await apiService.getAllProjects();
+      const projectsData = await apiService.getProjects();
+      console.log('📊 Raw projects response:', projectsData);
       
-      if (response && response.success) {
-        console.log('✅ Projects loaded:', response.data);
-        setProjects(response.data || []);
+      if (projectsData && projectsData.success && projectsData.data) {
+        console.log('✅ Projects loaded from data field:', projectsData.data.length, 'projects');
+        setProjects(projectsData.data);
+      } else if (projectsData && projectsData.projects) {
+        console.log('✅ Projects loaded from projects field:', projectsData.projects.length, 'projects');
+        setProjects(projectsData.projects);
+      } else if (Array.isArray(projectsData)) {
+        console.log('✅ Projects loaded as array:', projectsData.length, 'projects');
+        setProjects(projectsData);
       } else {
-        console.warn('⚠️ Projects loading response:', response);
+        console.warn('⚠️ No projects found or unexpected response format');
+        console.log('🔍 Response structure:', Object.keys(projectsData || {}));
         setProjects([]);
       }
     } catch (error) {
-      console.error('❌ Failed to load projects:', error);
+      console.error('❌ Error loading projects for organizational change:', error);
       setProjects([]);
     }
   };
 
-  const calculateAverageScores = () => {
+  const loadAssessments = async () => {
+    try {
+      console.log('📋 Loading assessments for current user...');
+      
+      // Pass project ID directly instead of params object
+      const assessmentsData = await apiService.getOrganizationalChangeAssessments(selectedProject);
+      if (assessmentsData && assessmentsData.assessments) {
+        setAssessments(assessmentsData.assessments);
+      }
+    } catch (error) {
+      console.error('Error loading organizational change assessments:', error);
+      setError('Failed to load assessments. Please try again.');
+    }
+  };
+
+  // Load ALL team assessments for metrics calculation (no role filtering)
+  const loadTeamAssessmentsForMetrics = async () => {
+    try {
+      console.log('📊 Loading team assessments for metrics calculation...');
+      
+      // Use the analytics endpoint to get all team data
+      const response = await apiService.getOrganizationalChangeAnalytics(selectedProject);
+      
+      if (response.success && response.assessments) {
+        console.log('✅ Team assessments for metrics loaded:', response.assessments.length);
+        setTeamAssessments(response.assessments);
+      } else {
+        console.warn('⚠️ No team assessment data received');
+        setTeamAssessments([]);
+      }
+    } catch (error) {
+      console.error('Error loading team assessments for metrics:', error);
+      setTeamAssessments([]);
+    }
+  };
+
+  // Calculate change management metrics from ALL assessments (team averages)
+  const calculateChangeMetrics = () => {
+    // Use teamAssessments for metrics calculation (includes all team data)
+    const dataToUse = teamAssessments.length > 0 ? teamAssessments : assessments;
+    
+    if (!dataToUse || dataToUse.length === 0) {
+      return {
+        vision: 0,
+        alignment: 0,
+        understanding: 0,
+        enactment: 0,
+        overall: 0,
+        count: 0
+      };
+    }
+
     const filteredAssessments = selectedProject === 'all' 
-      ? assessments 
-      : assessments.filter(assessment => assessment.project_id === parseInt(selectedProject));
+      ? dataToUse
+      : dataToUse.filter(assessment => 
+          assessment.project_id === parseInt(selectedProject) || 
+          assessment.project_id === selectedProject
+        );
 
     if (filteredAssessments.length === 0) {
       return {
         vision: 0,
-        reality: 0,
-        ethics: 0,
-        courage: 0,
-        overall: 0
+        alignment: 0,
+        understanding: 0,
+        enactment: 0,
+        overall: 0,
+        count: 0
       };
     }
 
-    const totals = { vision: 0, reality: 0, ethics: 0, courage: 0 };
-    const counts = { vision: 0, reality: 0, ethics: 0, courage: 0 };
+    let visionTotal = 0, visionCount = 0;
+    let alignmentTotal = 0, alignmentCount = 0;
+    let understandingTotal = 0, understandingCount = 0;
+    let enactmentTotal = 0, enactmentCount = 0;
+    let overallTotal = 0, overallCount = 0;
 
     filteredAssessments.forEach(assessment => {
-      Object.keys(totals).forEach(dimension => {
-        if (assessment[dimension] && assessment[dimension] > 0) {
-          totals[dimension] += assessment[dimension];
-          counts[dimension]++;
-        }
-      });
+      const visionScore = safeNumber(assessment.vision_score, 0);
+      const alignmentScore = safeNumber(assessment.alignment_score, 0);
+      const understandingScore = safeNumber(assessment.understanding_score, 0);
+      const enactmentScore = safeNumber(assessment.enactment_score, 0);
+
+      if (visionScore > 0) {
+        visionTotal += visionScore;
+        visionCount++;
+      }
+      if (alignmentScore > 0) {
+        alignmentTotal += alignmentScore;
+        alignmentCount++;
+      }
+      if (understandingScore > 0) {
+        understandingTotal += understandingScore;
+        understandingCount++;
+      }
+      if (enactmentScore > 0) {
+        enactmentTotal += enactmentScore;
+        enactmentCount++;
+      }
+
+      const assessmentOverall = (visionScore + alignmentScore + understandingScore + enactmentScore) / 4;
+      if (assessmentOverall > 0) {
+        overallTotal += assessmentOverall;
+        overallCount++;
+      }
     });
 
-    const averages = {};
-    Object.keys(totals).forEach(dimension => {
-      averages[dimension] = counts[dimension] > 0 ? totals[dimension] / counts[dimension] : 0;
-    });
-
-    const overall = Object.values(averages).reduce((sum, val) => sum + val, 0) / 4;
-
-    return {
-      ...averages,
-      overall
+    const metrics = {
+      vision: visionCount > 0 ? visionTotal / visionCount : 0,
+      alignment: alignmentCount > 0 ? alignmentTotal / alignmentCount : 0,
+      understanding: understandingCount > 0 ? understandingTotal / understandingCount : 0,
+      enactment: enactmentCount > 0 ? enactmentTotal / enactmentCount : 0,
+      overall: overallCount > 0 ? overallTotal / overallCount : 0,
+      count: filteredAssessments.length
     };
+
+    console.log('📈 Team Average Change Management Metrics:', {
+      vision: metrics.vision.toFixed(2),
+      alignment: metrics.alignment.toFixed(2), 
+      understanding: metrics.understanding.toFixed(2),
+      enactment: metrics.enactment.toFixed(2),
+      overall: metrics.overall.toFixed(2),
+      assessments: metrics.count,
+      dataSource: teamAssessments.length > 0 ? 'teamAssessments' : 'userAssessments'
+    });
+
+    return metrics;
   };
 
-  const handleSubmitAssessment = async (projectId, responses, notes = '') => {
+  // Helper function to get score color based on value
+  const getScoreColor = (score) => {
+    const safeScore = safeNumber(score, 0);
+    if (safeScore >= 6) return '#22c55e'; // green - excellent
+    if (safeScore >= 4) return '#eab308'; // yellow - good
+    if (safeScore >= 2) return '#f97316'; // orange - developing
+    return '#ef4444'; // red - needs improvement
+  };
+
+  // Helper function to get score label
+  const getScoreLabel = (score) => {
+    const safeScore = safeNumber(score, 0);
+    if (safeScore >= 6) return 'Excellent';
+    if (safeScore >= 4) return 'Good';
+    if (safeScore >= 2) return 'Developing';
+    return 'Needs Improvement';
+  };
+
+  const dimensions = Object.keys(organizationalChangeFramework);
+
+  // Handle form submission
+  const handleSubmitAssessment = async () => {
     try {
-      console.log('📝 Submitting organizational change assessment:', { projectId, responses, notes });
-
-      // Calculate dimension scores
-      const dimensionScores = {};
-      Object.keys(organizationalChangeFramework).forEach(dimension => {
-        const dimensionQuestions = organizationalChangeFramework[dimension].questions;
-        let total = 0;
-        let count = 0;
-        
-        dimensionQuestions.forEach(question => {
-          if (responses[question.key] && responses[question.key] > 0) {
-            total += responses[question.key];
-            count++;
-          }
-        });
-        
-        dimensionScores[dimension] = count > 0 ? total / count : 0;
-      });
-
+      setSubmitting(true);
+      
       const assessmentData = {
-        project_id: projectId,
-        user_id: currentUser.id,
-        vision: dimensionScores.vision,
-        reality: dimensionScores.reality,
-        ethics: dimensionScores.ethics,
-        courage: dimensionScores.courage,
-        responses: responses,
-        notes: notes,
-        assessment_type: 'organizational_change_management'
+        project_id: selectedProjectForAssessment || null,
+        type: 'organizational_change',
+        responses: responses
       };
 
-      const response = await apiService.submitOrganizationalChangeAssessment(assessmentData);
+      console.log('📝 Submitting organizational change assessment:', assessmentData);
 
-      if (response && response.success) {
-        console.log('✅ Organizational change assessment submitted successfully');
-        await loadAssessments();
-        setShowAssessmentForm(false);
+      // Note: You'll need to create this API endpoint
+      const response = await apiService.submitOrganizationalChangeAssessment(assessmentData);
+      
+      if (response.success) {
+        console.log('✅ Assessment submitted successfully');
+        
+        // Reset form
         setResponses({});
         setCurrentDimension('vision');
-
+        setCurrentDimensionIndex(0);
+        setShowAssessmentForm(false);
+        setSelectedProjectForAssessment('');
+        
+        // Reload assessments
+        await loadAssessments();
+        await loadTeamAssessmentsForMetrics();
+        
+        // Notify parent component if needed
         if (onDataChange) {
           onDataChange();
         }
       } else {
-        throw new Error(response?.error || 'Failed to submit assessment');
+        throw new Error(response.message || 'Submission failed');
       }
     } catch (error) {
-      console.error('❌ Failed to submit organizational change assessment:', error);
-      throw error;
+      console.error('❌ Error submitting assessment:', error);
+      setError(`Failed to submit assessment: ${error.message}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const averageScores = calculateAverageScores();
-  const filteredAssessments = selectedProject === 'all' 
-    ? assessments 
-    : assessments.filter(assessment => assessment.project_id === parseInt(selectedProject));
+  // Handle dimension navigation
+  const nextDimension = () => {
+    const currentIndex = dimensions.indexOf(currentDimension);
+    if (currentIndex < dimensions.length - 1) {
+      const nextDim = dimensions[currentIndex + 1];
+      setCurrentDimension(nextDim);
+      setCurrentDimensionIndex(currentIndex + 1);
+    }
+  };
+
+  const prevDimension = () => {
+    const currentIndex = dimensions.indexOf(currentDimension);
+    if (currentIndex > 0) {
+      const prevDim = dimensions[currentIndex - 1];
+      setCurrentDimension(prevDim);
+      setCurrentDimensionIndex(currentIndex - 1);
+    }
+  };
+
+  // Handle slider change
+  const handleSliderChange = (questionKey, value) => {
+    setResponses(prev => ({
+      ...prev,
+      [currentDimension]: {
+        ...prev[currentDimension],
+        [questionKey]: parseInt(value)
+      }
+    }));
+  };
+
+  // Check if current dimension is complete
+  const isDimensionComplete = (dimension) => {
+    const dimensionResponses = responses[dimension];
+    if (!dimensionResponses) return false;
+    
+    const requiredQuestions = organizationalChangeFramework[dimension].questions.map(q => q.key);
+    return requiredQuestions.every(key => dimensionResponses[key] !== undefined);
+  };
+
+  // Check if all dimensions are complete
+  const isAssessmentComplete = () => {
+    return dimensions.every(dim => isDimensionComplete(dim));
+  };
+
+  // Render slider component
+  const renderSlider = (question) => {
+    const currentValue = responses[currentDimension]?.[question.key] || 1;
+
+    return (
+      <div key={question.key} style={{
+        marginBottom: '2rem',
+        padding: '1.5rem',
+        backgroundColor: 'white',
+        borderRadius: '0.75rem',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ marginBottom: '1rem' }}>
+          <h5 style={{
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#111827',
+            marginBottom: '0.5rem'
+          }}>
+            {question.question}
+          </h5>
+          <p style={{
+            fontSize: '0.875rem',
+            color: '#6b7280',
+            marginBottom: '0.5rem'
+          }}>
+            {question.description}
+          </p>
+          <p style={{
+            fontSize: '0.75rem',
+            color: '#9ca3af',
+            fontStyle: 'italic'
+          }}>
+            {question.scale}
+          </p>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <input
+            type="range"
+            min="1"
+            max="7"
+            value={currentValue}
+            onChange={(e) => handleSliderChange(question.key, e.target.value)}
+            style={{
+              width: '100%',
+              height: '8px',
+              borderRadius: '4px',
+              background: `linear-gradient(to right, ${organizationalChangeFramework[currentDimension].color} 0%, ${organizationalChangeFramework[currentDimension].color} ${((currentValue - 1) / 6) * 100}%, #e5e7eb ${((currentValue - 1) / 6) * 100}%, #e5e7eb 100%)`,
+              outline: 'none',
+              appearance: 'none'
+            }}
+          />
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            width: '100%',
+            fontSize: '0.75rem',
+            color: '#9ca3af'
+          }}>
+            <span>1 - Strongly Disagree</span>
+            <span style={{ 
+              fontWeight: '600', 
+              color: organizationalChangeFramework[currentDimension].color,
+              fontSize: '1rem'
+            }}>
+              {currentValue}
+            </span>
+            <span>7 - Strongly Agree</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Calculate metrics for display
+  const metrics = calculateChangeMetrics();
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <h2>Loading organizational change management data...</h2>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '400px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          color: '#6b7280',
+          fontSize: '1rem'
+        }}>
+          <Loader style={{ animation: 'spin 1s linear infinite' }} size={20} />
+          Loading organizational change assessments...
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '2rem', backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '2rem'
-        }}>
-          <div>
-            <h1 style={{ fontSize: '2rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
-              Organizational Change Management
-            </h1>
-            <p style={{ color: '#6b7280', fontSize: '1.125rem', margin: 0 }}>
-              Full summary of all averages across projects and teams
-            </p>
-          </div>
-
+    <div style={{ padding: '1.5rem' }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2rem'
+      }}>
+        <div>
+          <h2 style={{
+            fontSize: '1.875rem',
+            fontWeight: '700',
+            color: '#111827',
+            margin: '0 0 0.5rem 0'
+          }}>
+            Organizational Change Management
+          </h2>
+          <p style={{
+            fontSize: '1rem',
+            color: '#6b7280',
+            margin: 0
+          }}>
+            Assess your effectiveness in leading organizational change across four key dimensions
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '1rem' }}>
           <button
             onClick={() => setShowAssessmentForm(true)}
             style={{
-              background: 'linear-gradient(to right, #7c3aed, #5b21b6)',
-              color: 'white',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              fontWeight: '600',
-              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '0.5rem',
-              boxShadow: '0 4px 6px rgba(124, 58, 237, 0.25)',
-              transition: 'all 0.2s'
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              padding: '0.75rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: 'pointer'
             }}
           >
-            <Plus size={20} />
+            <Plus size={16} />
             New Assessment
           </button>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              backgroundColor: 'white',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              padding: '0.75rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: 'pointer'
+            }}
+          >
+            <History size={16} />
+            View History
+          </button>
         </div>
+      </div>
 
-        {/* Project Filter */}
+      {/* Error display */}
+      {error && (
         <div style={{
-          backgroundColor: 'white',
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb',
-          padding: '1.5rem',
-          marginBottom: '2rem'
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '0.5rem',
+          padding: '1rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Filter size={16} style={{ color: '#6b7280' }} />
-              <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#374151' }}>
-                Filter by Project:
-              </span>
-            </div>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
+          <AlertCircle size={16} color="#dc2626" />
+          <span style={{ color: '#dc2626', fontSize: '0.875rem' }}>
+            {error}
+          </span>
+        </div>
+      )}
+
+      {/* Project filter */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem',
+        marginBottom: '2rem'
+      }}>
+        <Filter size={16} color="#6b7280" />
+        <select
+          value={selectedProject}
+          onChange={(e) => setSelectedProject(e.target.value)}
+          style={{
+            padding: '0.5rem 1rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            backgroundColor: 'white',
+            color: '#374151'
+          }}
+        >
+          <option value="all">All Projects</option>
+          {projects.map(project => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Metrics Cards and Visualizations */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '1rem',
+        marginBottom: '2rem'
+      }}>
+        {Object.entries(organizationalChangeFramework).map(([key, dimension]) => {
+          const score = metrics[key];
+          return (
+            <div
+              key={key}
               style={{
-                padding: '0.5rem 1rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                outline: 'none',
                 backgroundColor: 'white',
-                minWidth: '200px'
+                borderRadius: '0.75rem',
+                padding: '1.5rem',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
               }}
             >
-              <option value="all">All Projects</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>{project.name}</option>
-              ))}
-            </select>
-            <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-              Showing {filteredAssessments.length} assessment{filteredAssessments.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        </div>
-
-        {/* Diamond Chart and Summary */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '2rem', marginBottom: '2rem' }}>
-          {/* Bar Chart Visualization */}
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '0.75rem',
-            border: '1px solid #e5e7eb',
-            padding: '1.5rem'
-          }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
-              Organizational Change Management Overview
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {Object.entries({
-                vision: { label: 'Vision', color: '#3b82f6' },
-                reality: { label: 'Reality', color: '#10b981' },
-                ethics: { label: 'Ethics', color: '#f59e0b' },
-                courage: { label: 'Courage', color: '#ef4444' }
-              }).map(([key, config]) => (
-                <div key={key}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.875rem', fontWeight: '600', color: '#374151' }}>
-                      {config.label}
-                    </span>
-                    <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
-                      {averageScores[key].toFixed(1)}/7
-                    </span>
-                  </div>
-                  <div style={{
-                    width: '100%',
-                    height: '12px',
-                    backgroundColor: '#f3f4f6',
-                    borderRadius: '6px',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      width: `${(averageScores[key] / 7) * 100}%`,
-                      height: '100%',
-                      backgroundColor: config.color,
-                      borderRadius: '6px',
-                      transition: 'width 0.8s ease-out'
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Summary Statistics */}
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '0.75rem',
-            border: '1px solid #e5e7eb',
-            padding: '1.5rem'
-          }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
-              Summary Statistics
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {Object.entries({
-                vision: { label: 'Vision', color: '#3b82f6' },
-                reality: { label: 'Reality', color: '#10b981' },
-                ethics: { label: 'Ethics', color: '#f59e0b' },
-                courage: { label: 'Courage', color: '#ef4444' }
-              }).map(([key, config]) => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.875rem', color: '#374151', fontWeight: '500' }}>
-                    {config.label}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{
-                      width: '80px',
-                      height: '6px',
-                      backgroundColor: '#f3f4f6',
-                      borderRadius: '3px',
-                      overflow: 'hidden'
-                    }}>
-                      <div style={{
-                        width: `${(averageScores[key] / 7) * 100}%`,
-                        height: '100%',
-                        backgroundColor: config.color,
-                        transition: 'width 0.5s ease'
-                      }} />
-                    </div>
-                    <span style={{ 
-                      fontSize: '0.875rem', 
-                      fontWeight: '600', 
-                      color: '#111827',
-                      minWidth: '40px',
-                      textAlign: 'right'
-                    }}>
-                      {averageScores[key].toFixed(1)}/7
-                    </span>
-                  </div>
-                </div>
-              ))}
-              
-              <div style={{ 
-                borderTop: '1px solid #e5e7eb', 
-                paddingTop: '1rem', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center' 
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.5rem'
               }}>
-                <span style={{ fontSize: '1rem', color: '#111827', fontWeight: '600' }}>
-                  Overall Average
-                </span>
-                <span style={{ 
-                  fontSize: '1.125rem', 
-                  fontWeight: '700', 
-                  color: '#7c3aed',
-                  backgroundColor: '#f3e8ff',
-                  padding: '0.25rem 0.75rem',
-                  borderRadius: '9999px'
+                <h3 style={{
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: '#111827',
+                  margin: 0
                 }}>
-                  {averageScores.overall.toFixed(1)}/7
-                </span>
+                  {dimension.title}
+                </h3>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}>
+                  <button
+                    onClick={() => setChartVisibility(prev => ({
+                      ...prev,
+                      [key]: !prev[key]
+                    }))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#6b7280',
+                      cursor: 'pointer',
+                      padding: '0.25rem'
+                    }}
+                  >
+                    <Eye size={14} />
+                  </button>
+                </div>
+              </div>
+              
+              <div style={{
+                fontSize: '2rem',
+                fontWeight: '700',
+                color: getScoreColor(score),
+                marginBottom: '0.5rem'
+              }}>
+                {score > 0 ? score.toFixed(1) : '--'}
+              </div>
+              
+              <div style={{
+                fontSize: '0.75rem',
+                color: '#6b7280'
+              }}>
+                {score > 0 ? getScoreLabel(score) : 'No data'}
               </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Assessment History */}
+      {/* Visualization Section */}
+      {metrics.count > 0 && (
         <div style={{
           backgroundColor: 'white',
           borderRadius: '0.75rem',
+          padding: '2rem',
           border: '1px solid #e5e7eb',
-          padding: '1.5rem'
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          marginBottom: '2rem'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', margin: 0 }}>
-              Recent Assessments
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '2rem'
+          }}>
+            <h3 style={{
+              fontSize: '1.25rem',
+              fontWeight: '700',
+              color: '#111827',
+              margin: 0
+            }}>
+              Team Performance Visualization
             </h3>
-            <button
-              onClick={() => setShowHistoryModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.5rem 1rem',
-                backgroundColor: '#f3f4f6',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                color: '#374151',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              <History size={16} />
-              View All
-            </button>
+            
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setViewMode('progress')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: viewMode === 'progress' ? '#3b82f6' : 'white',
+                  color: viewMode === 'progress' ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Progress Circles
+              </button>
+              <button
+                onClick={() => setViewMode('bars')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: viewMode === 'bars' ? '#3b82f6' : 'white',
+                  color: viewMode === 'bars' ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Progress Bars
+              </button>
+              <button
+                onClick={() => setViewMode('comparison')}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: viewMode === 'comparison' ? '#3b82f6' : 'white',
+                  color: viewMode === 'comparison' ? 'white' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Team Comparison
+              </button>
+            </div>
           </div>
 
-          {filteredAssessments.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '3rem 0', color: '#6b7280' }}>
-              <BarChart3 size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
-              <p style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.5rem' }}>
-                No assessments yet
-              </p>
-              <p style={{ fontSize: '0.875rem', margin: 0 }}>
-                {selectedProject === 'all' 
-                  ? 'Start by creating your first organizational change assessment'
-                  : 'No assessments for the selected project'
-                }
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {filteredAssessments.slice(0, 5).map((assessment, index) => (
-                <AssessmentCard
-                  key={assessment.id || index}
-                  assessment={assessment}
-                  project={projects.find(p => p.id === assessment.project_id)}
-                  onClick={() => setSelectedAssessmentDetails(assessment)}
+          {/* Visualization Content */}
+          {viewMode === 'progress' && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '2rem',
+              justifyItems: 'center'
+            }}>
+              {Object.entries(organizationalChangeFramework).map(([key, dimension]) => (
+                <ProgressCircle
+                  key={key}
+                  value={metrics[key]}
+                  maxValue={7}
+                  size={140}
+                  strokeWidth={16}
+                  color={dimension.color}
+                  title={dimension.title}
+                  subtitle={`${metrics.count} assessments`}
                 />
               ))}
             </div>
           )}
+
+          {viewMode === 'bars' && (
+            <HorizontalProgressBars
+              data={{
+                vision: metrics.vision,
+                alignment: metrics.alignment,
+                understanding: metrics.understanding,
+                enactment: metrics.enactment
+              }}
+              framework={organizationalChangeFramework}
+              teamAverage={null}
+            />
+          )}
+
+          {viewMode === 'comparison' && (
+            <div>
+              <div style={{ 
+                textAlign: 'center', 
+                marginBottom: '2rem' 
+              }}>
+                <h4 style={{
+                  fontSize: '1.125rem',
+                  fontWeight: '600',
+                  color: '#111827',
+                  margin: '0 0 0.5rem 0'
+                }}>
+                  Team Performance Matrix
+                </h4>
+                <p style={{ 
+                  fontSize: '0.875rem', 
+                  color: '#6b7280',
+                  margin: 0
+                }}>
+                  Comparing individual performance across all dimensions
+                </p>
+              </div>
+              <ComparisonMatrix
+                assessments={assessments}
+                framework={organizationalChangeFramework}
+                projects={projects}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Assessment History */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '0.75rem',
+        border: '1px solid #e5e7eb',
+        padding: '1.5rem',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '1.5rem' 
+        }}>
+          <h3 style={{ 
+            fontSize: '1.25rem', 
+            fontWeight: '700', 
+            color: '#111827', 
+            margin: 0 
+          }}>
+            Recent Assessments
+          </h3>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1rem',
+              backgroundColor: '#f3f4f6',
+              border: '1px solid #e5e7eb',
+              borderRadius: '0.375rem',
+              fontSize: '0.875rem',
+              color: '#374151',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <History size={16} />
+            View All History
+          </button>
         </div>
 
-        {/* Assessment Form Modal */}
-        {showAssessmentForm && (
-          <AssessmentFormModal
-            isOpen={showAssessmentForm}
-            onClose={() => {
-              setShowAssessmentForm(false);
-              setResponses({});
-              setCurrentDimension('vision');
-            }}
-            onSubmit={handleSubmitAssessment}
-            framework={organizationalChangeFramework}
-            projects={projects}
-            responses={responses}
-            setResponses={setResponses}
-            currentDimension={currentDimension}
-            setCurrentDimension={setCurrentDimension}
-          />
-        )}
-
-        {/* History Modal */}
-        {showHistoryModal && (
-          <HistoryModal
-            isOpen={showHistoryModal}
-            onClose={() => setShowHistoryModal(false)}
-            assessments={filteredAssessments}
-            projects={projects}
-            onAssessmentSelect={setSelectedAssessmentDetails}
-          />
-        )}
-
-        {/* Assessment Details Modal */}
-        {selectedAssessmentDetails && (
-          <AssessmentDetailsModal
-            isOpen={!!selectedAssessmentDetails}
-            onClose={() => setSelectedAssessmentDetails(null)}
-            assessment={selectedAssessmentDetails}
-            project={projects.find(p => p.id === selectedAssessmentDetails.project_id)}
-            framework={organizationalChangeFramework}
-          />
+        {assessments.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 0', color: '#6b7280' }}>
+            <BarChart3 size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
+            <p style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+              No assessments yet
+            </p>
+            <p style={{ fontSize: '0.875rem', margin: 0 }}>
+              {selectedProject === 'all' 
+                ? 'Start by creating your first organizational change assessment'
+                : 'No assessments for the selected project'
+              }
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {assessments.slice(0, 5).map((assessment, index) => (
+              <AssessmentCard
+                key={assessment.id || index}
+                assessment={assessment}
+                project={projects.find(p => p.id === assessment.project_id)}
+                framework={organizationalChangeFramework}
+                onClick={() => setSelectedAssessmentDetails(assessment)}
+                showProject={true}
+              />
+            ))}
+            
+            {assessments.length > 5 && (
+              <div style={{ 
+                textAlign: 'center', 
+                paddingTop: '1rem',
+                borderTop: '1px solid #f3f4f6'
+              }}>
+                <button
+                  onClick={() => setShowHistoryModal(true)}
+                  style={{
+                    color: '#3b82f6',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  View {assessments.length - 5} more assessments →
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
-    </div>
-  );
-};
 
-// Helper components (simplified versions)
-const AssessmentCard = ({ assessment, project, onClick }) => (
-  <div 
-    onClick={onClick}
-    style={{
-      padding: '1rem',
-      border: '1px solid #e5e7eb',
-      borderRadius: '0.5rem',
-      backgroundColor: '#fafafa',
-      cursor: 'pointer',
-      transition: 'all 0.2s'
-    }}
-  >
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div>
-        <h4 style={{ fontSize: '0.875rem', fontWeight: '600', margin: '0 0 0.25rem 0' }}>
-          {project?.name || 'Unknown Project'}
-        </h4>
-        <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-          {new Date(assessment.created_at || assessment.submission_date).toLocaleDateString()}
-        </p>
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        {['vision', 'reality', 'ethics', 'courage'].map(dimension => (
-          <div key={dimension} style={{
-            width: '8px',
-            height: '40px',
-            backgroundColor: '#f3f4f6',
-            borderRadius: '4px',
-            position: 'relative'
+      {/* Assessment Form Modal */}
+      {showAssessmentForm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '1rem',
+            padding: '2rem',
+            maxWidth: '800px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto'
           }}>
             <div style={{
-              width: '100%',
-              height: `${(assessment[dimension] || 0) / 7 * 100}%`,
-              backgroundColor: getDimensionColor(dimension),
-              borderRadius: '4px',
-              position: 'absolute',
-              bottom: 0
-            }} />
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '2rem'
+            }}>
+              <h3 style={{
+                fontSize: '1.5rem',
+                fontWeight: '700',
+                color: '#111827',
+                margin: 0
+              }}>
+                Organizational Change Management Assessment
+              </h3>
+              <button
+                onClick={() => setShowAssessmentForm(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  cursor: 'pointer'
+                }}
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Progress indicator */}
+            <div style={{
+              display: 'flex',
+              marginBottom: '2rem',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '0.5rem',
+              padding: '0.25rem'
+            }}>
+              {dimensions.map((dimension, index) => (
+                <div
+                  key={dimension}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem',
+                    textAlign: 'center',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    borderRadius: '0.375rem',
+                    backgroundColor: index <= currentDimensionIndex ? organizationalChangeFramework[dimension].color : 'transparent',
+                    color: index <= currentDimensionIndex ? 'white' : '#6b7280',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {organizationalChangeFramework[dimension].title}
+                </div>
+              ))}
+            </div>
+
+            {/* Project selection */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Project (Optional)
+              </label>
+              <select
+                value={selectedProjectForAssessment}
+                onChange={(e) => setSelectedProjectForAssessment(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.875rem'
+                }}
+              >
+                <option value="">General Assessment (No specific project)</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              {!selectedProjectForAssessment && (
+                <p style={{
+                  fontSize: '0.75rem',
+                  color: '#6b7280',
+                  marginTop: '0.25rem',
+                  fontStyle: 'italic'
+                }}>
+                  This assessment will be general (not project-specific).
+                </p>
+              )}
+            </div>
+
+            {/* Current dimension content */}
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{
+                marginBottom: '1.5rem',
+                textAlign: 'center'
+              }}>
+                <h4 style={{
+                  fontSize: '1.5rem',
+                  fontWeight: '700',
+                  color: organizationalChangeFramework[currentDimension].color,
+                  marginBottom: '0.5rem'
+                }}>
+                  {organizationalChangeFramework[currentDimension].title}
+                </h4>
+                <p style={{
+                  fontSize: '1rem',
+                  color: '#374151',
+                  marginBottom: '0.5rem'
+                }}>
+                  {organizationalChangeFramework[currentDimension].description}
+                </p>
+                <p style={{
+                  fontSize: '0.875rem',
+                  color: '#6b7280',
+                  fontStyle: 'italic'
+                }}>
+                  {organizationalChangeFramework[currentDimension].details}
+                </p>
+              </div>
+
+              {/* Questions for current dimension */}
+              {organizationalChangeFramework[currentDimension].questions.map(question => 
+                renderSlider(question)
+              )}
+            </div>
+
+            {/* Navigation buttons */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '2rem'
+            }}>
+              <button
+                onClick={prevDimension}
+                disabled={currentDimensionIndex === 0}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.75rem 1rem',
+                  backgroundColor: currentDimensionIndex === 0 ? '#f9fafb' : 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.875rem',
+                  color: currentDimensionIndex === 0 ? '#9ca3af' : '#374151',
+                  cursor: currentDimensionIndex === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+
+              <span style={{
+                fontSize: '0.875rem',
+                color: '#6b7280'
+              }}>
+                {currentDimensionIndex + 1} of {dimensions.length}
+              </span>
+
+              {currentDimensionIndex === dimensions.length - 1 ? (
+                <button
+                  onClick={handleSubmitAssessment}
+                  disabled={!isAssessmentComplete() || submitting}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: (!isAssessmentComplete() || submitting) ? '#f9fafb' : '#10b981',
+                    color: (!isAssessmentComplete() || submitting) ? '#9ca3af' : 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: (!isAssessmentComplete() || submitting) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {submitting ? (
+                    <>
+                      <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={16} />
+                      Complete Assessment
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={nextDimension}
+                  disabled={!isDimensionComplete(currentDimension)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.75rem 1rem',
+                    backgroundColor: !isDimensionComplete(currentDimension) ? '#f9fafb' : '#3b82f6',
+                    color: !isDimensionComplete(currentDimension) ? '#9ca3af' : 'white',
+                    border: 'none',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    cursor: !isDimensionComplete(currentDimension) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Next
+                  <ChevronRight size={16} />
+                </button>
+              )}
+            </div>
           </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-const getDimensionColor = (dimension) => {
-  const colors = {
-    vision: '#3b82f6',
-    reality: '#10b981',
-    ethics: '#f59e0b',
-    courage: '#ef4444'
-  };
-  return colors[dimension] || '#6b7280';
-};
-
-// Placeholder modal components
-const AssessmentFormModal = ({ isOpen, onClose, onSubmit, framework, projects, responses, setResponses, currentDimension, setCurrentDimension }) => {
-  if (!isOpen) return null;
-  
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '0.75rem',
-        width: '90%',
-        maxWidth: '600px',
-        maxHeight: '80vh',
-        overflow: 'auto',
-        padding: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1rem' }}>
-          New Organizational Change Assessment
-        </h2>
-        <p>Assessment form would be implemented here with project selection and multi-step questions.</p>
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-          <button onClick={onClose} style={{
-            padding: '0.5rem 1rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            backgroundColor: 'white',
-            cursor: 'pointer'
-          }}>
-            Cancel
-          </button>
-          <button onClick={() => onSubmit(projects[0]?.id || 1, responses, '')} style={{
-            padding: '0.5rem 1rem',
-            backgroundColor: '#7c3aed',
-            color: 'white',
-            border: 'none',
-            borderRadius: '0.375rem',
-            cursor: 'pointer'
-          }}>
-            Submit
-          </button>
         </div>
-      </div>
-    </div>
-  );
-};
+      )}
 
-const HistoryModal = ({ isOpen, onClose, assessments, projects, onAssessmentSelect }) => {
-  if (!isOpen) return null;
-  
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '0.75rem',
-        width: '90%',
-        maxWidth: '800px',
-        maxHeight: '80vh',
-        overflow: 'auto',
-        padding: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1rem' }}>
-          Assessment History
-        </h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {assessments.map((assessment, index) => (
-            <AssessmentCard
-              key={assessment.id || index}
-              assessment={assessment}
-              project={projects.find(p => p.id === assessment.project_id)}
-              onClick={() => {
-                onAssessmentSelect(assessment);
-                onClose();
-              }}
-            />
-          ))}
-        </div>
-        <button 
-          onClick={onClose}
-          style={{
-            marginTop: '2rem',
-            padding: '0.5rem 1rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            backgroundColor: 'white',
-            cursor: 'pointer'
-          }}
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  );
-};
+      {/* History Modal */}
+      {showHistoryModal && (
+        <HistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          assessments={assessments}
+          projects={projects}
+          framework={organizationalChangeFramework}
+          onAssessmentSelect={setSelectedAssessmentDetails}
+        />
+      )}
 
-const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framework }) => {
-  if (!isOpen) return null;
-  
-  return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '0.75rem',
-        width: '90%',
-        maxWidth: '600px',
-        maxHeight: '80vh',
-        overflow: 'auto',
-        padding: '2rem'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '1rem' }}>
-          Assessment Details
-        </h2>
-        <p><strong>Project:</strong> {project?.name || 'Unknown Project'}</p>
-        <p><strong>Date:</strong> {new Date(assessment.created_at || assessment.submission_date).toLocaleDateString()}</p>
-        <div style={{ marginTop: '1rem' }}>
-          <h4>Scores:</h4>
-          {['vision', 'reality', 'ethics', 'courage'].map(dimension => (
-            <p key={dimension}>
-              <strong>{dimension.charAt(0).toUpperCase() + dimension.slice(1)}:</strong> {assessment[dimension] || 0}/7
-            </p>
-          ))}
-        </div>
-        <button 
-          onClick={onClose}
-          style={{
-            marginTop: '2rem',
-            padding: '0.5rem 1rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '0.375rem',
-            backgroundColor: 'white',
-            cursor: 'pointer'
-          }}
-        >
-          Close
-        </button>
-      </div>
+      {/* Assessment Details Modal */}
+      {selectedAssessmentDetails && (
+        <AssessmentDetailsModal
+          isOpen={!!selectedAssessmentDetails}
+          onClose={() => setSelectedAssessmentDetails(null)}
+          assessment={selectedAssessmentDetails}
+          project={projects.find(p => p.id === selectedAssessmentDetails.project_id)}
+          framework={organizationalChangeFramework}
+        />
+      )}
     </div>
   );
 };
