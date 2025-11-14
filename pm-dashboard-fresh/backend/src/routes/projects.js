@@ -5,6 +5,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const { requireProjectAccess } = require('../middleware/rbac');
 const projectController = require('../controllers/projectController');
+const feedbackController = require('../controllers/feedbackController');
 const { asyncHandler } = require('../middleware/errorHandler');
 
 // FIXED: Import all necessary functions
@@ -66,6 +67,9 @@ router.delete('/:id/team/:userId', auth, removeTeamMember);
 // ADDED: Missing team routes
 router.get('/:id/team', auth, getProjectTeam);
 router.put('/:id/team/:memberId', auth, updateTeamMember);
+
+router.post('/:id/feedback', auth, feedbackController.submitFeedback);
+router.get('/:id/feedback', auth, feedbackController.getProjectFeedback);
 
 // Comment routes
 router.get('/:id/comments', auth, getComments);

@@ -43,19 +43,28 @@ class OrganizationalChangeController {
 
       // Role-based access control
       if (userRole === 'Team Member') {
-        // Team members can only see their own assessments
+        // FIXED: Team members can see all assessments for projects they're part of
         paramCount++;
-        query += ` AND oca.user_id = $${paramCount}`;
+        query += ` AND oca.project_id IN (
+          SELECT DISTINCT project_id 
+          FROM project_team_members 
+          WHERE user_id = $${paramCount}
+          UNION
+          SELECT DISTINCT id 
+          FROM projects 
+          WHERE manager_id = $${paramCount}
+        )`;
         params.push(currentUserId);
-      } else if (userRole === 'Manager') {
-        // Managers can see all assessments for projects they manage
+      } else if (userRole === 'Manager' || userRole === 'Project Manager') {
+        // Managers can see all assessments for projects they manage + participate in
         paramCount++;
         query += ` AND (oca.user_id = $${paramCount} OR EXISTS (
           SELECT 1 FROM projects WHERE id = oca.project_id AND manager_id = $${paramCount}
+        ) OR oca.project_id IN (
+          SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $${paramCount}
         ))`;
         params.push(currentUserId);
       }
-      // Executive Leaders can see all assessments (no additional filter)
 
       // Filter by specific user if requested and user has permission
       if (user_id && (userRole === 'Executive Leader' || userRole === 'Manager') && !isNaN(parseInt(user_id))) {

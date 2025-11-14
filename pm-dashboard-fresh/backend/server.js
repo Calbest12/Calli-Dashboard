@@ -50,7 +50,7 @@ const app = express();
 if (config.nodeEnv === 'production') {
   app.set('trust proxy', 1); // Trust first proxy
 } else {
-  app.set('trust proxy', true); // Trust all proxies in development
+  app.set('trust proxy', false); // Trust all proxies in development
 }
 
 // CORS configuration

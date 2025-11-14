@@ -230,6 +230,18 @@ class ApiService {
       throw error;
     }
   }
+  async getProjectInsights(projectId) {
+      try {
+        return await this.get(`/api/ai/insights/${projectId}`);
+      } catch (error) {
+        console.error('Error getting project insights:', error);
+        return {
+          success: false,
+          error: error.message,
+          insights: { summary: 'Project insights temporarily unavailable' }
+        };
+      }
+    }
 
   // PROJECT TEAM METHODS - FIXED: These were missing!
   async getProjectTeam(projectId) {
@@ -370,6 +382,16 @@ class ApiService {
 
   async updateProjectMember(projectId, memberId, memberData) {
     return this.updateProjectTeamMember(projectId, memberId, memberData);
+  }
+  async submitProjectFeedback(projectId, feedbackData) {
+    try {
+      console.log('📝 Submitting project feedback for project:', projectId);
+      const result = await this.post(`/api/projects/${projectId}/feedback`, feedbackData);
+      return result;
+    } catch (error) {
+      console.error('❌ Error submitting project feedback:', error);
+      throw new Error(error.message || 'Failed to submit project feedback');
+    }
   }
 
   // USER MANAGEMENT METHODS
@@ -606,6 +628,405 @@ class ApiService {
     } catch (error) {
       console.error('Error getting executive dashboard:', error);
       return { success: false, error: error.message, data: { teamSize: 0, totalProjects: 0, averageProgress: 0 } };
+    }
+  }
+  async sendAIChat(chatData) {
+      try {
+        console.log('🤖 Sending AI chat request:', chatData);
+        
+        const response = await fetch(`${this.baseURL}/api/ai/chat`, {
+          method: 'POST',
+          headers: this.getHeaders(),
+          body: JSON.stringify({
+            message: chatData.message,
+            context: chatData.context || {},
+            projectId: chatData.projectId || null
+          })
+        });
+    
+        const result = await this.handleResponse(response);
+        return result;
+    
+      } catch (error) {
+        console.error('❌ AI Chat API Error:', error);
+        
+        // Return a user-friendly error response
+        return {
+          success: false,
+          error: error.message || 'AI chat is currently unavailable',
+          fallback: true
+        };
+      }
+    }
+    // MISSING CAREER METHODS FOR API SERVICE
+// Add these methods to your frontend/src/services/apiService.js
+
+  // CAREER DEVELOPMENT METHODS (ADD THESE TO YOUR API SERVICE CLASS)
+  async getCareerGoals(userId = null) {
+    try {
+      // Use current user if no userId specified
+      if (!userId) {
+        const user = this.getCurrentUser();
+        userId = user?.id;
+      }
+      
+      if (!userId) {
+        return { success: false, error: 'No user ID available', data: [] };
+      }
+      
+      console.log('🎯 Fetching career goals for user:', userId);
+      const result = await this.get(`/api/career/goals/${userId}`);
+      
+      return {
+        success: true,
+        data: result.data || [],
+        goals: result.data || [] // Also provide 'goals' for backward compatibility
+      };
+    } catch (error) {
+      console.error('Error getting career goals:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        data: [],
+        goals: []
+      };
+    }
+  }
+
+  async createCareerGoal(goalData) {
+    try {
+      console.log('🎯 Creating career goal:', goalData);
+      const result = await this.post('/api/career/goals', goalData);
+      return result;
+    } catch (error) {
+      console.error('Error creating career goal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updateCareerGoal(goalId, goalData) {
+    try {
+      console.log('🎯 Updating career goal:', goalId, goalData);
+      const result = await this.put(`/api/career/goals/${goalId}`, goalData);
+      return result;
+    } catch (error) {
+      console.error('Error updating career goal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteCareerGoal(goalId) {
+    try {
+      console.log('🎯 Deleting career goal:', goalId);
+      const result = await this.delete(`/api/career/goals/${goalId}`);
+      return result;
+    } catch (error) {
+      console.error('Error deleting career goal:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getUserCompletedGoals(userId = null) {
+    try {
+      if (!userId) {
+        const user = this.getCurrentUser();
+        userId = user?.id;
+      }
+      
+      if (!userId) {
+        return { success: false, error: 'No user ID available', completedGoals: [] };
+      }
+      
+      console.log('🎯 Fetching completed career goals for user:', userId);
+      const result = await this.get(`/api/career/completed-goals/${userId}`);
+      
+      return {
+        success: true,
+        completedGoals: result.data || result.completedGoals || []
+      };
+    } catch (error) {
+      console.error('Error getting completed career goals:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        completedGoals: []
+      };
+    }
+  }
+
+  // This method already exists in your API service but make sure it's working
+  async getCareerStats(userId = null) {
+    try {
+      if (!userId) {
+        const user = this.getCurrentUser();
+        userId = user?.id;
+      }
+      
+      if (!userId) {
+        console.warn('No user ID available for career stats');
+        return { success: false, error: 'No user available', data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+      }
+      
+      console.log('📊 Fetching career stats for user:', userId);
+      return this.get(`/api/career/stats/${userId}`);
+    } catch (error) {
+      console.error('Error getting career stats:', error);
+      return { success: false, error: error.message, data: { activeGoals: 0, completedGoals: 0, avgProgress: 0 } };
+    }
+  }
+
+  // Progress update method
+  async updateCareerGoalProgress(goalId, progressData) {
+    try {
+      console.log('📈 Updating career goal progress:', goalId, progressData);
+      const result = await this.put(`/api/career/goals/${goalId}/progress`, progressData);
+      return result;
+    } catch (error) {
+      console.error('Error updating career goal progress:', error);
+      return { success: false, error: error.message };
+    }
+  }
+  // MISSING ORGANIZATIONAL CHANGE METHODS FOR API SERVICE
+// Add these methods to your frontend/src/services/apiService.js
+
+// ORGANIZATIONAL CHANGE ASSESSMENT METHODS (ADD THESE TO YOUR API SERVICE CLASS)
+
+  async getOrganizationalChangeAssessments(projectId = null) {
+    try {
+      console.log('🔄 Fetching organizational change assessments for project:', projectId);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') {
+        params.append('project_id', projectId);
+      }
+      
+      const url = `/api/organizational-change/assessments${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.get(url);
+      
+      return {
+        success: true,
+        assessments: result.assessments || result.data || []
+      };
+    } catch (error) {
+      console.error('Error getting organizational change assessments:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        assessments: [] 
+      };
+    }
+  }
+
+  async submitOrganizationalChangeAssessment(assessmentData) {
+    try {
+      console.log('🔄 Submitting organizational change assessment:', assessmentData);
+      const result = await this.post('/api/organizational-change/assessments', assessmentData);
+      return result;
+    } catch (error) {
+      console.error('Error submitting organizational change assessment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getOrganizationalChangeAnalytics(projectId = null) {
+    try {
+      console.log('📊 Fetching organizational change analytics for project:', projectId);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') {
+        params.append('project_id', projectId);
+      }
+      
+      const url = `/api/organizational-change/analytics${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.get(url);
+      
+      return {
+        success: true,
+        assessments: result.assessments || result.data || [],
+        analytics: result.analytics || {}
+      };
+    } catch (error) {
+      console.error('Error getting organizational change analytics:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        assessments: [],
+        analytics: {}
+      };
+    }
+  }
+
+  async getOrganizationalChangeAssessmentDetails(assessmentId) {
+    try {
+      console.log('🔄 Fetching organizational change assessment details:', assessmentId);
+      const result = await this.get(`/api/organizational-change/assessments/${assessmentId}`);
+      return result;
+    } catch (error) {
+      console.error('Error getting organizational change assessment details:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updateOrganizationalChangeAssessment(assessmentId, assessmentData) {
+    try {
+      console.log('🔄 Updating organizational change assessment:', assessmentId, assessmentData);
+      const result = await this.put(`/api/organizational-change/assessments/${assessmentId}`, assessmentData);
+      return result;
+    } catch (error) {
+      console.error('Error updating organizational change assessment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteOrganizationalChangeAssessment(assessmentId) {
+    try {
+      console.log('🔄 Deleting organizational change assessment:', assessmentId);
+      const result = await this.delete(`/api/organizational-change/assessments/${assessmentId}`);
+      return result;
+    } catch (error) {
+      console.error('Error deleting organizational change assessment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getOrganizationalChangeTeamMetrics(projectId = null) {
+    try {
+      console.log('📊 Fetching organizational change team metrics for project:', projectId);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') {
+        params.append('project_id', projectId);
+      }
+      
+      const url = `/api/organizational-change/team-metrics${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.get(url);
+      
+      return {
+        success: true,
+        metrics: result.metrics || result.data || {}
+      };
+    } catch (error) {
+      console.error('Error getting organizational change team metrics:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        metrics: {} 
+      };
+    }
+  }
+
+  // LEADERSHIP ASSESSMENT METHODS (if also missing)
+
+  // In your API service
+  async getLeadershipAssessments(projectIdOrParams = null) {
+    try {
+      let projectId = null;
+      
+      // Handle both formats: getLeadershipAssessments(projectId) or getLeadershipAssessments({project_id: projectId})
+      if (typeof projectIdOrParams === 'object' && projectIdOrParams !== null) {
+        projectId = projectIdOrParams.project_id;
+      } else {
+        projectId = projectIdOrParams;
+      }
+      
+      console.log('💪 Fetching leadership assessments for project:', projectId);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') {
+        params.append('project_id', projectId);
+      }
+      
+      const url = `/api/leadership/assessments${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.get(url);
+      
+      return {
+        success: true,
+        assessments: result.assessments || result.data || []
+      };
+    } catch (error) {
+      console.error('Error getting leadership assessments:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        assessments: [] 
+      };
+    }
+  }
+
+  async submitLeadershipAssessment(assessmentData) {
+    try {
+      console.log('💪 Submitting leadership assessment:', assessmentData);
+      const result = await this.post('/api/leadership/assessments', assessmentData);
+      return result;
+    } catch (error) {
+      console.error('Error submitting leadership assessment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getLeadershipAnalytics(projectId = null) {
+    try {
+      console.log('📊 Fetching leadership analytics for project:', projectId);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (projectId && projectId !== 'all') {
+        params.append('project_id', projectId);
+      }
+      
+      const url = `/api/leadership/analytics${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.get(url);
+      
+      return {
+        success: true,
+        assessments: result.assessments || result.data || [],
+        analytics: result.analytics || {}
+      };
+    } catch (error) {
+      console.error('Error getting leadership analytics:', error);
+      return { 
+        success: false, 
+        error: error.message, 
+        assessments: [],
+        analytics: {}
+      };
+    }
+  }
+
+  async getLeadershipAssessmentDetails(assessmentId) {
+    try {
+      console.log('💪 Fetching leadership assessment details:', assessmentId);
+      const result = await this.get(`/api/leadership/assessments/${assessmentId}`);
+      return result;
+    } catch (error) {
+      console.error('Error getting leadership assessment details:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async updateLeadershipAssessment(assessmentId, assessmentData) {
+    try {
+      console.log('💪 Updating leadership assessment:', assessmentId, assessmentData);
+      const result = await this.put(`/api/leadership/assessments/${assessmentId}`, assessmentData);
+      return result;
+    } catch (error) {
+      console.error('Error updating leadership assessment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async deleteLeadershipAssessment(assessmentId) {
+    try {
+      console.log('💪 Deleting leadership assessment:', assessmentId);
+      const result = await this.delete(`/api/leadership/assessments/${assessmentId}`);
+      return result;
+    } catch (error) {
+      console.error('Error deleting leadership assessment:', error);
+      return { success: false, error: error.message };
     }
   }
 }

@@ -134,119 +134,113 @@ class AIController {
     }
   }
 
-  async buildComprehensiveContext(user, projectId, message) {
+  async buildComprehensiveContext(userId, projectId, message) {
     const context = {
-      user: user,
-      projectId: projectId,
-      projects: [],
+      user: null,
+      project: null,
+      teamMembers: [],
       assessments: [],
-      goals: [],
-      team: [],
-      interactions: []
+      feedback: [],
+      goals: [] // Only project-related goals
     };
-
+  
     try {
-      // Get user's projects (recent and relevant)
-      const projectsQuery = `
-        SELECT p.*, 
-               COUNT(DISTINCT pt.user_id) as team_size,
-               COUNT(DISTINCT f.id) as feedback_count
-        FROM projects p
-        LEFT JOIN project_teams pt ON p.id = pt.project_id
-        LEFT JOIN feedback f ON p.id = f.project_id
-        WHERE p.user_id = $1 
-           OR pt.user_id = $1
-           OR p.name ILIKE $2 
-           OR p.description ILIKE $2
-        GROUP BY p.id
-        ORDER BY 
-          CASE WHEN p.id = $3 THEN 0 ELSE 1 END,
-          p.updated_at DESC
-        LIMIT 10
-      `;
-      const projectsResult = await this.dbPool.query(projectsQuery, [
-        user.id, 
-        `%${message}%`, 
-        projectId || 0
-      ]);
-      context.projects = projectsResult.rows;
-
-      // Get user's assessments
-      const assessmentsQuery = `
-        SELECT 'leadership_diamond' as type, 
-               ld.task_score, ld.team_score, ld.individual_score, ld.organization_score,
-               ld.responses, ld.created_at
-        FROM leadership_diamond_assessments ld
-        WHERE ld.user_id = $1
-        UNION ALL
-        SELECT 'value' as type,
-               va.vision_score as task_score, va.alignment_score as team_score, 
-               va.understanding_score as individual_score, va.enactment_score as organization_score,
-               va.responses, va.created_at
-        FROM value_assessments va
-        WHERE va.user_id = $1
-        ORDER BY created_at DESC
-        LIMIT 5
-      `;
-      const assessmentsResult = await this.dbPool.query(assessmentsQuery, [user.id]);
-      context.assessments = assessmentsResult.rows;
-
-      // Get career development goals
-      const goalsQuery = `
-        SELECT cg.*, 
-               COUNT(DISTINCT lr.id) as learning_resources_count,
-               COUNT(DISTINCT gph.id) as progress_history_count
-        FROM career_development_goals cg
-        LEFT JOIN learning_resources lr ON cg.id = lr.goal_id
-        LEFT JOIN goal_progress_history gph ON cg.id = gph.goal_id
-        WHERE cg.user_id = $1
-           OR cg.description ILIKE $2
-           OR cg.notes ILIKE $2
-        GROUP BY cg.id
-        ORDER BY 
-          CASE WHEN cg.status = 'active' THEN 0 ELSE 1 END,
-          cg.updated_at DESC
-        LIMIT 10
-      `;
-      const goalsResult = await this.dbPool.query(goalsQuery, [user.id, `%${message}%`]);
-      context.goals = goalsResult.rows;
-
-      // Get team information for context
-      const teamQuery = `
-        SELECT DISTINCT u.id, u.name, u.role, u.avatar,
-               COUNT(DISTINCT p.id) as shared_projects
-        FROM users u
-        JOIN project_teams pt ON u.id = pt.user_id
-        JOIN projects p ON pt.project_id = p.id
-        WHERE p.user_id = $1 OR pt.user_id = $1
-        AND u.id != $1
-        GROUP BY u.id, u.name, u.role, u.avatar
-        ORDER BY shared_projects DESC
-        LIMIT 10
-      `;
-      const teamResult = await this.dbPool.query(teamQuery, [user.id]);
-      context.team = teamResult.rows;
-
-      // Get recent relevant interactions for continuity
-      const interactionsQuery = `
-        SELECT query, response, context_data, created_at
-        FROM ai_interactions
-        WHERE user_id = $1
-          AND (query ILIKE $2 OR response ILIKE $2)
-        ORDER BY created_at DESC
-        LIMIT 3
-      `;
-      const interactionsResult = await this.dbPool.query(interactionsQuery, [
-        user.id, 
-        `%${message.split(' ').slice(0, 3).join(' ')}%`
-      ]);
-      context.interactions = interactionsResult.rows;
-
-    } catch (dbError) {
-      console.error('❌ Database context building error:', dbError.message);
-      // Continue with partial context rather than failing
+      // Get user info
+      if (userId) {
+        const userQuery = 'SELECT id, name, email, role FROM users WHERE id = $1';
+        const userResult = await db.query(userQuery, [userId]);
+        context.user = userResult.rows[0] || null;
+      }
+  
+      // Get SPECIFIC PROJECT ONLY (not all projects)
+      if (projectId && userId) {
+        console.log(`🎯 Building context for SPECIFIC PROJECT: ${projectId}`);
+        
+        const projectQuery = `
+          SELECT p.*, u.name as manager_name,
+                 pm.pm_progress, pm.leadership_progress, pm.change_mgmt_progress, pm.career_dev_progress
+          FROM projects p 
+          LEFT JOIN users u ON p.manager_id = u.id 
+          WHERE p.id = $1 AND (p.manager_id = $2 OR EXISTS(
+            SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = $2
+          ))
+        `;
+        const projectResult = await db.query(projectQuery, [projectId, userId]);
+        context.project = projectResult.rows[0] || null;
+  
+        if (!context.project) {
+          console.log(`⚠️ User ${userId} doesn't have access to project ${projectId}`);
+          return context;
+        }
+  
+        // Get TEAM MEMBERS for this specific project only
+        const teamQuery = `
+          SELECT u.id, u.name, u.email, u.role,
+                 ptm.role_in_project, ptm.joined_date
+          FROM project_team_members ptm
+          JOIN users u ON ptm.user_id = u.id
+          WHERE ptm.project_id = $1
+          ORDER BY u.name
+        `;
+        const teamResult = await db.query(teamQuery, [projectId]);
+        context.teamMembers = teamResult.rows || [];
+  
+        // Get ASSESSMENTS for this specific project only
+        const assessmentQueries = [
+          `SELECT 'leadership' as type, vision_score, reality_score, ethics_score, courage_score, created_at, u.name as user_name
+           FROM leadership_assessments la 
+           JOIN users u ON la.user_id = u.id
+           WHERE la.project_id = $1 ORDER BY la.created_at DESC LIMIT 10`,
+          `SELECT 'organizational_change' as type, vision_score, alignment_score, understanding_score, enactment_score, created_at, u.name as user_name
+           FROM organizational_change_assessments oca 
+           JOIN users u ON oca.user_id = u.id
+           WHERE oca.project_id = $1 ORDER BY oca.created_at DESC LIMIT 10`
+        ];
+  
+        for (const query of assessmentQueries) {
+          try {
+            const result = await db.query(query, [projectId]);
+            context.assessments = [...context.assessments, ...result.rows];
+          } catch (tableError) {
+            console.log(`⚠️ Assessment table not found: ${tableError.message}`);
+          }
+        }
+  
+        // Get FEEDBACK for this specific project only
+        const feedbackQuery = `
+          SELECT pf.*, u.name as user_name
+          FROM project_feedback pf
+          JOIN users u ON pf.user_id = u.id
+          WHERE pf.project_id = $1
+          ORDER BY pf.created_at DESC LIMIT 10
+        `;
+        const feedbackResult = await db.query(feedbackQuery, [projectId]);
+        context.feedback = feedbackResult.rows || [];
+  
+        // Get PROJECT-RELATED CAREER GOALS only (goals that mention this project or are relevant)
+        const goalsQuery = `
+          SELECT cdg.*
+          FROM career_development_goals cdg
+          WHERE cdg.user_id IN (SELECT user_id FROM project_team_members WHERE project_id = $1)
+          AND cdg.status = 'active'
+          ORDER BY cdg.priority DESC, cdg.created_at DESC LIMIT 5
+        `;
+        const goalsResult = await db.query(goalsQuery, [projectId]);
+        context.goals = goalsResult.rows || [];
+  
+        console.log(`✅ Project-scoped context built:`, {
+          project: context.project?.name,
+          teamMembers: context.teamMembers.length,
+          assessments: context.assessments.length,
+          feedback: context.feedback.length,
+          goals: context.goals.length
+        });
+      }
+  
+    } catch (error) {
+      console.log('⚠️ Context building error:', error.message);
     }
-
+  
     return context;
   }
 

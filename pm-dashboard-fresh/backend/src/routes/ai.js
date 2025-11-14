@@ -51,83 +51,79 @@ const aiAuth = async (req, res, next) => {
     let authToken = null;
     
     const authHeader = req.headers.authorization;
-    console.log('ðŸ” Auth header received:', authHeader ? 'Present' : 'Missing');
+    console.log('🔍 Auth header received:', authHeader ? 'Present' : 'Missing');
     
     if (authHeader && authHeader.startsWith('Bearer ')) {
       authToken = authHeader.substring(7); 
-      console.log('ðŸ” Token from Authorization header:', authToken?.length);
-    }
-    
-    if (!authToken && req.cookies && req.cookies.authToken) {
-      authToken = req.cookies.authToken;
-      console.log('ðŸ” Token from cookies:', authToken?.length);
-    }
-    
-    if (!authToken && req.query.token) {
-      authToken = req.query.token;
-      console.log('ðŸ” Token from query params:', authToken?.length);
+      console.log('🔍 Token from Authorization header:', authToken?.substring(0, 10) + '...');
     }
     
     if (!authToken) {
-      console.log('âŒ No authentication token found in any location');
+      console.log('❌ No authentication token found');
       return res.status(401).json({
         success: false,
         error: 'Authentication required - no token provided'
       });
     }
 
-    console.log('ðŸ” Final token to use:', authToken?.substring(0, 10) + '...');
+    console.log('🔍 Final token to process:', authToken?.substring(0, 15) + '...');
     
-    if (authToken.length < 1) {
-      console.log('âŒ Invalid token format');
+    // FIXED: Handle both "user_15" and "15" formats
+    let userId = null;
+    if (authToken.startsWith('user_')) {
+      userId = parseInt(authToken.substring(5)); // Remove 'user_' prefix
+      console.log('🔍 Extracted user ID from user_ token:', userId);
+    } else if (!isNaN(authToken)) {
+      userId = parseInt(authToken);
+      console.log('🔍 Using direct numeric token as user ID:', userId);
+    } else {
+      console.log('❌ Token is not a valid format:', authToken);
       return res.status(401).json({
         success: false,
         error: 'Invalid token format'
       });
     }
 
-    let userId = null;
-    if (!isNaN(authToken) && parseInt(authToken) > 0) {
-      userId = parseInt(authToken);
-      console.log('ðŸ” Parsed token as user ID:', userId);
-    } else {
-      console.log('âŒ Token is not a valid user ID:', authToken);
+    if (!userId || userId <= 0) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid token - must be a valid user ID'
+        error: 'Invalid user ID extracted from token'
       });
     }
 
     try {
       const { query } = require('../config/database');
-      console.log('ðŸ” Looking up user ID:', userId);
+      console.log('🔍 Looking up user ID:', userId);
       
       const result = await query('SELECT id, name, email, role FROM users WHERE id = $1', [userId]);
-      console.log('ðŸ” Database lookup result:', result.rows.length, 'rows');
       
-      if (result.rows.length > 0) {
-        req.user = result.rows[0];
-        console.log('âœ… User authenticated successfully:', req.user.name, 'ID:', req.user.id);
-        return next();
-      } else {
-        console.log('âŒ User not found in database for ID:', userId);
+      if (result.rows.length === 0) {
+        console.log('❌ User not found for ID:', userId);
         return res.status(401).json({
           success: false,
           error: 'User not found'
         });
       }
+      
+      const user = result.rows[0];
+      console.log('✅ AI auth success:', user.name, 'ID:', user.id);
+      
+      req.user = user;
+      next();
+      
     } catch (dbError) {
-      console.error('âŒ Database error during auth:', dbError.message);
+      console.error('❌ Database error during auth:', dbError);
       return res.status(500).json({
         success: false,
-        error: 'Authentication service error'
+        error: 'Authentication database error'
       });
     }
+
   } catch (error) {
-    console.error('âŒ Auth middleware error:', error.message);
+    console.error('❌ AI auth middleware error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Authentication error'
+      error: 'Authentication failed'
     });
   }
 };

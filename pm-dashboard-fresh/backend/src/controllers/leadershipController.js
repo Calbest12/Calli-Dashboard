@@ -8,6 +8,9 @@ const { query } = require('../config/database');
  * GET /api/leadership/assessments
  * Query params: project_id (optional), user_id (optional - Executive Leaders only)
  */
+/**
+ * Get leadership assessments - TEAM VISIBILITY for Team Members
+ */
 const getLeadershipAssessments = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -15,9 +18,6 @@ const getLeadershipAssessments = async (req, res) => {
     const { project_id, user_id } = req.query;
 
     console.log(`📊 Fetching leadership assessments for user ${userId}, role: ${userRole}`);
-
-    // Use provided user_id if user has permission, otherwise use authenticated user
-    const targetUserId = user_id && userRole === 'Executive Leader' ? user_id : userId;
 
     let assessmentsQuery = `
       SELECT 
@@ -30,14 +30,53 @@ const getLeadershipAssessments = async (req, res) => {
       FROM leadership_assessments la
       LEFT JOIN projects p ON la.project_id = p.id
       LEFT JOIN users u ON la.user_id = u.id
-      WHERE la.user_id = $1
+      WHERE 1=1
     `;
 
-    const queryParams = [targetUserId];
+    const queryParams = [];
+    let paramCount = 0;
 
+    // Apply project filtering first
     if (project_id && project_id !== 'all') {
-      assessmentsQuery += ` AND la.project_id = $${queryParams.length + 1}`;
-      queryParams.push(project_id);
+      paramCount++;
+      assessmentsQuery += ` AND la.project_id = $${paramCount}`;
+      queryParams.push(parseInt(project_id));
+    }
+
+    // FIXED: Role-based access control - Team Members can see TEAM data
+    if (userRole === 'Team Member') {
+      // Team members can see assessments for projects they're part of (team visibility)
+      paramCount++;
+      assessmentsQuery += ` AND la.project_id IN (
+        SELECT DISTINCT project_id 
+        FROM project_team_members 
+        WHERE user_id = $${paramCount}
+        UNION
+        SELECT DISTINCT id 
+        FROM projects 
+        WHERE manager_id = $${paramCount}
+      )`;
+      queryParams.push(userId);
+    } else if (userRole === 'Manager' || userRole === 'Project Manager') {
+      // Managers can see assessments for projects they manage + projects they're team members of
+      paramCount++;
+      assessmentsQuery += ` AND (
+        la.project_id IN (
+          SELECT DISTINCT id FROM projects WHERE manager_id = $${paramCount}
+        )
+        OR la.project_id IN (
+          SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $${paramCount}
+        )
+      )`;
+      queryParams.push(userId);
+    }
+    // Executive Leaders can see all assessments (no additional filter)
+
+    // Handle specific user filtering (only for executives/managers)
+    if (user_id && (userRole === 'Executive Leader' || userRole === 'Manager')) {
+      paramCount++;
+      assessmentsQuery += ` AND la.user_id = $${paramCount}`;
+      queryParams.push(parseInt(user_id));
     }
 
     assessmentsQuery += ` ORDER BY la.created_at DESC`;
@@ -51,11 +90,12 @@ const getLeadershipAssessments = async (req, res) => {
         : assessment.responses
     }));
 
-    console.log(`✅ Found ${assessments.length} leadership assessments`);
+    console.log(`✅ Found ${assessments.length} leadership assessments (team visibility: ${userRole})`);
 
     res.json({
       success: true,
-      assessments
+      assessments: assessments,
+      message: `Found ${assessments.length} leadership assessments`
     });
 
   } catch (error) {
