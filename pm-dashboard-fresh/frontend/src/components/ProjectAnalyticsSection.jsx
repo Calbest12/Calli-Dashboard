@@ -120,9 +120,9 @@ const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUse
   );
 
   const progressData = [
-    { key: 'PM', label: 'Project Management', value: analytics.pm_progress, color: '#3b82f6' },
+    { key: 'PM', label: 'Traditional Project Management', value: analytics.pm_progress, color: '#3b82f6' },
     { key: 'Leadership', label: 'Leadership', value: analytics.leadership_progress, color: '#10b981' },
-    { key: 'ChangeMgmt', label: 'Change Management', value: analytics.change_mgmt_progress, color: '#8b5cf6' },
+    { key: 'ChangeMgmt', label: 'Organizational Change Management', value: analytics.change_mgmt_progress, color: '#8b5cf6' },
     { key: 'CareerDev', label: 'Career Development', value: analytics.career_dev_progress, color: '#f59e0b' }
   ];
 

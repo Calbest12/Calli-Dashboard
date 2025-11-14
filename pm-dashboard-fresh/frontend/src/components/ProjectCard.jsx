@@ -254,7 +254,7 @@ const ProjectCard = ({ project, onEdit, onDelete, onView }) => {
                 {getProjectStakeholder()}
               </p>
               <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                Stakeholder
+                Who is this for?
               </p>
             </div>
           </div>

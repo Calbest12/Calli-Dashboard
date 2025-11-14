@@ -455,7 +455,7 @@ Examples of GOOD enhanced insights:
     
     // Find the lowest scoring area for targeted improvement
     const scores = [
-      { area: 'PM', score: pmProgress, label: 'project management' },
+      { area: 'PM', score: pmProgress, label: 'traditional project management' },
       { area: 'Leadership', score: leadershipProgress, label: 'leadership' },
       { area: 'ChangeMgmt', score: changeMgmtProgress, label: 'change management' },
       { area: 'CareerDev', score: careerDevProgress, label: 'career development' }
@@ -652,14 +652,14 @@ Examples of GOOD enhanced insights:
           padding: '1.5rem'
         }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', marginBottom: '0.5rem' }}>
-            Project Metrics
+            Enhanced Project Metrics
           </h3>
           <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1.5rem' }}>
             Track both project completion and team feedback across different areas
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {[
-              { key: 'PM', label: 'Project Management (Actual Progress)', color: '#3b82f6', icon: Target, isMainProgress: true },
+              { key: 'PM', label: 'Traditional Project Management (Actual Progress)', color: '#3b82f6', icon: Target, isMainProgress: true },
               { key: 'Leadership', label: 'Leadership (Team Feedback)', color: '#10b981', icon: Award, isMainProgress: false },
               { key: 'ChangeMgmt', label: 'Organizational Change Management (Team Feedback)', color: '#8b5cf6', icon: Activity, isMainProgress: false },
               { key: 'CareerDev', label: 'Career Development (Team Feedback)', color: '#f59e0b', icon: TrendingUp, isMainProgress: false }
