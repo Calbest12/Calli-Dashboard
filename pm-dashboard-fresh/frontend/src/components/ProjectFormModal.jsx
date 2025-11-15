@@ -313,7 +313,7 @@ const ProjectFormModal = ({ isOpen, onClose, onSubmit, project }) => {
               color: '#374151',
               marginBottom: '0.5rem'
             }}>
-              Who the project is for (Stakeholder) *
+              Who the project is for?
             </label>
             <input
               type="text"

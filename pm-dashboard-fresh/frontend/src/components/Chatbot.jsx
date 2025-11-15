@@ -130,12 +130,12 @@ const Chatbot = ({ currentUser = null, currentProject = null }) => {
       
       const isCareerGoalsRequest = (
         messageText.includes('career goal') ||
-        messageText.includes('career development') ||
-        messageText.includes('career progress') ||
-        messageText.includes('goals') ||
+        (messageText.includes('career development') && !messageText.includes('team')) ||
+        (messageText.includes('career progress') && !messageText.includes('assessment')) ||
+        (messageText.includes('goals') && !messageText.includes('leadership') && !messageText.includes('team')) ||
         messageText.includes('skill development') ||
-        messageText.includes('professional development') ||
-        (messageText.includes('career') && (messageText.includes('track') || messageText.includes('plan')))
+        (messageText.includes('professional development') && !messageText.includes('leadership')) ||
+        (messageText.includes('career') && (messageText.includes('track') || messageText.includes('plan')) && !messageText.includes('assessment'))
       );
       
       const isProjectInsightRequest = currentProject && (
@@ -149,10 +149,47 @@ const Chatbot = ({ currentUser = null, currentProject = null }) => {
         (messageText.includes('project') && (messageText.includes('doing') || messageText.includes('going')))
       );
 
+      // NEW: Check for specific project name in the message
+      const isSpecificProjectRequest = (
+        messageText.includes('analyze') ||
+        messageText.includes('insight') ||
+        messageText.includes('summary') ||
+        messageText.includes('progress') ||
+        messageText.includes('status')
+      ) && messageText.includes('project');
+
+      // NEW: Check for team-wide assessment analysis requests
+      const isTeamAssessmentRequest = (
+        // Combined assessment requests (both leadership and change management)
+        (messageText.includes('team') && messageText.includes('assessment') && 
+         (messageText.includes('both') || messageText.includes('all') || 
+          (!messageText.includes('leadership') && !messageText.includes('change')))) ||
+        (messageText.includes('overall') && messageText.includes('assessment')) ||
+        (messageText.includes('how is the team') || messageText.includes('team performance') || messageText.includes('team progress'))
+      );
+
+      // NEW: Leadership-only assessment requests
+      const isLeadershipOnlyRequest = (
+        (messageText.includes('leadership') && messageText.includes('assessment')) ||
+        (messageText.includes('my leadership') && messageText.includes('assessment')) ||
+        (messageText.includes('tell me about') && messageText.includes('leadership') && !messageText.includes('change')) ||
+        (messageText.includes('show me') && messageText.includes('leadership') && !messageText.includes('change')) ||
+        messageText.includes('team leadership') ||
+        (messageText.includes('leadership') && messageText.includes('progress') && !messageText.includes('change'))
+      );
+
+      // NEW: Change management-only assessment requests  
+      const isChangeManagementOnlyRequest = (
+        (messageText.includes('change management') && messageText.includes('assessment')) ||
+        (messageText.includes('organizational change') && messageText.includes('assessment')) ||
+        (messageText.includes('tell me about') && messageText.includes('change') && !messageText.includes('leadership')) ||
+        (messageText.includes('show me') && messageText.includes('change') && !messageText.includes('leadership'))
+      );
+
       let response;
       
       if (isAllProjectsRequest) {
-        const projectsResponse = await aiService.getAllProjects();
+        const projectsResponse = await apiService.getAllProjects();
         if (projectsResponse.success && projectsResponse.data) {
           const projects = projectsResponse.data;
           let projectSummary = `You currently have ${projects.length} project(s):\n\n`;
@@ -244,6 +281,948 @@ const Chatbot = ({ currentUser = null, currentProject = null }) => {
             tokensUsed: 0
           };
           setMessages([...newMessages, aiMessage]);
+        }
+      } else if (isLeadershipOnlyRequest) {
+        // NEW: Handle leadership-only assessment analysis with actionable insights
+        try {
+          console.log('👑 Fetching leadership-only assessment analysis...');
+          
+          const [teamLeadershipData, allProjectsData] = await Promise.all([
+            apiService.getLeadershipAssessments(), // All team leadership assessments
+            apiService.getAllProjects() // All projects for context
+          ]);
+
+          console.log('📊 Leadership data fetched:', {
+            leadership: teamLeadershipData.success,
+            projects: allProjectsData.success
+          });
+
+          if (!teamLeadershipData.success || !teamLeadershipData.assessments || teamLeadershipData.assessments.length === 0) {
+            const aiMessage = {
+              id: Date.now() + 1,
+              sender: 'ai',
+              text: "No leadership assessments have been completed yet. I recommend starting with leadership assessments across your active projects to establish baseline metrics and identify development opportunities.",
+              timestamp: new Date(),
+              model: 'leadership-guidance',
+              tokensUsed: 0
+            };
+            setMessages([...newMessages, aiMessage]);
+            return;
+          }
+
+          const assessments = teamLeadershipData.assessments;
+          let analysisText = `**Leadership Assessment Analysis**\n\n`;
+
+          // Calculate comprehensive leadership metrics
+          const leadershipFields = ['vision_score', 'reality_score', 'ethics_score', 'courage_score'];
+          const projectGroups = {};
+          const totals = { vision_score: 0, reality_score: 0, ethics_score: 0, courage_score: 0 };
+          let totalCount = 0;
+          let recentAssessments = [];
+
+          // Group assessments by project and calculate totals
+          assessments.forEach(assessment => {
+            if (assessment) {
+              const projectId = assessment.project_id || 'general';
+              if (!projectGroups[projectId]) {
+                projectGroups[projectId] = [];
+              }
+              projectGroups[projectId].push(assessment);
+
+              leadershipFields.forEach(field => {
+                const score = parseFloat(assessment[field] || 0);
+                if (score > 0) {
+                  totals[field] += score;
+                }
+              });
+              totalCount++;
+
+              // Track recent assessments (last 30 days)
+              const assessmentDate = new Date(assessment.created_at);
+              const thirtyDaysAgo = new Date();
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              if (assessmentDate > thirtyDaysAgo) {
+                recentAssessments.push(assessment);
+              }
+            }
+          });
+
+          // Calculate averages
+          const averages = {};
+          leadershipFields.forEach(field => {
+            averages[field] = totalCount > 0 ? totals[field] / totalCount : 0;
+          });
+          const overallAverage = Object.values(averages).reduce((sum, val) => sum + val, 0) / leadershipFields.length;
+
+          // Overall Leadership Summary
+          analysisText += `**Leadership Performance Overview:**\n`;
+          analysisText += `• Total Leadership Assessments: ${totalCount}\n`;
+          analysisText += `• Recent Activity: ${recentAssessments.length} assessment${recentAssessments.length !== 1 ? 's' : ''} in last 30 days\n`;
+          analysisText += `• **Overall Leadership Score: ${overallAverage.toFixed(1)}/7**\n\n`;
+
+          // Detailed dimension analysis
+          analysisText += `**Leadership Dimension Breakdown:**\n`;
+          analysisText += `• Vision: ${averages.vision_score.toFixed(1)}/7\n`;
+          analysisText += `• Reality: ${averages.reality_score.toFixed(1)}/7\n`;
+          analysisText += `• Ethics: ${averages.ethics_score.toFixed(1)}/7\n`;
+          analysisText += `• Courage: ${averages.courage_score.toFixed(1)}/7\n\n`;
+
+          // Identify strengths and development areas
+          const dimensionAnalysis = [
+            { name: 'Vision', score: averages.vision_score, description: 'creating compelling direction' },
+            { name: 'Reality', score: averages.reality_score, description: 'data-driven decision making' },
+            { name: 'Ethics', score: averages.ethics_score, description: 'integrity and fairness' },
+            { name: 'Courage', score: averages.courage_score, description: 'difficult decisions and risk-taking' }
+          ].sort((a, b) => b.score - a.score);
+
+          analysisText += `**Leadership Strengths & Development Areas:**\n`;
+          analysisText += `🏆 **Strongest Area:** ${dimensionAnalysis[0].name} (${dimensionAnalysis[0].score.toFixed(1)}/7) - ${dimensionAnalysis[0].description}\n`;
+          analysisText += `📈 **Primary Development Focus:** ${dimensionAnalysis[3].name} (${dimensionAnalysis[3].score.toFixed(1)}/7) - ${dimensionAnalysis[3].description}\n\n`;
+
+          // Initialize projectScores array in broader scope
+          let projectScores = [];
+
+          // Project-specific analysis with actionable insights
+          if (allProjectsData.success && allProjectsData.data) {
+            const projects = allProjectsData.data;
+            analysisText += `**Project Leadership Analysis:**\n`;
+
+            projects.forEach(project => {
+              const projectAssessments = projectGroups[project.id] || [];
+              if (projectAssessments.length > 0) {
+                // Calculate project average
+                const projectTotals = { vision_score: 0, reality_score: 0, ethics_score: 0, courage_score: 0 };
+                projectAssessments.forEach(assessment => {
+                  leadershipFields.forEach(field => {
+                    projectTotals[field] += parseFloat(assessment[field] || 0);
+                  });
+                });
+
+                const projectAvg = Object.values(projectTotals).reduce((sum, val) => sum + val, 0) / (leadershipFields.length * projectAssessments.length);
+                projectScores.push({
+                  name: project.name,
+                  score: projectAvg,
+                  assessmentCount: projectAssessments.length,
+                  status: project.status,
+                  priority: project.priority
+                });
+              }
+            });
+
+            // Sort projects by leadership score
+            projectScores.sort((a, b) => b.score - a.score);
+
+            if (projectScores.length > 0) {
+              analysisText += `*Projects Ranked by Leadership Performance:*\n`;
+              projectScores.forEach((project, index) => {
+                const indicator = index === 0 ? '🟢' : 
+                                index === projectScores.length - 1 && projectScores.length > 1 ? '🔴' : '🟡';
+                analysisText += `${indicator} ${project.name}: ${project.score.toFixed(1)}/7 (${project.assessmentCount} assessment${project.assessmentCount !== 1 ? 's' : ''})\n`;
+              });
+              analysisText += `\n`;
+
+              // Identify projects needing attention
+              const needsAttention = projectScores.filter(p => p.score < overallAverage - 0.3);
+              const highPriorityNeeds = needsAttention.filter(p => p.priority === 'high' || p.status === 'at_risk');
+
+              if (highPriorityNeeds.length > 0) {
+                analysisText += `🚨 **High Priority Leadership Focus:** ${highPriorityNeeds[0].name} (Score: ${highPriorityNeeds[0].score.toFixed(1)}/7)\n`;
+              } else if (needsAttention.length > 0) {
+                analysisText += `⚠️ **Leadership Attention Needed:** ${needsAttention[0].name} (Score: ${needsAttention[0].score.toFixed(1)}/7)\n`;
+              }
+            }
+
+            // Find projects missing leadership assessments
+            const projectsWithoutAssessments = projects.filter(p => !projectGroups[p.id] || projectGroups[p.id].length === 0);
+            if (projectsWithoutAssessments.length > 0) {
+              analysisText += `📋 **Missing Leadership Assessments:** ${projectsWithoutAssessments.map(p => p.name).join(', ')}\n`;
+            }
+            analysisText += `\n`;
+          }
+
+          // Actionable recommendations based on data
+          analysisText += `**Strategic Leadership Recommendations:**\n`;
+
+          // Overall performance recommendations
+          if (overallAverage >= 6) {
+            analysisText += `• **Excellence Maintenance**: Your leadership scores are excellent! Focus on mentoring others and sharing best practices\n`;
+          } else if (overallAverage >= 5) {
+            analysisText += `• **Refinement Focus**: Strong leadership foundation. Target specific dimensions for breakthrough performance\n`;
+          } else if (overallAverage >= 4) {
+            analysisText += `• **Development Priority**: Systematic leadership development needed to reach high-performance levels\n`;
+          } else {
+            analysisText += `• **Urgent Development**: Consider comprehensive leadership coaching or training programs\n`;
+          }
+
+          // Specific dimension recommendations
+          if (averages.vision_score < 4) {
+            analysisText += `• **Vision Development**: Work on articulating clearer, more compelling project visions and strategic direction\n`;
+          }
+          if (averages.reality_score < 4) {
+            analysisText += `• **Data-Driven Leadership**: Strengthen analytical skills and evidence-based decision making\n`;
+          }
+          if (averages.ethics_score < 4) {
+            analysisText += `• **Integrity Focus**: Emphasize transparent communication and consistent ethical decision-making\n`;
+          }
+          if (averages.courage_score < 4) {
+            analysisText += `• **Courage Building**: Practice making difficult decisions and taking calculated risks\n`;
+          }
+
+          // Project-specific recommendations
+          if (projectScores.length > 0) {
+            const lowestProject = projectScores[projectScores.length - 1];
+            if (lowestProject.score < overallAverage - 0.5) {
+              analysisText += `• **Project Focus**: "${lowestProject.name}" needs immediate leadership attention - consider additional support or resources\n`;
+            }
+
+            const gapBetweenBestWorst = projectScores[0].score - projectScores[projectScores.length - 1].score;
+            if (gapBetweenBestWorst > 1.5) {
+              analysisText += `• **Consistency Improvement**: Large performance gap between projects - standardize leadership approaches\n`;
+            }
+          }
+
+          // Recent activity insights
+          if (recentAssessments.length === 0) {
+            analysisText += `• **Assessment Frequency**: No recent assessments completed - schedule regular leadership evaluations\n`;
+          } else if (recentAssessments.length < totalCount * 0.3) {
+            analysisText += `• **Assessment Cadence**: Consider more frequent leadership assessments to track progress\n`;
+          }
+
+          const aiMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: analysisText,
+            timestamp: new Date(),
+            model: 'leadership-insights',
+            tokensUsed: 0
+          };
+          setMessages([...newMessages, aiMessage]);
+
+        } catch (error) {
+          console.error('Error in leadership assessment analysis:', error);
+          const errorMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: `I had trouble analyzing leadership assessment data: ${error.message}. Please try again.`,
+            timestamp: new Date(),
+            isError: true
+          };
+          setMessages([...newMessages, errorMessage]);
+        }
+      } else if (isChangeManagementOnlyRequest) {
+        // NEW: Handle change management-only assessment analysis with actionable insights
+        try {
+          console.log('🔄 Fetching organizational change management-only assessment analysis...');
+          
+          const [teamOrgChangeData, allProjectsData] = await Promise.all([
+            apiService.getOrganizationalChangeAssessments(), // All team org change assessments
+            apiService.getAllProjects() // All projects for context
+          ]);
+
+          console.log('📊 Organizational change management data fetched:', {
+            orgChange: teamOrgChangeData.success,
+            projects: allProjectsData.success
+          });
+
+          if (!teamOrgChangeData.success || !teamOrgChangeData.assessments || teamOrgChangeData.assessments.length === 0) {
+            const aiMessage = {
+              id: Date.now() + 1,
+              sender: 'ai',
+              text: "No organizational change management assessments have been completed yet. I recommend conducting organizational change readiness assessments to understand how well your team adapts to organizational changes and manages transformation initiatives.",
+              timestamp: new Date(),
+              model: 'organizational-change-management-guidance',
+              tokensUsed: 0
+            };
+            setMessages([...newMessages, aiMessage]);
+            return;
+          }
+
+          const assessments = teamOrgChangeData.assessments;
+          let analysisText = `**Organizational Change Management Assessment Analysis**\n\n`;
+
+          // Calculate comprehensive organizational change management metrics
+          const changeFields = ['vision_score', 'alignment_score', 'understanding_score', 'enactment_score'];
+          const projectGroups = {};
+          const totals = { vision_score: 0, alignment_score: 0, understanding_score: 0, enactment_score: 0 };
+          let totalCount = 0;
+          let recentAssessments = [];
+
+          // Group assessments by project and calculate totals
+          assessments.forEach(assessment => {
+            if (assessment) {
+              const projectId = assessment.project_id || 'general';
+              if (!projectGroups[projectId]) {
+                projectGroups[projectId] = [];
+              }
+              projectGroups[projectId].push(assessment);
+
+              changeFields.forEach(field => {
+                const score = parseFloat(assessment[field] || 0);
+                if (score > 0) {
+                  totals[field] += score;
+                }
+              });
+              totalCount++;
+
+              // Track recent assessments (last 30 days)
+              const assessmentDate = new Date(assessment.created_at);
+              const thirtyDaysAgo = new Date();
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              if (assessmentDate > thirtyDaysAgo) {
+                recentAssessments.push(assessment);
+              }
+            }
+          });
+
+          // Calculate averages
+          const averages = {};
+          changeFields.forEach(field => {
+            averages[field] = totalCount > 0 ? totals[field] / totalCount : 0;
+          });
+          const overallAverage = Object.values(averages).reduce((sum, val) => sum + val, 0) / changeFields.length;
+
+          // Overall Organizational Change Management Summary
+          analysisText += `**Organizational Change Management Performance Overview:**\n`;
+          analysisText += `• Total Organizational Change Assessments: ${totalCount}\n`;
+          analysisText += `• Recent Activity: ${recentAssessments.length} assessment${recentAssessments.length !== 1 ? 's' : ''} in last 30 days\n`;
+          analysisText += `• **Overall Organizational Change Readiness Score: ${overallAverage.toFixed(1)}/7**\n\n`;
+
+          // Detailed dimension analysis
+          analysisText += `**Organizational Change Management Dimension Breakdown:**\n`;
+          analysisText += `• Vision: ${averages.vision_score.toFixed(1)}/7\n`;
+          analysisText += `• Alignment: ${averages.alignment_score.toFixed(1)}/7\n`;
+          analysisText += `• Understanding: ${averages.understanding_score.toFixed(1)}/7\n`;
+          analysisText += `• Enactment: ${averages.enactment_score.toFixed(1)}/7\n\n`;
+
+          // Identify strengths and development areas
+          const dimensionAnalysis = [
+            { name: 'Vision', score: averages.vision_score, description: 'inspiring organizational change direction' },
+            { name: 'Alignment', score: averages.alignment_score, description: 'organizational support systems' },
+            { name: 'Understanding', score: averages.understanding_score, description: 'stakeholder perspectives and resistance' },
+            { name: 'Enactment', score: averages.enactment_score, description: 'translating vision into action' }
+          ].sort((a, b) => b.score - a.score);
+
+          analysisText += `**Organizational Change Management Strengths & Development Areas:**\n`;
+          analysisText += `🏆 **Strongest Area:** ${dimensionAnalysis[0].name} (${dimensionAnalysis[0].score.toFixed(1)}/7) - ${dimensionAnalysis[0].description}\n`;
+          analysisText += `📈 **Primary Development Focus:** ${dimensionAnalysis[3].name} (${dimensionAnalysis[3].score.toFixed(1)}/7) - ${dimensionAnalysis[3].description}\n\n`;
+
+          // Initialize projectScores array in broader scope
+          let projectScores = [];
+
+          // Project-specific analysis with actionable insights
+          if (allProjectsData.success && allProjectsData.data) {
+            const projects = allProjectsData.data;
+            analysisText += `**Project Organizational Change Management Analysis:**\n`;
+
+            projects.forEach(project => {
+              const projectAssessments = projectGroups[project.id] || [];
+              if (projectAssessments.length > 0) {
+                // Calculate project average
+                const projectTotals = { vision_score: 0, alignment_score: 0, understanding_score: 0, enactment_score: 0 };
+                projectAssessments.forEach(assessment => {
+                  changeFields.forEach(field => {
+                    projectTotals[field] += parseFloat(assessment[field] || 0);
+                  });
+                });
+
+                const projectAvg = Object.values(projectTotals).reduce((sum, val) => sum + val, 0) / (changeFields.length * projectAssessments.length);
+                projectScores.push({
+                  name: project.name,
+                  score: projectAvg,
+                  assessmentCount: projectAssessments.length,
+                  status: project.status,
+                  priority: project.priority
+                });
+              }
+            });
+
+            // Sort projects by organizational change management score
+            projectScores.sort((a, b) => b.score - a.score);
+
+            if (projectScores.length > 0) {
+              analysisText += `*Projects Ranked by Organizational Change Management Performance:*\n`;
+              projectScores.forEach((project, index) => {
+                const indicator = index === 0 ? '🟢' : 
+                                index === projectScores.length - 1 && projectScores.length > 1 ? '🔴' : '🟡';
+                analysisText += `${indicator} ${project.name}: ${project.score.toFixed(1)}/7 (${project.assessmentCount} assessment${project.assessmentCount !== 1 ? 's' : ''})\n`;
+              });
+              analysisText += `\n`;
+
+              // Identify projects needing attention
+              const needsAttention = projectScores.filter(p => p.score < overallAverage - 0.3);
+              const highPriorityNeeds = needsAttention.filter(p => p.priority === 'high' || p.status === 'at_risk');
+
+              if (highPriorityNeeds.length > 0) {
+                analysisText += `🚨 **High Priority Organizational Change Focus:** ${highPriorityNeeds[0].name} (Score: ${highPriorityNeeds[0].score.toFixed(1)}/7)\n`;
+              } else if (needsAttention.length > 0) {
+                analysisText += `⚠️ **Organizational Change Management Attention Needed:** ${needsAttention[0].name} (Score: ${needsAttention[0].score.toFixed(1)}/7)\n`;
+              }
+            }
+
+            // Find projects missing organizational change management assessments
+            const projectsWithoutAssessments = projects.filter(p => !projectGroups[p.id] || projectGroups[p.id].length === 0);
+            if (projectsWithoutAssessments.length > 0) {
+              analysisText += `📋 **Missing Organizational Change Management Assessments:** ${projectsWithoutAssessments.map(p => p.name).join(', ')}\n`;
+            }
+            analysisText += `\n`;
+          }
+
+          // Actionable recommendations based on data
+          analysisText += `**Strategic Organizational Change Management Recommendations:**\n`;
+
+          // Overall performance recommendations
+          if (overallAverage >= 6) {
+            analysisText += `• **Organizational Change Excellence**: Outstanding organizational change management capabilities! Consider leading organizational transformation initiatives\n`;
+          } else if (overallAverage >= 5) {
+            analysisText += `• **Organizational Change Maturity**: Strong organizational change management foundation. Focus on advanced organizational change leadership techniques\n`;
+          } else if (overallAverage >= 4) {
+            analysisText += `• **Organizational Change Development**: Systematic improvement needed in organizational change management practices\n`;
+          } else {
+            analysisText += `• **Organizational Change Management Priority**: Consider comprehensive organizational change management training and support\n`;
+          }
+
+          // Specific dimension recommendations
+          if (averages.vision_score < 4) {
+            analysisText += `• **Vision Development**: Strengthen ability to create and communicate compelling organizational change visions\n`;
+          }
+          if (averages.alignment_score < 4) {
+            analysisText += `• **System Alignment**: Improve organizational structures and processes to support organizational change initiatives\n`;
+          }
+          if (averages.understanding_score < 4) {
+            analysisText += `• **Stakeholder Focus**: Develop deeper understanding of resistance patterns and stakeholder concerns in organizational change\n`;
+          }
+          if (averages.enactment_score < 4) {
+            analysisText += `• **Execution Excellence**: Strengthen ability to translate organizational change vision into concrete actions and results\n`;
+          }
+
+          // Project-specific recommendations
+          if (projectScores.length > 0) {
+            const lowestProject = projectScores[projectScores.length - 1];
+            if (lowestProject.score < overallAverage - 0.5) {
+              analysisText += `• **Project Focus**: "${lowestProject.name}" needs immediate organizational change management support - consider change champions or additional resources\n`;
+            }
+
+            const gapBetweenBestWorst = projectScores[0].score - projectScores[projectScores.length - 1].score;
+            if (gapBetweenBestWorst > 1.5) {
+              analysisText += `• **Organizational Change Consistency**: Large performance gap between projects - standardize organizational change management approaches\n`;
+            }
+          }
+
+          // Recent activity insights
+          if (recentAssessments.length === 0) {
+            analysisText += `• **Assessment Frequency**: No recent organizational change assessments completed - schedule regular organizational change readiness evaluations\n`;
+          } else if (recentAssessments.length < totalCount * 0.3) {
+            analysisText += `• **Assessment Cadence**: Consider more frequent organizational change management assessments to monitor progress\n`;
+          }
+
+          // Organizational change-specific insights
+          if (averages.vision_score > averages.enactment_score + 1) {
+            analysisText += `• **Vision-Execution Gap**: Strong organizational change vision but weak execution - focus on implementation planning and follow-through\n`;
+          }
+          if (averages.understanding_score > averages.alignment_score + 1) {
+            analysisText += `• **Understanding-Support Gap**: Good stakeholder insight but poor system support - align organizational processes with change needs\n`;
+          }
+
+          const aiMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: analysisText,
+            timestamp: new Date(),
+            model: 'organizational-change-management-insights',
+            tokensUsed: 0
+          };
+          setMessages([...newMessages, aiMessage]);
+
+        } catch (error) {
+          console.error('Error in organizational change management assessment analysis:', error);
+          const errorMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: `I had trouble analyzing organizational change management assessment data: ${error.message}. Please try again.`,
+            timestamp: new Date(),
+            isError: true
+          };
+          setMessages([...newMessages, errorMessage]);
+        }
+      } else if (isTeamAssessmentRequest) {
+        // NEW: Handle team-wide assessment analysis
+        try {
+          console.log('👥 Fetching team-wide assessment analysis...');
+          
+          const [teamLeadershipData, teamOrgChangeData, allProjectsData] = await Promise.all([
+            apiService.getLeadershipAssessments(), // All team leadership assessments
+            apiService.getOrganizationalChangeAssessments(), // All team org change assessments
+            apiService.getAllProjects() // All projects for context
+          ]);
+
+          console.log('📊 Team-wide data fetched:', {
+            leadership: teamLeadershipData.success,
+            orgChange: teamOrgChangeData.success,
+            projects: allProjectsData.success
+          });
+
+          let analysisText = `**Team-Wide Assessment Analysis**\n\n`;
+          
+          // Helper function to calculate comprehensive team metrics
+          const calculateTeamMetrics = (assessments, scoreFields, assessmentType) => {
+            if (!assessments || assessments.length === 0) {
+              return { hasData: false };
+            }
+
+            // Group by project for project-level analysis
+            const projectGroups = {};
+            const totals = scoreFields.reduce((acc, field) => ({ ...acc, [field]: 0 }), {});
+            let totalCount = 0;
+
+            assessments.forEach(assessment => {
+              if (assessment) {
+                const projectId = assessment.project_id || 'general';
+                if (!projectGroups[projectId]) {
+                  projectGroups[projectId] = [];
+                }
+                projectGroups[projectId].push(assessment);
+
+                scoreFields.forEach(field => {
+                  const score = parseFloat(assessment[field] || 0);
+                  if (score > 0) {
+                    totals[field] += score;
+                  }
+                });
+                totalCount++;
+              }
+            });
+
+            const averages = {};
+            scoreFields.forEach(field => {
+              averages[field] = totalCount > 0 ? totals[field] / totalCount : 0;
+            });
+
+            const overallAverage = Object.values(averages).reduce((sum, val) => sum + val, 0) / scoreFields.length;
+
+            return {
+              hasData: true,
+              averages,
+              overallAverage,
+              totalAssessments: totalCount,
+              projectGroups,
+              assessmentType
+            };
+          };
+
+          // Analyze leadership assessments
+          const leadershipFields = ['vision_score', 'reality_score', 'ethics_score', 'courage_score'];
+          const leadershipMetrics = calculateTeamMetrics(
+            teamLeadershipData.success ? teamLeadershipData.assessments : [],
+            leadershipFields,
+            'Leadership'
+          );
+
+          // Analyze organizational change assessments
+          const orgChangeFields = ['vision_score', 'alignment_score', 'understanding_score', 'enactment_score'];
+          const orgChangeMetrics = calculateTeamMetrics(
+            teamOrgChangeData.success ? teamOrgChangeData.assessments : [],
+            orgChangeFields,
+            'Organizational Change'
+          );
+
+          // Leadership Analysis Section
+          analysisText += `**Team Leadership Assessment Overview:**\n`;
+          if (leadershipMetrics.hasData) {
+            analysisText += `• Total Leadership Assessments: ${leadershipMetrics.totalAssessments}\n`;
+            analysisText += `• Vision (Leadership): ${leadershipMetrics.averages.vision_score.toFixed(1)}/7\n`;
+            analysisText += `• Reality: ${leadershipMetrics.averages.reality_score.toFixed(1)}/7\n`;
+            analysisText += `• Ethics: ${leadershipMetrics.averages.ethics_score.toFixed(1)}/7\n`;
+            analysisText += `• Courage: ${leadershipMetrics.averages.courage_score.toFixed(1)}/7\n`;
+            analysisText += `• **Team Leadership Average: ${leadershipMetrics.overallAverage.toFixed(1)}/7**\n\n`;
+
+            // Find strongest and weakest leadership areas
+            const leadScores = leadershipMetrics.averages;
+            const leadEntries = Object.entries(leadScores).map(([key, value]) => ({ 
+              area: key.replace('_score', '').charAt(0).toUpperCase() + key.replace('_score', '').slice(1), 
+              score: value 
+            }));
+            leadEntries.sort((a, b) => b.score - a.score);
+            
+            analysisText += `*Leadership Strengths:* ${leadEntries[0].area} (${leadEntries[0].score.toFixed(1)}/7)\n`;
+            analysisText += `*Growth Area:* ${leadEntries[leadEntries.length - 1].area} (${leadEntries[leadEntries.length - 1].score.toFixed(1)}/7)\n\n`;
+          } else {
+            analysisText += `• No leadership assessments completed yet\n\n`;
+          }
+
+          // Organizational Change Analysis Section
+          analysisText += `**Team Change Management Assessment Overview:**\n`;
+          if (orgChangeMetrics.hasData) {
+            analysisText += `• Total Change Assessments: ${orgChangeMetrics.totalAssessments}\n`;
+            analysisText += `• Vision (Change): ${orgChangeMetrics.averages.vision_score.toFixed(1)}/7\n`;
+            analysisText += `• Alignment: ${orgChangeMetrics.averages.alignment_score.toFixed(1)}/7\n`;
+            analysisText += `• Understanding: ${orgChangeMetrics.averages.understanding_score.toFixed(1)}/7\n`;
+            analysisText += `• Enactment: ${orgChangeMetrics.averages.enactment_score.toFixed(1)}/7\n`;
+            analysisText += `• **Team Change Management Average: ${orgChangeMetrics.overallAverage.toFixed(1)}/7**\n\n`;
+
+            // Find strongest and weakest change areas
+            const changeScores = orgChangeMetrics.averages;
+            const changeEntries = Object.entries(changeScores).map(([key, value]) => ({ 
+              area: key.replace('_score', '').charAt(0).toUpperCase() + key.replace('_score', '').slice(1), 
+              score: value 
+            }));
+            changeEntries.sort((a, b) => b.score - a.score);
+            
+            analysisText += `*Change Strengths:* ${changeEntries[0].area} (${changeEntries[0].score.toFixed(1)}/7)\n`;
+            analysisText += `*Development Area:* ${changeEntries[changeEntries.length - 1].area} (${changeEntries[changeEntries.length - 1].score.toFixed(1)}/7)\n\n`;
+          } else {
+            analysisText += `• No change management assessments completed yet\n\n`;
+          }
+
+          // Project-specific breakdown if we have project data
+          if (allProjectsData.success && allProjectsData.data && allProjectsData.data.length > 0) {
+            const projects = allProjectsData.data;
+            analysisText += `**Assessment Distribution Across Projects:**\n`;
+            
+            projects.forEach(project => {
+              const projectLeadership = leadershipMetrics.hasData ? 
+                (leadershipMetrics.projectGroups[project.id] || []).length : 0;
+              const projectChange = orgChangeMetrics.hasData ? 
+                (orgChangeMetrics.projectGroups[project.id] || []).length : 0;
+              
+              if (projectLeadership > 0 || projectChange > 0) {
+                analysisText += `• ${project.name}: ${projectLeadership} leadership, ${projectChange} change assessments\n`;
+              }
+            });
+            analysisText += `\n`;
+          }
+
+          // Team recommendations
+          analysisText += `**Team Development Recommendations:**\n`;
+          
+          if (leadershipMetrics.hasData && orgChangeMetrics.hasData) {
+            const combinedAverage = (leadershipMetrics.overallAverage + orgChangeMetrics.overallAverage) / 2;
+            analysisText += `• **Overall Team Assessment Score: ${combinedAverage.toFixed(1)}/7**\n`;
+            
+            if (combinedAverage >= 6) {
+              analysisText += `• Excellent performance! Focus on maintaining high standards and mentoring other teams\n`;
+            } else if (combinedAverage >= 4.5) {
+              analysisText += `• Strong performance with room for targeted improvements\n`;
+            } else {
+              analysisText += `• Consider comprehensive development programs to improve assessment scores\n`;
+            }
+          }
+
+          if (leadershipMetrics.hasData && leadershipMetrics.overallAverage < 4) {
+            analysisText += `• **Leadership Development Priority**: Consider leadership training or coaching programs\n`;
+          }
+
+          if (orgChangeMetrics.hasData && orgChangeMetrics.overallAverage < 4) {
+            analysisText += `• **Change Management Focus**: Implement change management best practices and training\n`;
+          }
+
+          if (leadershipMetrics.hasData && orgChangeMetrics.hasData) {
+            const diff = Math.abs(leadershipMetrics.overallAverage - orgChangeMetrics.overallAverage);
+            if (diff > 1) {
+              const stronger = leadershipMetrics.overallAverage > orgChangeMetrics.overallAverage ? 'leadership' : 'change management';
+              const weaker = stronger === 'leadership' ? 'change management' : 'leadership';
+              analysisText += `• **Balance Focus**: Strong ${stronger} but ${weaker} needs development for well-rounded capabilities\n`;
+            }
+          }
+
+          const aiMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: analysisText,
+            timestamp: new Date(),
+            model: 'team-assessment-analysis',
+            tokensUsed: 0
+          };
+          setMessages([...newMessages, aiMessage]);
+
+        } catch (error) {
+          console.error('Error in team assessment analysis:', error);
+          const errorMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: `I had trouble analyzing team assessment data: ${error.message}. Please try again.`,
+            timestamp: new Date(),
+            isError: true
+          };
+          setMessages([...newMessages, errorMessage]);
+        }
+      } else if (isSpecificProjectRequest) {
+        // NEW: Handle specific project analysis by extracting project name from message
+        try {
+          // First get all projects to find the one mentioned in the message
+          const allProjectsResponse = await apiService.getAllProjects();
+          if (allProjectsResponse.success && allProjectsResponse.data) {
+            const allProjects = allProjectsResponse.data;
+            
+            // Find project mentioned in the message
+            let targetProject = null;
+            for (const project of allProjects) {
+              if (messageText.includes(project.name.toLowerCase())) {
+                targetProject = project;
+                break;
+              }
+            }
+            
+            if (targetProject) {
+              console.log(`🎯 Found specific project: ${targetProject.name} (ID: ${targetProject.id})`);
+              
+              // Get comprehensive project data including assessments
+              console.log('📊 Fetching comprehensive project analysis with team-wide data...');
+              
+              try {
+                // Fetch all project-related data AND team-wide data concurrently
+                const [
+                  projectInsights, 
+                  projectLeadershipData, 
+                  projectOrgChangeData,
+                  teamLeadershipData,
+                  teamOrgChangeData
+                ] = await Promise.all([
+                  apiService.getProjectInsights(targetProject.id),
+                  apiService.getLeadershipAssessments({ project_id: targetProject.id }),
+                  apiService.getOrganizationalChangeAssessments(targetProject.id),
+                  apiService.getLeadershipAssessments(), // All team leadership assessments
+                  apiService.getOrganizationalChangeAssessments() // All team org change assessments
+                ]);
+
+                console.log('📊 Comprehensive data fetched:', {
+                  projectInsights: projectInsights.success,
+                  projectLeadership: projectLeadershipData.success,
+                  projectOrgChange: projectOrgChangeData.success,
+                  teamLeadership: teamLeadershipData.success,
+                  teamOrgChange: teamOrgChangeData.success
+                });
+
+                if (projectInsights.success) {
+                  const insights = projectInsights.insights;
+                  let insightText = `**Comprehensive Analysis for "${targetProject.name}"**\n\n`;
+                  
+                  // Basic project info
+                  insightText += `**Project Overview:**\n`;
+                  insightText += `• Status: ${insights.metrics.status}\n`;
+                  insightText += `• Priority: ${insights.metrics.priority}\n`;
+                  insightText += `• Team Size: ${insights.metrics.teamSize} members\n`;
+                  insightText += `• PM Progress: ${insights.metrics.progressScores.pm}/7\n\n`;
+                  
+                  // Helper function to calculate assessment averages
+                  const calculateAssessmentAverages = (assessments, scoreFields) => {
+                    if (!assessments || assessments.length === 0) return null;
+                    
+                    const totals = scoreFields.reduce((acc, field) => ({ ...acc, [field]: 0 }), {});
+                    let count = 0;
+                    
+                    assessments.forEach(assessment => {
+                      if (assessment) {
+                        scoreFields.forEach(field => {
+                          const score = parseFloat(assessment[field] || 0);
+                          if (score > 0) {
+                            totals[field] += score;
+                          }
+                        });
+                        count++;
+                      }
+                    });
+                    
+                    if (count === 0) return null;
+                    
+                    const averages = {};
+                    scoreFields.forEach(field => {
+                      averages[field] = totals[field] / count;
+                    });
+                    
+                    const overall = Object.values(averages).reduce((sum, val) => sum + val, 0) / scoreFields.length;
+                    return { ...averages, overall, count };
+                  };
+
+                  // Leadership Assessment Analysis
+                  const leadershipFields = ['vision_score', 'reality_score', 'ethics_score', 'courage_score'];
+                  const projectLeadershipAvg = calculateAssessmentAverages(
+                    projectLeadershipData.success ? projectLeadershipData.assessments : [], 
+                    leadershipFields
+                  );
+                  const teamLeadershipAvg = calculateAssessmentAverages(
+                    teamLeadershipData.success ? teamLeadershipData.assessments : [], 
+                    leadershipFields
+                  );
+
+                  insightText += `**Leadership Assessment Analysis:**\n`;
+                  if (projectLeadershipAvg) {
+                    insightText += `*Project-Specific (${projectLeadershipAvg.count} assessment${projectLeadershipAvg.count !== 1 ? 's' : ''}):*\n`;
+                    insightText += `• Vision: ${projectLeadershipAvg.vision_score.toFixed(1)}/7\n`;
+                    insightText += `• Reality: ${projectLeadershipAvg.reality_score.toFixed(1)}/7\n`;
+                    insightText += `• Ethics: ${projectLeadershipAvg.ethics_score.toFixed(1)}/7\n`;
+                    insightText += `• Courage: ${projectLeadershipAvg.courage_score.toFixed(1)}/7\n`;
+                    insightText += `• **Project Leadership Score: ${projectLeadershipAvg.overall.toFixed(1)}/7**\n\n`;
+                  } else {
+                    insightText += `*Project-Specific:* No leadership assessments completed for this project yet\n\n`;
+                  }
+
+                  if (teamLeadershipAvg) {
+                    insightText += `*Team-Wide Average (${teamLeadershipAvg.count} total assessment${teamLeadershipAvg.count !== 1 ? 's' : ''}):*\n`;
+                    insightText += `• Vision: ${teamLeadershipAvg.vision_score.toFixed(1)}/7\n`;
+                    insightText += `• Reality: ${teamLeadershipAvg.reality_score.toFixed(1)}/7\n`;
+                    insightText += `• Ethics: ${teamLeadershipAvg.ethics_score.toFixed(1)}/7\n`;
+                    insightText += `• Courage: ${teamLeadershipAvg.courage_score.toFixed(1)}/7\n`;
+                    insightText += `• **Team Leadership Average: ${teamLeadershipAvg.overall.toFixed(1)}/7**\n\n`;
+
+                    // Add comparison if both project and team data exist
+                    if (projectLeadershipAvg) {
+                      const diff = projectLeadershipAvg.overall - teamLeadershipAvg.overall;
+                      const comparison = diff > 0.5 ? "significantly above" : 
+                                       diff < -0.5 ? "below" : "aligned with";
+                      insightText += `*Comparison:* This project's leadership is **${comparison} team average** (${diff > 0 ? '+' : ''}${diff.toFixed(1)})\n\n`;
+                    }
+                  } else {
+                    insightText += `*Team-Wide:* No team leadership assessment data available\n\n`;
+                  }
+                  
+                  // Organizational Change Assessment Analysis
+                  const orgChangeFields = ['vision_score', 'alignment_score', 'understanding_score', 'enactment_score'];
+                  const projectOrgChangeAvg = calculateAssessmentAverages(
+                    projectOrgChangeData.success ? projectOrgChangeData.assessments : [], 
+                    orgChangeFields
+                  );
+                  const teamOrgChangeAvg = calculateAssessmentAverages(
+                    teamOrgChangeData.success ? teamOrgChangeData.assessments : [], 
+                    orgChangeFields
+                  );
+
+                  insightText += `**Organizational Change Management Analysis:**\n`;
+                  if (projectOrgChangeAvg) {
+                    insightText += `*Project-Specific (${projectOrgChangeAvg.count} assessment${projectOrgChangeAvg.count !== 1 ? 's' : ''}):*\n`;
+                    insightText += `• Vision: ${projectOrgChangeAvg.vision_score.toFixed(1)}/7\n`;
+                    insightText += `• Alignment: ${projectOrgChangeAvg.alignment_score.toFixed(1)}/7\n`;
+                    insightText += `• Understanding: ${projectOrgChangeAvg.understanding_score.toFixed(1)}/7\n`;
+                    insightText += `• Enactment: ${projectOrgChangeAvg.enactment_score.toFixed(1)}/7\n`;
+                    insightText += `• **Project Change Management Score: ${projectOrgChangeAvg.overall.toFixed(1)}/7**\n\n`;
+                  } else {
+                    insightText += `*Project-Specific:* No change management assessments completed for this project yet\n\n`;
+                  }
+
+                  if (teamOrgChangeAvg) {
+                    insightText += `*Team-Wide Average (${teamOrgChangeAvg.count} total assessment${teamOrgChangeAvg.count !== 1 ? 's' : ''}):*\n`;
+                    insightText += `• Vision: ${teamOrgChangeAvg.vision_score.toFixed(1)}/7\n`;
+                    insightText += `• Alignment: ${teamOrgChangeAvg.alignment_score.toFixed(1)}/7\n`;
+                    insightText += `• Understanding: ${teamOrgChangeAvg.understanding_score.toFixed(1)}/7\n`;
+                    insightText += `• Enactment: ${teamOrgChangeAvg.enactment_score.toFixed(1)}/7\n`;
+                    insightText += `• **Team Change Management Average: ${teamOrgChangeAvg.overall.toFixed(1)}/7**\n\n`;
+
+                    // Add comparison if both project and team data exist
+                    if (projectOrgChangeAvg) {
+                      const diff = projectOrgChangeAvg.overall - teamOrgChangeAvg.overall;
+                      const comparison = diff > 0.5 ? "significantly above" : 
+                                       diff < -0.5 ? "below" : "aligned with";
+                      insightText += `*Comparison:* This project's change management is **${comparison} team average** (${diff > 0 ? '+' : ''}${diff.toFixed(1)})\n\n`;
+                    }
+                  } else {
+                    insightText += `*Team-Wide:* No team change management assessment data available\n\n`;
+                  }
+                  
+                  // Overall Project Health Summary
+                  insightText += `**Comprehensive Project Health:**\n`;
+                  insightText += `• PM Progress: ${insights.metrics.progressScores.pm}/7\n`;
+                  
+                  if (projectLeadershipAvg) {
+                    insightText += `• Leadership Effectiveness: ${projectLeadershipAvg.overall.toFixed(1)}/7\n`;
+                  }
+                  
+                  if (projectOrgChangeAvg) {
+                    insightText += `• Change Readiness: ${projectOrgChangeAvg.overall.toFixed(1)}/7\n`;
+                  }
+                  
+                  if (insights.metrics.avgFeedback) {
+                    insightText += `• Team Satisfaction: ${insights.metrics.avgFeedback}/7\n`;
+                  }
+
+                  // Calculate overall project health score
+                  let healthComponents = [insights.metrics.progressScores.pm];
+                  if (projectLeadershipAvg) healthComponents.push(projectLeadershipAvg.overall);
+                  if (projectOrgChangeAvg) healthComponents.push(projectOrgChangeAvg.overall);
+                  if (insights.metrics.avgFeedback) healthComponents.push(parseFloat(insights.metrics.avgFeedback));
+                  
+                  const overallHealth = healthComponents.reduce((sum, score) => sum + score, 0) / healthComponents.length;
+                  insightText += `• **Overall Project Health: ${overallHealth.toFixed(1)}/7**\n\n`;
+                  
+                  // Enhanced recommendations based on assessment data
+                  insightText += `**Strategic Recommendations:**\n`;
+                  insights.recommendations.forEach(rec => insightText += `• ${rec}\n`);
+                  
+                  // Add assessment-specific recommendations
+                  if (projectLeadershipAvg && teamLeadershipAvg) {
+                    const leadDiff = projectLeadershipAvg.overall - teamLeadershipAvg.overall;
+                    if (leadDiff < -0.5) {
+                      insightText += `• **Leadership Focus**: This project's leadership scores are below team average - consider additional leadership development\n`;
+                    } else if (leadDiff > 0.5) {
+                      insightText += `• **Leadership Strength**: This project shows strong leadership - consider sharing best practices with other teams\n`;
+                    }
+                  }
+                  
+                  if (projectOrgChangeAvg && teamOrgChangeAvg) {
+                    const changeDiff = projectOrgChangeAvg.overall - teamOrgChangeAvg.overall;
+                    if (changeDiff < -0.5) {
+                      insightText += `• **Change Management**: Focus on improving change readiness - scores are below team average\n`;
+                    } else if (changeDiff > 0.5) {
+                      insightText += `• **Change Excellence**: Strong change management capabilities - leverage this for organizational initiatives\n`;
+                    }
+                  }
+
+                  // Recent activity
+                  if (insights.recentActivity && insights.recentActivity.length > 0) {
+                    insightText += `\n**Recent Activity:**\n`;
+                    insights.recentActivity.slice(0, 3).forEach(activity => {
+                      const date = new Date(activity.created_at).toLocaleDateString();
+                      insightText += `• ${activity.description} (${date})\n`;
+                    });
+                  }
+                  
+                  const aiMessage = {
+                    id: Date.now() + 1,
+                    sender: 'ai',
+                    text: insightText,
+                    timestamp: new Date(),
+                    model: 'comprehensive-analysis',
+                    tokensUsed: 0
+                  };
+                  setMessages([...newMessages, aiMessage]);
+                } else {
+                  throw new Error(`Failed to get comprehensive insights for project "${targetProject.name}"`);
+                }
+              } catch (analysisError) {
+                console.error('Error in comprehensive project analysis:', analysisError);
+                const errorMessage = {
+                  id: Date.now() + 1,
+                  sender: 'ai',
+                  text: `I had trouble getting comprehensive analysis for "${targetProject.name}": ${analysisError.message}. Let me try a basic analysis instead.`,
+                  timestamp: new Date(),
+                  isError: true
+                };
+                setMessages([...newMessages, errorMessage]);
+              }
+            } else {
+              // Project not found - show available projects
+              const projectNames = allProjects.map(p => p.name).join(', ');
+              const aiMessage = {
+                id: Date.now() + 1,
+                sender: 'ai',
+                text: `I couldn't find a project with that name. Your available projects are: ${projectNames}. Please try again with the exact project name.`,
+                timestamp: new Date(),
+                model: 'project-helper',
+                tokensUsed: 0
+              };
+              setMessages([...newMessages, aiMessage]);
+            }
+          } else {
+            throw new Error('Failed to fetch projects for analysis');
+          }
+        } catch (error) {
+          console.error('Error in specific project analysis:', error);
+          const errorMessage = {
+            id: Date.now() + 1,
+            sender: 'ai',
+            text: `I had trouble analyzing that project: ${error.message}. Please try again or check if the project name is correct.`,
+            timestamp: new Date(),
+            isError: true
+          };
+          setMessages([...newMessages, errorMessage]);
         }
       } else if (isProjectInsightRequest) {
         response = await apiService.getProjectInsights(currentProject.id);

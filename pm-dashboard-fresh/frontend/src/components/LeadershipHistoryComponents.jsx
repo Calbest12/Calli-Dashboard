@@ -1,207 +1,250 @@
 // frontend/src/components/LeadershipHistoryComponents.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
+  X, 
+  BarChart3, 
   Calendar, 
   User, 
   Building2, 
-  ChevronDown, 
-  ChevronUp, 
-  BarChart3, 
   TrendingUp,
   Eye,
-  X,
+  Award,
   Filter,
-  Users,
-  Clock,
-  Target,
-  Shuffle
+  ChevronDown
 } from 'lucide-react';
-import { ProgressCircle } from './EnhancedVisualizationComponents';
 
-// Radar Chart Component for Leadership Assessment Visualization
-const RadarChart = ({ data, framework, size = 300 }) => {
-  const centerX = size / 2;
-  const centerY = size / 2;
-  const radius = size * 0.35;
-  const dimensions = Object.keys(framework);
-  
-  // Calculate points for the assessment data
-  const getPoint = (value, index) => {
-    const numericValue = parseFloat(value) || 0;
-    const angle = (index * 2 * Math.PI) / dimensions.length - Math.PI / 2;
-    const distance = (numericValue / 7) * radius;
-    return {
-      x: centerX + Math.cos(angle) * distance,
-      y: centerY + Math.sin(angle) * distance
-    };
-  };
+// Progress Circle Component for Leadership Dimensions
+const ProgressCircle = ({ value, max = 7, size = 80, strokeWidth = 8, color = '#3b82f6', title, subtitle }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const percentage = (value / max) * 100;
+  const strokeDasharray = `${(percentage / 100) * circumference} ${circumference}`;
 
-  // Create grid circles
-  const gridLevels = [1, 2, 3, 4, 5, 6, 7];
-  
   return (
-    <div style={{ display: 'flex', justifyContent: 'center' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '0.5rem'
+    }}>
+      <div style={{
+        position: 'relative',
+        display: 'inline-block'
+      }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#f3f4f6"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={color}
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            strokeDasharray={strokeDasharray}
+            strokeLinecap="round"
+            style={{
+              transition: 'stroke-dasharray 0.5s ease'
+            }}
+          />
+        </svg>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          fontSize: '1rem',
+          fontWeight: '600',
+          color: '#374151'
+        }}>
+          {value.toFixed(1)}
+        </div>
+      </div>
+      
+      {title && (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '0.875rem',
+            fontWeight: '600',
+            color: '#374151'
+          }}>
+            {title}
+          </div>
+          {subtitle && (
+            <div style={{
+              fontSize: '0.75rem',
+              color: '#6b7280'
+            }}>
+              {subtitle}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Radar Chart for Leadership Diamond
+const RadarChart = ({ data, dimensions, size = 300, colors = {} }) => {
+  const center = size / 2;
+  const maxRadius = size * 0.35;
+  const numLevels = 7;
+
+  // Leadership diamond dimensions
+  const leadershipDimensions = ['vision', 'reality', 'ethics', 'courage'];
+  const dimensionsToUse = leadershipDimensions;
+
+  const points = dimensionsToUse.map((dim, index) => {
+    const angle = (index * 2 * Math.PI) / dimensionsToUse.length - Math.PI / 2;
+    const value = data[dim] || 0;
+    const radius = (value / 7) * maxRadius;
+    
+    return {
+      x: center + Math.cos(angle) * radius,
+      y: center + Math.sin(angle) * radius,
+      labelX: center + Math.cos(angle) * (maxRadius + 30),
+      labelY: center + Math.sin(angle) * (maxRadius + 30),
+      dimension: dim,
+      value: value
+    };
+  });
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '1rem'
+    }}>
       <svg width={size} height={size} style={{ overflow: 'visible' }}>
         {/* Grid circles */}
-        {gridLevels.map(level => (
+        {Array.from({ length: numLevels }, (_, i) => (
           <circle
-            key={level}
-            cx={centerX}
-            cy={centerY}
-            r={(level / 7) * radius}
+            key={i}
+            cx={center}
+            cy={center}
+            r={(maxRadius / numLevels) * (i + 1)}
+            stroke="#e5e7eb"
+            strokeWidth="1"
             fill="none"
-            stroke={level === 7 ? '#e5e7eb' : '#f3f4f6'}
-            strokeWidth={level === 7 ? 2 : 1}
           />
         ))}
-        
-        {/* Grid lines to each dimension */}
-        {dimensions.map((dimension, index) => {
-          const angle = (index * 2 * Math.PI) / dimensions.length - Math.PI / 2;
-          const endX = centerX + Math.cos(angle) * radius;
-          const endY = centerY + Math.sin(angle) * radius;
+
+        {/* Grid lines */}
+        {dimensionsToUse.map((_, index) => {
+          const angle = (index * 2 * Math.PI) / dimensionsToUse.length - Math.PI / 2;
+          const endX = center + Math.cos(angle) * maxRadius;
+          const endY = center + Math.sin(angle) * maxRadius;
           
           return (
             <line
-              key={dimension}
-              x1={centerX}
-              y1={centerY}
+              key={index}
+              x1={center}
+              y1={center}
               x2={endX}
               y2={endY}
-              stroke="#f3f4f6"
-              strokeWidth={1}
+              stroke="#e5e7eb"
+              strokeWidth="1"
             />
           );
         })}
-        
-        {/* Assessment data polygon */}
-        {data && (
-          <polygon
-            points={dimensions.map((dimension, index) => {
-              const point = getPoint(data[dimension] || 0, index);
-              return `${point.x},${point.y}`;
-            }).join(' ')}
-            fill={`${framework[dimensions[0]]?.color}20`}
-            stroke={framework[dimensions[0]]?.color || '#3b82f6'}
-            strokeWidth={2}
-          />
-        )}
-        
+
+        {/* Data polygon */}
+        <polygon
+          points={points.map(p => `${p.x},${p.y}`).join(' ')}
+          fill="#3b82f6"
+          fillOpacity="0.3"
+          stroke="#3b82f6"
+          strokeWidth="2"
+        />
+
         {/* Data points */}
-        {data && dimensions.map((dimension, index) => {
-          const point = getPoint(data[dimension] || 0, index);
-          return (
-            <circle
-              key={dimension}
-              cx={point.x}
-              cy={point.y}
-              r={4}
-              fill={framework[dimension]?.color || '#3b82f6'}
-            />
-          );
-        })}
-        
-        {/* Dimension labels */}
-        {dimensions.map((dimension, index) => {
-          const angle = (index * 2 * Math.PI) / dimensions.length - Math.PI / 2;
-          const labelDistance = radius + 30;
-          const labelX = centerX + Math.cos(angle) * labelDistance;
-          const labelY = centerY + Math.sin(angle) * labelDistance;
-          
-          return (
+        {points.map((point, index) => (
+          <circle
+            key={index}
+            cx={point.x}
+            cy={point.y}
+            r="4"
+            fill="#3b82f6"
+            stroke="white"
+            strokeWidth="2"
+          />
+        ))}
+
+        {/* Labels */}
+        {points.map((point, index) => (
+          <g key={index}>
             <text
-              key={dimension}
-              x={labelX}
-              y={labelY}
+              x={point.labelX}
+              y={point.labelY}
               textAnchor="middle"
-              dominantBaseline="middle"
-              fill="#374151"
+              dominantBaseline="central"
               fontSize="12"
               fontWeight="600"
+              fill="#374151"
             >
-              {framework[dimension]?.title}
+              {point.dimension.charAt(0).toUpperCase() + point.dimension.slice(1)}
             </text>
-          );
-        })}
-        
-        {/* Score labels */}
-        {data && dimensions.map((dimension, index) => {
-          const score = parseFloat(data[dimension]) || 0;
-          const angle = (index * 2 * Math.PI) / dimensions.length - Math.PI / 2;
-          const scoreDistance = radius + 50;
-          const scoreX = centerX + Math.cos(angle) * scoreDistance;
-          const scoreY = centerY + Math.sin(angle) * scoreDistance;
-          
-          return (
             <text
-              key={`score-${dimension}`}
-              x={scoreX}
-              y={scoreY}
+              x={point.labelX}
+              y={point.labelY + 15}
               textAnchor="middle"
-              dominantBaseline="middle"
-              fill={framework[dimension]?.color || '#3b82f6'}
-              fontSize="14"
-              fontWeight="700"
+              dominantBaseline="central"
+              fontSize="11"
+              fill="#6b7280"
             >
-              {score.toFixed(1)}
+              {point.value.toFixed(1)}
             </text>
-          );
-        })}
+          </g>
+        ))}
       </svg>
     </div>
   );
 };
 
-// Bar Chart Component for Leadership Comparison
-const BarChart = ({ data, framework, height = 300 }) => {
-  const dimensions = Object.keys(framework);
+// Bar Chart for Leadership Dimensions
+const BarChart = ({ data, dimensions, height = 200, colors = {} }) => {
+  const leadershipDimensions = [
+    { key: 'vision', title: 'Vision', color: '#3b82f6' },
+    { key: 'reality', title: 'Reality', color: '#10b981' },
+    { key: 'ethics', title: 'Ethics', color: '#8b5cf6' },
+    { key: 'courage', title: 'Courage', color: '#f59e0b' }
+  ];
+
   const maxValue = 7;
-  const barWidth = 60;
-  const barSpacing = 20;
-  const chartWidth = dimensions.length * (barWidth + barSpacing) - barSpacing;
   const chartHeight = height - 60;
+  const barWidth = 60;
+  const spacing = 20;
+  const chartWidth = (barWidth + spacing) * leadershipDimensions.length;
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center' }}>
-      <svg width={chartWidth + 60} height={height} style={{ overflow: 'visible' }}>
-        {/* Y-axis grid lines */}
-        {[1, 2, 3, 4, 5, 6, 7].map(value => (
-          <g key={value}>
-            <line
-              x1={30}
-              y1={40 + chartHeight - (value / maxValue) * chartHeight}
-              x2={chartWidth + 30}
-              y2={40 + chartHeight - (value / maxValue) * chartHeight}
-              stroke="#f3f4f6"
-              strokeWidth={1}
-            />
-            <text
-              x={25}
-              y={40 + chartHeight - (value / maxValue) * chartHeight + 4}
-              textAnchor="end"
-              fontSize="12"
-              fill="#6b7280"
-            >
-              {value}
-            </text>
-          </g>
-        ))}
-        
-        {/* Bars */}
-        {dimensions.map((dimension, index) => {
-          const value = parseFloat(data[dimension]) || 0;
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '1rem'
+    }}>
+      <svg width={chartWidth} height={height} style={{ overflow: 'visible' }}>
+        {leadershipDimensions.map((dimension, index) => {
+          const value = data[dimension.key] || 0;
           const barHeight = (value / maxValue) * chartHeight;
-          const barX = 30 + index * (barWidth + barSpacing);
+          const barX = index * (barWidth + spacing);
           const barY = 40 + chartHeight - barHeight;
-          
+
           return (
-            <g key={dimension}>
+            <g key={dimension.key}>
               <rect
                 x={barX}
                 y={barY}
                 width={barWidth}
                 height={barHeight}
-                fill={framework[dimension]?.color || '#3b82f6'}
+                fill={dimension.color}
                 rx={4}
               />
               <text
@@ -222,7 +265,7 @@ const BarChart = ({ data, framework, height = 300 }) => {
                 fill="#6b7280"
                 transform={`rotate(-45, ${barX + barWidth / 2}, ${40 + chartHeight + 20})`}
               >
-                {framework[dimension]?.title}
+                {dimension.title}
               </text>
             </g>
           );
@@ -232,51 +275,59 @@ const BarChart = ({ data, framework, height = 300 }) => {
   );
 };
 
-// Assessment Card Component for Leadership
+// Assessment Card Component with User Names
 const AssessmentCard = ({ assessment, project, framework, onClick, showProject = true }) => {
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric'
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
+  const getOverallScore = () => {
+    const scores = [
+      parseFloat(assessment.vision_score) || 0,
+      parseFloat(assessment.reality_score) || 0,
+      parseFloat(assessment.ethics_score) || 0,
+      parseFloat(assessment.courage_score) || 0
+    ];
+    const validScores = scores.filter(score => score > 0);
+    return validScores.length > 0 ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length : 0;
+  };
+
   const getScoreColor = (score) => {
-    if (score >= 6) return '#10b981'; // green
-    if (score >= 4) return '#f59e0b'; // yellow
-    return '#ef4444'; // red
+    if (score >= 6) return '#10b981';
+    if (score >= 4) return '#f59e0b';
+    return '#ef4444';
   };
 
-  const scores = {
-    vision: parseFloat(assessment.vision_score) || 0,
-    reality: parseFloat(assessment.reality_score) || 0,
-    ethics: parseFloat(assessment.ethics_score) || 0,
-    courage: parseFloat(assessment.courage_score) || 0
-  };
-
-  const overallScore = (scores.vision + scores.reality + scores.ethics + scores.courage) / 4;
+  const overallScore = getOverallScore();
 
   return (
-    <div
+    <div 
       style={{
         backgroundColor: 'white',
         border: '1px solid #e5e7eb',
         borderRadius: '0.75rem',
         padding: '1.5rem',
         cursor: 'pointer',
-        transition: 'all 0.2s',
-        boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1)',
-        hover: {
-          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-          borderColor: '#d1d5db'
-        }
+        transition: 'all 0.2s ease',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}
-      onClick={() => onClick(assessment)}
+      onClick={() => onClick && onClick(assessment)}
+      onMouseEnter={(e) => {
+        e.target.style.borderColor = '#3b82f6';
+        e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.borderColor = '#e5e7eb';
+        e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+      }}
     >
-      {/* Header */}
+      {/* Header with project, user, date, and score */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -284,36 +335,39 @@ const AssessmentCard = ({ assessment, project, framework, onClick, showProject =
         marginBottom: '1rem'
       }}>
         <div style={{ flex: 1 }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            marginBottom: '0.5rem'
-          }}>
-            <Calendar size={16} style={{ color: '#6b7280' }} />
-            <span style={{
-              fontSize: '0.875rem',
-              color: '#6b7280',
-              fontWeight: '500'
-            }}>
-              {formatDate(assessment.created_at)}
-            </span>
-          </div>
-          
           {showProject && (
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.75rem',
+              gap: '0.5rem',
               marginBottom: '0.5rem'
             }}>
-              <Building2 size={16} style={{ color: '#6b7280' }} />
+              <Building2 size={14} style={{ color: '#6b7280' }} />
               <span style={{
                 fontSize: '0.875rem',
-                color: '#374151',
-                fontWeight: '500'
+                fontWeight: '600',
+                color: '#374151'
               }}>
-                {assessment.project_name || 'General Assessment'}
+                {project?.name || 'General Assessment'}
+              </span>
+            </div>
+          )}
+          
+          {/* User name */}
+          {assessment.user_name && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              marginBottom: '0.5rem'
+            }}>
+              <User size={14} style={{ color: '#3b82f6' }} />
+              <span style={{
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#3b82f6'
+              }}>
+                {assessment.user_name}
               </span>
             </div>
           )}
@@ -321,109 +375,167 @@ const AssessmentCard = ({ assessment, project, framework, onClick, showProject =
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.75rem'
+            gap: '0.5rem'
           }}>
-            <User size={16} style={{ color: '#6b7280' }} />
+            <Calendar size={14} style={{ color: '#6b7280' }} />
             <span style={{
               fontSize: '0.875rem',
               color: '#6b7280'
             }}>
-              Leadership Assessment
+              {formatDate(assessment.created_at)}
             </span>
           </div>
         </div>
         
-        <div style={{ textAlign: 'right' }}>
+        <div style={{
+          fontSize: '1.5rem',
+          fontWeight: '700',
+          color: getScoreColor(overallScore)
+        }}>
+          {overallScore.toFixed(1)}
+        </div>
+      </div>
+
+      {/* Leadership dimensions scores */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '0.75rem'
+      }}>
+        <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '2rem',
-            fontWeight: '700',
-            color: getScoreColor(overallScore),
-            lineHeight: 1
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#3b82f6',
+            marginBottom: '0.25rem'
           }}>
-            {overallScore.toFixed(1)}
+            {(parseFloat(assessment.vision_score) || 0).toFixed(1)}
           </div>
           <div style={{
             fontSize: '0.75rem',
             color: '#6b7280',
-            marginTop: '0.25rem'
+            fontWeight: '500'
           }}>
-            Overall Score
+            Vision
           </div>
         </div>
-      </div>
-      
-      {/* Dimension Scores */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '1rem',
-        marginTop: '1rem'
-      }}>
-        {Object.entries(framework).map(([key, dimension]) => (
-          <div key={key} style={{ textAlign: 'center' }}>
-            <div style={{
-              fontSize: '1.125rem',
-              fontWeight: '600',
-              color: dimension.color,
-              marginBottom: '0.25rem'
-            }}>
-              {scores[key].toFixed(1)}
-            </div>
-            <div style={{
-              fontSize: '0.75rem',
-              color: '#6b7280',
-              fontWeight: '500'
-            }}>
-              {dimension.title}
-            </div>
+        
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#10b981',
+            marginBottom: '0.25rem'
+          }}>
+            {(parseFloat(assessment.reality_score) || 0).toFixed(1)}
           </div>
-        ))}
+          <div style={{
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            fontWeight: '500'
+          }}>
+            Reality
+          </div>
+        </div>
+        
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#8b5cf6',
+            marginBottom: '0.25rem'
+          }}>
+            {(parseFloat(assessment.ethics_score) || 0).toFixed(1)}
+          </div>
+          <div style={{
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            fontWeight: '500'
+          }}>
+            Ethics
+          </div>
+        </div>
+        
+        <div style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            color: '#f59e0b',
+            marginBottom: '0.25rem'
+          }}>
+            {(parseFloat(assessment.courage_score) || 0).toFixed(1)}
+          </div>
+          <div style={{
+            fontSize: '0.75rem',
+            color: '#6b7280',
+            fontWeight: '500'
+          }}>
+            Courage
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-// Enhanced History Modal Component
+// History Modal Component with User Filtering
 const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAssessmentSelect }) => {
-  const [filteredAssessments, setFilteredAssessments] = useState(assessments);
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [filterUser, setFilterUser] = useState('all');
   const [filterProject, setFilterProject] = useState('all');
-  const [viewMode, setViewMode] = useState('cards');
-
-  useEffect(() => {
-    let filtered = [...assessments];
-
-    // Apply project filter
-    if (filterProject !== 'all') {
-      filtered = filtered.filter(assessment => 
-        assessment.project_id === parseInt(filterProject)
-      );
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      let comparison = 0;
-      
-      if (sortBy === 'date') {
-        comparison = new Date(a.created_at) - new Date(b.created_at);
-      } else if (sortBy === 'score') {
-        const aScore = (parseFloat(a.vision_score) + parseFloat(a.reality_score) + parseFloat(a.ethics_score) + parseFloat(a.courage_score)) / 4;
-        const bScore = (parseFloat(b.vision_score) + parseFloat(b.reality_score) + parseFloat(b.ethics_score) + parseFloat(b.courage_score)) / 4;
-        comparison = aScore - bScore;
-      } else if (sortBy === 'project') {
-        comparison = (a.project_name || '').localeCompare(b.project_name || '');
-      }
-      
-      return sortOrder === 'desc' ? -comparison : comparison;
-    });
-
-    setFilteredAssessments(filtered);
-  }, [assessments, sortBy, sortOrder, filterProject]);
+  const [sortBy, setSortBy] = useState('date');
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
   if (!isOpen) return null;
 
-  const uniqueProjects = [...new Set(assessments.map(a => a.project_id).filter(Boolean))];
+  // Get unique users from assessments
+  const users = [...new Set(assessments
+    .filter(a => a.user_name) // Only assessments with user names
+    .map(a => ({ id: a.user_id, name: a.user_name }))
+  )].filter((user, index, self) => 
+    index === self.findIndex(u => u.id === user.id) // Remove duplicates
+  );
+
+  // Filter and sort assessments
+  const filteredAssessments = assessments
+    .filter(assessment => {
+      const userMatch = filterUser === 'all' || assessment.user_id?.toString() === filterUser;
+      
+      // Handle project filtering including null values
+      let projectMatch = true;
+      if (filterProject === 'all') {
+        projectMatch = true;
+      } else if (filterProject === 'null') {
+        projectMatch = !assessment.project_id;
+      } else {
+        projectMatch = assessment.project_id?.toString() === filterProject;
+      }
+      
+      return userMatch && projectMatch;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'date':
+          return new Date(b.created_at) - new Date(a.created_at);
+        case 'user':
+          return (a.user_name || '').localeCompare(b.user_name || '');
+        case 'score':
+          const aScore = (
+            (parseFloat(a.vision_score) || 0) + 
+            (parseFloat(a.reality_score) || 0) + 
+            (parseFloat(a.ethics_score) || 0) + 
+            (parseFloat(a.courage_score) || 0)
+          ) / 4;
+          const bScore = (
+            (parseFloat(b.vision_score) || 0) + 
+            (parseFloat(b.reality_score) || 0) + 
+            (parseFloat(b.ethics_score) || 0) + 
+            (parseFloat(b.courage_score) || 0)
+          ) / 4;
+          return bScore - aScore;
+        default:
+          return 0;
+      }
+    });
 
   return (
     <div style={{
@@ -436,35 +548,46 @@ const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAss
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 1000,
-      padding: '1rem'
+      zIndex: 1001
     }}>
       <div style={{
         backgroundColor: 'white',
         borderRadius: '1rem',
+        padding: '2rem',
         maxWidth: '1200px',
-        width: '100%',
+        width: '95%',
         maxHeight: '90vh',
+        overflow: 'hidden',
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
+        flexDirection: 'column'
       }}>
         {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '1.5rem',
+          marginBottom: '2rem',
+          paddingBottom: '1rem',
           borderBottom: '1px solid #e5e7eb'
         }}>
-          <h2 style={{
-            fontSize: '1.5rem',
-            fontWeight: '700',
-            color: '#111827',
-            margin: 0
-          }}>
-            Leadership Assessment History
-          </h2>
+          <div>
+            <h3 style={{
+              fontSize: '1.5rem',
+              fontWeight: '700',
+              color: '#111827',
+              margin: 0
+            }}>
+              Leadership Assessment History
+            </h3>
+            <p style={{
+              fontSize: '0.875rem',
+              color: '#6b7280',
+              margin: '0.5rem 0 0 0'
+            }}>
+              {filteredAssessments.length} assessment{filteredAssessments.length !== 1 ? 's' : ''} found
+            </p>
+          </div>
+          
           <button
             onClick={onClose}
             style={{
@@ -472,28 +595,63 @@ const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAss
               border: 'none',
               color: '#6b7280',
               cursor: 'pointer',
-              padding: '0.5rem'
+              padding: '0.5rem',
+              borderRadius: '0.5rem'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f3f4f6';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
             }}
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Controls */}
+        {/* Filters */}
         <div style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '1rem 1.5rem',
-          backgroundColor: '#f9fafb',
-          borderBottom: '1px solid #e5e7eb',
           gap: '1rem',
-          flexWrap: 'wrap'
+          marginBottom: '2rem',
+          flexWrap: 'wrap',
+          alignItems: 'center'
         }}>
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flex: 1 }}>
-            <Filter size={16} style={{ color: '#6b7280' }} />
-            
+          {/* User Filter */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <User size={16} style={{ color: '#6b7280' }} />
+            <select
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+                backgroundColor: 'white',
+                minWidth: '150px'
+              }}
+            >
+              <option value="all">All Users ({users.length})</option>
+              {users.map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Project Filter */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <Building2 size={16} style={{ color: '#6b7280' }} />
             <select
               value={filterProject}
               onChange={(e) => setFilterProject(e.target.value)}
@@ -502,28 +660,30 @@ const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAss
                 border: '1px solid #d1d5db',
                 borderRadius: '0.375rem',
                 fontSize: '0.875rem',
-                backgroundColor: 'white'
+                backgroundColor: 'white',
+                minWidth: '150px'
               }}
             >
               <option value="all">All Projects</option>
-              <option value="">General Assessments</option>
-              {uniqueProjects.map(projectId => {
-                const project = projects.find(p => p.id === projectId);
-                return (
-                  <option key={projectId} value={projectId}>
-                    {project?.name || `Project ${projectId}`}
-                  </option>
-                );
-              })}
+              <option value="null">General Assessments</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
             </select>
+          </div>
 
+          {/* Sort Options */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}>
+            <TrendingUp size={16} style={{ color: '#6b7280' }} />
             <select
-              value={`${sortBy}-${sortOrder}`}
-              onChange={(e) => {
-                const [newSortBy, newSortOrder] = e.target.value.split('-');
-                setSortBy(newSortBy);
-                setSortOrder(newSortOrder);
-              }}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
               style={{
                 padding: '0.5rem',
                 border: '1px solid #d1d5db',
@@ -532,155 +692,83 @@ const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAss
                 backgroundColor: 'white'
               }}
             >
-              <option value="date-desc">Newest First</option>
-              <option value="date-asc">Oldest First</option>
-              <option value="score-desc">Highest Score</option>
-              <option value="score-asc">Lowest Score</option>
-              <option value="project-asc">Project A-Z</option>
+              <option value="date">Sort by Date</option>
+              <option value="user">Sort by User</option>
+              <option value="score">Sort by Score</option>
             </select>
           </div>
 
           {/* View Mode Toggle */}
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{
+            display: 'flex',
+            gap: '0.25rem',
+            marginLeft: 'auto'
+          }}>
             <button
-              onClick={() => setViewMode('cards')}
+              onClick={() => setViewMode('list')}
               style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: viewMode === 'cards' ? '#3b82f6' : 'white',
-                color: viewMode === 'cards' ? 'white' : '#6b7280',
+                padding: '0.5rem',
+                backgroundColor: viewMode === 'list' ? '#3b82f6' : 'white',
+                color: viewMode === 'list' ? 'white' : '#374151',
                 border: '1px solid #d1d5db',
                 borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                fontSize: '0.875rem'
               }}
             >
-              Cards
+              List
             </button>
             <button
-              onClick={() => setViewMode('table')}
+              onClick={() => setViewMode('grid')}
               style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: viewMode === 'table' ? '#3b82f6' : 'white',
-                color: viewMode === 'table' ? 'white' : '#6b7280',
+                padding: '0.5rem',
+                backgroundColor: viewMode === 'grid' ? '#3b82f6' : 'white',
+                color: viewMode === 'grid' ? 'white' : '#374151',
                 border: '1px solid #d1d5db',
                 borderRadius: '0.375rem',
-                fontSize: '0.875rem',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                fontSize: '0.875rem'
               }}
             >
-              Table
+              Grid
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '1.5rem' }}>
+        <div style={{ flex: 1, overflow: 'auto' }}>
           {filteredAssessments.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              padding: '3rem',
+              padding: '3rem 0',
               color: '#6b7280'
             }}>
-              <Target size={48} style={{ margin: '0 auto 1rem', color: '#d1d5db' }} />
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+              <BarChart3 size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
+              <p style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.5rem' }}>
                 No assessments found
-              </h3>
-              <p style={{ fontSize: '0.875rem' }}>
-                {filterProject !== 'all' ? 'Try adjusting your filters or' : 'Complete your first assessment to see it here.'}
+              </p>
+              <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                Try adjusting your filters to see more results
               </p>
             </div>
           ) : (
-            <>
-              {viewMode === 'cards' ? (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
-                  gap: '1.5rem'
-                }}>
-                  {filteredAssessments.map(assessment => (
-                    <AssessmentCard
-                      key={assessment.id}
-                      assessment={assessment}
-                      project={projects.find(p => p.id === assessment.project_id)}
-                      framework={framework}
-                      onClick={onAssessmentSelect}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    fontSize: '0.875rem'
-                  }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f9fafb' }}>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Date</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', color: '#374151' }}>Project</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Vision</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Reality</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Ethics</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Courage</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Overall</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', color: '#374151' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredAssessments.map(assessment => {
-                        const scores = {
-                          vision: parseFloat(assessment.vision_score) || 0,
-                          reality: parseFloat(assessment.reality_score) || 0,
-                          ethics: parseFloat(assessment.ethics_score) || 0,
-                          courage: parseFloat(assessment.courage_score) || 0
-                        };
-                        const overallScore = (scores.vision + scores.reality + scores.ethics + scores.courage) / 4;
-                        
-                        return (
-                          <tr key={assessment.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                            <td style={{ padding: '0.75rem' }}>
-                              {new Date(assessment.created_at).toLocaleDateString()}
-                            </td>
-                            <td style={{ padding: '0.75rem' }}>
-                              {assessment.project_name || 'General'}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: framework.vision.color, fontWeight: '600' }}>
-                              {scores.vision.toFixed(1)}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: framework.reality.color, fontWeight: '600' }}>
-                              {scores.reality.toFixed(1)}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: framework.ethics.color, fontWeight: '600' }}>
-                              {scores.ethics.toFixed(1)}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', color: framework.courage.color, fontWeight: '600' }}>
-                              {scores.courage.toFixed(1)}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '700' }}>
-                              {overallScore.toFixed(1)}
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                              <button
-                                onClick={() => onAssessmentSelect(assessment)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#3b82f6',
-                                  cursor: 'pointer',
-                                  padding: '0.25rem'
-                                }}
-                              >
-                                <Eye size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
+            <div style={{
+              display: viewMode === 'grid' ? 'grid' : 'flex',
+              flexDirection: viewMode === 'list' ? 'column' : undefined,
+              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(400px, 1fr))' : undefined,
+              gap: '1rem'
+            }}>
+              {filteredAssessments.map((assessment, index) => (
+                <AssessmentCard
+                  key={assessment.id || index}
+                  assessment={assessment}
+                  project={projects.find(p => p.id === assessment.project_id)}
+                  framework={framework}
+                  onClick={() => onAssessmentSelect(assessment)}
+                  showProject={true}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -688,46 +776,40 @@ const HistoryModal = ({ isOpen, onClose, assessments, projects, framework, onAss
   );
 };
 
-// Assessment Details Modal Component
+// Assessment Details Modal Component  
 const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framework }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  
+
   if (!isOpen || !assessment) return null;
 
-  // Safety check for assessment structure
-  if (!assessment.id) {
-    console.warn('Invalid assessment data:', assessment);
-    return null;
-  }
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-  // Parse responses from JSON with error handling
-  let responses = {};
-  try {
-    if (assessment.responses && typeof assessment.responses === 'string') {
-      responses = JSON.parse(assessment.responses);
-    } else if (assessment.responses && typeof assessment.responses === 'object') {
-      responses = assessment.responses;
-    }
-  } catch (error) {
-    console.warn('Failed to parse assessment responses:', error);
-    responses = {};
-  }
-  
-  // Calculate dimension scores with safety checks
+  const responses = typeof assessment.responses === 'string' 
+    ? JSON.parse(assessment.responses) 
+    : assessment.responses || {};
+
+  // Leadership dimensions for progress circles
+  const dimensions = [
+    { key: 'vision', title: 'Vision', color: '#3b82f6' },
+    { key: 'reality', title: 'Reality', color: '#10b981' },
+    { key: 'ethics', title: 'Ethics', color: '#8b5cf6' },
+    { key: 'courage', title: 'Courage', color: '#f59e0b' }
+  ];
+
   const scores = {
     vision: parseFloat(assessment.vision_score) || 0,
     reality: parseFloat(assessment.reality_score) || 0,
     ethics: parseFloat(assessment.ethics_score) || 0,
     courage: parseFloat(assessment.courage_score) || 0
   };
-
-  const dimensions = Object.keys(framework);
-
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: <Target size={16} /> },
-    { id: 'responses', label: 'Detailed Responses', icon: <Users size={16} /> },
-    { id: 'visualization', label: 'Visualization', icon: <BarChart3 size={16} /> }
-  ];
 
   return (
     <div style={{
@@ -740,56 +822,55 @@ const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framewor
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      zIndex: 1001,
-      padding: '1rem'
+      zIndex: 1001
     }}>
       <div style={{
         backgroundColor: 'white',
         borderRadius: '1rem',
-        maxWidth: '1000px',
-        width: '100%',
+        padding: '2rem',
+        maxWidth: '900px',
+        width: '95%',
         maxHeight: '90vh',
+        overflow: 'hidden',
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
+        flexDirection: 'column'
       }}>
         {/* Header */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '1.5rem',
+          marginBottom: '2rem',
+          paddingBottom: '1rem',
           borderBottom: '1px solid #e5e7eb'
         }}>
           <div>
-            <h2 style={{
+            <h3 style={{
               fontSize: '1.5rem',
               fontWeight: '700',
               color: '#111827',
-              margin: '0 0 0.5rem 0'
+              margin: 0
             }}>
               Leadership Assessment Details
-            </h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-              <span>
-                {new Date(assessment.created_at).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: 'numeric'
-                })}
-              </span>
-              {project && (
-                <>
-                  <span>•</span>
-                  <span>{project.name}</span>
-                </>
+            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+              {assessment.user_name && (
+                <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                  <User size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                  {assessment.user_name}
+                </span>
               )}
-              <span>•</span>
-              <span>Overall: {((scores.vision + scores.reality + scores.ethics + scores.courage) / 4).toFixed(1)}/7</span>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                <Calendar size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                {formatDate(assessment.created_at)}
+              </span>
+              <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                <Building2 size={14} style={{ display: 'inline', marginRight: '0.5rem' }} />
+                {project?.name || 'General Assessment'}
+              </span>
             </div>
           </div>
+          
           <button
             onClick={onClose}
             style={{
@@ -797,219 +878,76 @@ const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framewor
               border: 'none',
               color: '#6b7280',
               cursor: 'pointer',
-              padding: '0.5rem'
+              padding: '0.5rem',
+              borderRadius: '0.5rem'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#f3f4f6';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
             }}
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
         {/* Tabs */}
         <div style={{
           display: 'flex',
-          borderBottom: '1px solid #e5e7eb',
-          backgroundColor: '#f9fafb'
+          gap: '0.5rem',
+          marginBottom: '2rem',
+          borderBottom: '1px solid #e5e7eb'
         }}>
-          {tabs.map(tab => (
+          {['overview', 'responses', 'visualization'].map(tab => (
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '1rem 1.5rem',
-                border: 'none',
+                padding: '0.75rem 1rem',
                 backgroundColor: 'transparent',
-                color: activeTab === tab.id ? '#3b82f6' : '#6b7280',
-                borderBottom: activeTab === tab.id ? '2px solid #3b82f6' : '2px solid transparent',
+                border: 'none',
+                borderBottom: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent',
+                color: activeTab === tab ? '#3b82f6' : '#6b7280',
+                fontWeight: '500',
                 cursor: 'pointer',
                 fontSize: '0.875rem',
-                fontWeight: '500'
+                textTransform: 'capitalize'
               }}
             >
-              {tab.icon}
-              {tab.label}
+              {tab}
             </button>
           ))}
         </div>
 
-        {/* Content */}
+        {/* Tab Content */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {activeTab === 'overview' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '2rem', padding: '2rem' }}>
-              {dimensions.map(dimension => (
-                <div
-                  key={dimension}
-                  style={{
-                    backgroundColor: '#f9fafb',
-                    padding: '1.5rem',
-                    borderRadius: '0.75rem',
-                    border: `3px solid ${framework[dimension].color}`
-                  }}
-                >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '1rem'
-                  }}>
-                    <h4 style={{
-                      fontSize: '1.125rem',
-                      fontWeight: '600',
-                      color: '#111827',
-                      margin: 0
-                    }}>
-                      {framework[dimension].title}
-                    </h4>
-                    <span style={{
-                      fontSize: '2rem',
-                      fontWeight: '700',
-                      color: framework[dimension].color
-                    }}>
-                      {scores[dimension]?.toFixed(1) || '0.0'}
-                    </span>
-                  </div>
-                  
-                  <p style={{
-                    fontSize: '0.875rem',
-                    color: '#6b7280',
-                    margin: 0,
-                    lineHeight: 1.5
-                  }}>
-                    {framework[dimension].description}
-                  </p>
-                  
-                  {responses[dimension] && Object.keys(responses[dimension] || {}).length > 0 && (
-                    <div style={{ marginTop: '1rem' }}>
-                      <p style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        color: '#374151',
-                        marginBottom: '0.5rem'
-                      }}>
-                        {Object.keys(responses[dimension] || {}).length} questions answered
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'responses' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', padding: '2rem' }}>
-              {dimensions.map(dimension => (
-                <div key={dimension}>
-                  <h4 style={{
-                    fontSize: '1.25rem',
-                    fontWeight: '600',
-                    color: framework[dimension].color,
-                    margin: '0 0 1rem 0',
-                    borderLeft: `4px solid ${framework[dimension].color}`,
-                    paddingLeft: '1rem'
-                  }}>
-                    {framework[dimension].title}
-                  </h4>
-                  
-                  {framework[dimension].questions.map((question, qIndex) => {
-                    const responseValue = responses[dimension]?.[question.key];
-                    
-                    return (
-                      <div
-                        key={question.key}
-                        style={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '0.5rem',
-                          padding: '1.5rem',
-                          marginBottom: '1rem'
-                        }}
-                      >
-                        <div style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          marginBottom: '0.75rem'
-                        }}>
-                          <h5 style={{
-                            fontSize: '1rem',
-                            fontWeight: '500',
-                            color: '#111827',
-                            margin: 0,
-                            flex: 1
-                          }}>
-                            {question.question || 'Question not available'}
-                          </h5>
-                          <div style={{
-                            backgroundColor: framework[dimension].color,
-                            color: 'white',
-                            padding: '0.5rem 1rem',
-                            borderRadius: '0.5rem',
-                            fontSize: '1.125rem',
-                            fontWeight: '700',
-                            marginLeft: '1rem'
-                          }}>
-                            {responseValue || 'N/A'}/7
-                          </div>
-                        </div>
-                        
-                        <p style={{
-                          fontSize: '0.875rem',
-                          color: '#6b7280',
-                          margin: 0,
-                          lineHeight: 1.5
-                        }}>
-                          {question.description || 'No description available'}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'visualization' && (
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center',
-              gap: '2rem',
-              padding: '2rem'
-            }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               {/* Progress Circles */}
-              <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                <h4 style={{
-                  fontSize: '1.25rem',
-                  fontWeight: '600',
-                  color: '#111827',
-                  marginBottom: '2rem'
-                }}>
-                  Leadership Assessment Scores
-                </h4>
-                
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                  gap: '2rem',
-                  justifyItems: 'center',
-                  maxWidth: '800px',
-                  margin: '0 auto'
-                }}>
-                  {Object.entries(framework).map(([key, dimension]) => (
-                    <ProgressCircle
-                      key={key}
-                      value={parseFloat(scores[key]) || 0}
-                      maxValue={7}
-                      size={160}
-                      strokeWidth={18}
-                      color={dimension.color}
-                      title={dimension.title}
-                      subtitle="Individual Score"
-                    />
-                  ))}
-                </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1.5rem',
+                backgroundColor: '#f9fafb',
+                padding: '2rem',
+                borderRadius: '0.75rem',
+                border: '1px solid #e5e7eb'
+              }}>
+                {dimensions.map(dimension => (
+                  <ProgressCircle
+                    key={dimension.key}
+                    value={scores[dimension.key]}
+                    max={7}
+                    size={100}
+                    strokeWidth={10}
+                    color={dimension.color}
+                    title={dimension.title}
+                    subtitle={`${scores[dimension.key].toFixed(1)}/7`}
+                  />
+                ))}
               </div>
               
               {/* Score Summary */}
@@ -1018,9 +956,7 @@ const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framewor
                 padding: '1.5rem',
                 borderRadius: '0.75rem',
                 border: '1px solid #e5e7eb',
-                textAlign: 'center',
-                maxWidth: '400px',
-                width: '100%'
+                textAlign: 'center'
               }}>
                 <h5 style={{
                   fontSize: '1rem',
@@ -1036,7 +972,7 @@ const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framewor
                   color: '#3b82f6',
                   marginBottom: '0.5rem'
                 }}>
-                  {((parseFloat(scores.vision) + parseFloat(scores.reality) + parseFloat(scores.ethics) + parseFloat(scores.courage)) / 4).toFixed(1)}
+                  {((scores.vision + scores.reality + scores.ethics + scores.courage) / 4).toFixed(1)}
                 </div>
                 <div style={{
                   fontSize: '0.875rem',
@@ -1045,6 +981,152 @@ const AssessmentDetailsModal = ({ isOpen, onClose, assessment, project, framewor
                   Average across all leadership dimensions
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'responses' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              {dimensions.map(dimension => (
+                <div key={dimension.key}>
+                  <h4 style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '600',
+                    color: dimension.color,
+                    margin: '0 0 1rem 0',
+                    borderLeft: `4px solid ${dimension.color}`,
+                    paddingLeft: '1rem'
+                  }}>
+                    {dimension.title}
+                  </h4>
+                  
+                  {framework[dimension.key] && framework[dimension.key].questions && 
+                   framework[dimension.key].questions.map((question, qIndex) => {
+                    const responseValue = responses[dimension.key]?.[question.key];
+                    
+                    return (
+                      <div 
+                        key={qIndex}
+                        style={{
+                          backgroundColor: '#f9fafb',
+                          padding: '1.5rem',
+                          borderRadius: '0.75rem',
+                          border: '1px solid #e5e7eb',
+                          marginBottom: '1rem'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          marginBottom: '1rem'
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <h5 style={{
+                              fontSize: '1rem',
+                              fontWeight: '600',
+                              color: '#111827',
+                              margin: '0 0 0.5rem 0'
+                            }}>
+                              {question.question}
+                            </h5>
+                            <p style={{
+                              fontSize: '0.875rem',
+                              color: '#6b7280',
+                              margin: '0 0 0.5rem 0',
+                              lineHeight: 1.5
+                            }}>
+                              {question.description}
+                            </p>
+                            <p style={{
+                              fontSize: '0.75rem',
+                              color: '#9ca3af',
+                              margin: 0,
+                              fontStyle: 'italic'
+                            }}>
+                              {question.scale}
+                            </p>
+                          </div>
+                          
+                          <div style={{
+                            marginLeft: '1rem',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{
+                              display: 'inline-block',
+                              padding: '0.5rem 1rem',
+                              backgroundColor: dimension.color,
+                              color: 'white',
+                              borderRadius: '0.5rem',
+                              fontWeight: '600',
+                              fontSize: '1.125rem',
+                              minWidth: '3rem'
+                            }}>
+                              {responseValue || 'N/A'}
+                            </div>
+                            <div style={{
+                              fontSize: '0.75rem',
+                              color: '#6b7280',
+                              marginTop: '0.25rem'
+                            }}>
+                              Score
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Show total score for this dimension */}
+                  <div style={{
+                    backgroundColor: '#f3f4f6',
+                    padding: '1rem',
+                    borderRadius: '0.5rem',
+                    border: `2px solid ${dimension.color}`,
+                    marginBottom: '1rem'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span style={{
+                        fontSize: '1rem',
+                        fontWeight: '600',
+                        color: '#111827'
+                      }}>
+                        {dimension.title} Dimension Average:
+                      </span>
+                      <span style={{
+                        fontSize: '1.5rem',
+                        fontWeight: '700',
+                        color: dimension.color
+                      }}>
+                        {scores[dimension.key].toFixed(1)}/7
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'visualization' && (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '2rem'
+            }}>
+              <RadarChart 
+                data={scores} 
+                dimensions={dimensions.map(d => d.key)} 
+                size={400}
+              />
+              <BarChart 
+                data={scores} 
+                dimensions={dimensions} 
+                height={250}
+              />
             </div>
           )}
         </div>
@@ -1058,5 +1140,6 @@ export {
   BarChart,
   AssessmentCard,
   HistoryModal,
-  AssessmentDetailsModal
+  AssessmentDetailsModal,
+  ProgressCircle
 };

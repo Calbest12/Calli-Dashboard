@@ -944,7 +944,10 @@ const LeadershipTab = ({ currentUser, onDataChange }) => {
             color: '#111827',
             margin: 0
           }}>
-            Recent Assessments
+            {selectedProject === 'all' ? 
+              `Recent Assessments (${assessments.length} total)` : 
+              `Team Assessments for ${projects.find(p => p.id == selectedProject)?.name || 'Selected Project'} (${assessments.length} assessments)`
+            }
           </h3>
           <button
             onClick={loadAssessments}
@@ -1025,6 +1028,17 @@ const LeadershipTab = ({ currentUser, onDataChange }) => {
                     }}>
                       {new Date(assessment.created_at).toLocaleDateString()}
                     </div>
+                    {/* Show user name to indicate which team member submitted the assessment */}
+                    {assessment.user_name && (
+                      <div style={{
+                        fontSize: '0.875rem',
+                        fontWeight: '500',
+                        color: '#3b82f6',
+                        marginTop: '0.25rem'
+                      }}>
+                        👤 {assessment.user_name}
+                      </div>
+                    )}
                   </div>
                   <div style={{
                     fontSize: '1.25rem',
