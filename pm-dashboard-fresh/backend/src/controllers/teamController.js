@@ -9,7 +9,8 @@ const { query } = require('../config/database');
 const addTeamMember = async (req, res) => {
   try {
     const projectId = req.params.id || req.params.projectId;
-    const { userId, role, contribution } = req.body;
+    const { userId, id, role, contribution } = req.body;
+    const memberId = userId || id; 
 
     if (!userId) {
       return res.status(400).json({

@@ -1,15 +1,9 @@
 // backend/src/controllers/leadershipController.js
-// CLEAN VERSION - Node.js only, no JSX code
-
+// CORRECTED VERSION: Maintains existing function export structure but removes role-based viewing restrictions
 const { query } = require('../config/database');
 
 /**
- * Get all leadership assessments for a user
- * GET /api/leadership/assessments
- * Query params: project_id (optional), user_id (optional - Executive Leaders only)
- */
-/**
- * Get leadership assessments - TEAM VISIBILITY for Team Members
+ * Get leadership assessments - UPDATED FOR EQUAL ACCESS
  */
 const getLeadershipAssessments = async (req, res) => {
   try {
@@ -17,7 +11,7 @@ const getLeadershipAssessments = async (req, res) => {
     const userRole = req.user.role;
     const { project_id, user_id } = req.query;
 
-    console.log(`📊 Fetching leadership assessments for user ${userId}, role: ${userRole}`);
+    console.log(`📊 Fetching leadership assessments with equal access for user ${userId}, role: ${userRole}`);
 
     let assessmentsQuery = `
       SELECT 
@@ -43,37 +37,15 @@ const getLeadershipAssessments = async (req, res) => {
       queryParams.push(parseInt(project_id));
     }
 
-    // FIXED: Role-based access control - Team Members can see TEAM data
-    if (userRole === 'Team Member') {
-      // Team members can see assessments for projects they're part of (team visibility)
-      paramCount++;
-      assessmentsQuery += ` AND la.project_id IN (
-        SELECT DISTINCT project_id 
-        FROM project_team_members 
-        WHERE user_id = $${paramCount}
-        UNION
-        SELECT DISTINCT id 
-        FROM projects 
-        WHERE manager_id = $${paramCount}
-      )`;
-      queryParams.push(userId);
-    } else if (userRole === 'Manager' || userRole === 'Project Manager') {
-      // Managers can see assessments for projects they manage + projects they're team members of
-      paramCount++;
-      assessmentsQuery += ` AND (
-        la.project_id IN (
-          SELECT DISTINCT id FROM projects WHERE manager_id = $${paramCount}
-        )
-        OR la.project_id IN (
-          SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $${paramCount}
-        )
-      )`;
-      queryParams.push(userId);
-    }
-    // Executive Leaders can see all assessments (no additional filter)
+    // UPDATED: Equal access for all roles - everyone can see all team assessments for collective analytics
+    // This enables full team transparency and collective leadership development insights
+    // No role-based restrictions on viewing assessment data - everyone sees the same comprehensive view
+    
+    // Note: Edit permissions are still controlled at the individual assessment level
+    // This change only affects VIEW access to enable team-wide leadership analytics
 
-    // Handle specific user filtering (only for executives/managers)
-    if (user_id && (userRole === 'Executive Leader' || userRole === 'Manager')) {
+    // Handle specific user filtering (available for all roles now, not just executives)
+    if (user_id && user_id !== 'all') {
       paramCount++;
       assessmentsQuery += ` AND la.user_id = $${paramCount}`;
       queryParams.push(parseInt(user_id));
@@ -90,12 +62,17 @@ const getLeadershipAssessments = async (req, res) => {
         : assessment.responses
     }));
 
-    console.log(`✅ Found ${assessments.length} leadership assessments (team visibility: ${userRole})`);
+    console.log(`✅ Found ${assessments.length} leadership assessments with equal access (role: ${userRole})`);
 
     res.json({
       success: true,
       assessments: assessments,
-      message: `Found ${assessments.length} leadership assessments`
+      message: `Found ${assessments.length} leadership assessments`,
+      access_info: {
+        user_role: userRole,
+        access_level: 'full_team_visibility',
+        note: 'All users can view team-wide leadership assessment data for collective insights'
+      }
     });
 
   } catch (error) {
@@ -222,7 +199,7 @@ const submitLeadershipAssessment = async (req, res) => {
 };
 
 /**
- * Get specific leadership assessment by ID
+ * Get specific leadership assessment by ID - UPDATED FOR EQUAL ACCESS
  * GET /api/leadership/assessments/:id
  */
 const getLeadershipAssessmentById = async (req, res) => {
@@ -254,11 +231,8 @@ const getLeadershipAssessmentById = async (req, res) => {
 
     const queryParams = [assessmentId];
 
-    // Only allow users to see their own assessments unless they're Executive Leaders
-    if (userRole !== 'Executive Leader') {
-      assessmentQuery += ` AND la.user_id = $2`;
-      queryParams.push(userId);
-    }
+    // UPDATED: No role-based access control for viewing assessment details
+    // All users can view any assessment details for team transparency
 
     const result = await query(assessmentQuery, queryParams);
 
@@ -276,62 +250,64 @@ const getLeadershipAssessmentById = async (req, res) => {
         : result.rows[0].responses
     };
 
-    console.log(`✅ Found leadership assessment: ID ${assessmentId}`);
+    console.log(`✅ Assessment details retrieved with equal access: ID ${assessmentId} (viewed by ${userRole})`);
 
     res.json({
       success: true,
-      assessment
+      assessment: assessment
     });
 
   } catch (error) {
-    console.error('❌ Error fetching leadership assessment by ID:', error);
+    console.error('❌ Error getting assessment details:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch leadership assessment'
+      error: 'Failed to get assessment details'
     });
   }
 };
 
 /**
- * Get leadership metrics and analytics
+ * Get leadership metrics/analytics - UPDATED FOR EQUAL ACCESS
  * GET /api/leadership/metrics
  */
 const getLeadershipMetrics = async (req, res) => {
   try {
     const userId = req.user.id;
     const userRole = req.user.role;
-    const { project_id, user_id } = req.query;
+    const { project_id } = req.query;
 
-    console.log(`📊 Fetching leadership metrics for user ${userId}, role: ${userRole}`);
-
-    // Use provided user_id if user has permission, otherwise use authenticated user
-    const targetUserId = user_id && userRole === 'Executive Leader' ? user_id : userId;
+    console.log(`📊 Fetching leadership metrics with equal access for user ${userId}, role: ${userRole}`);
 
     let metricsQuery = `
       SELECT 
-        COUNT(la.id) as total_assessments,
-        AVG(la.vision_score) as avg_vision_score,
-        AVG(la.reality_score) as avg_reality_score,
-        AVG(la.ethics_score) as avg_ethics_score,
-        AVG(la.courage_score) as avg_courage_score,
-        AVG(la.overall_score) as avg_overall_score,
-        MIN(la.created_at) as first_assessment,
-        MAX(la.created_at) as latest_assessment
+        COUNT(*) as total_assessments,
+        AVG(vision_score) as avg_vision_score,
+        AVG(reality_score) as avg_reality_score,
+        AVG(ethics_score) as avg_ethics_score,
+        AVG(courage_score) as avg_courage_score,
+        AVG(overall_score) as avg_overall_score,
+        MIN(created_at) as first_assessment,
+        MAX(created_at) as latest_assessment
       FROM leadership_assessments la
-      WHERE la.user_id = $1
+      LEFT JOIN projects p ON la.project_id = p.id
+      WHERE 1=1
     `;
 
-    const queryParams = [targetUserId];
+    const queryParams = [];
+    let paramCount = 0;
 
     if (project_id && project_id !== 'all') {
-      metricsQuery += ` AND la.project_id = $${queryParams.length + 1}`;
-      queryParams.push(project_id);
+      paramCount++;
+      metricsQuery += ` AND la.project_id = $${paramCount}`;
+      queryParams.push(parseInt(project_id));
     }
+
+    // UPDATED: Equal access for all roles - everyone can see team-wide metrics
+    // No role-based restrictions on viewing metrics data
 
     const result = await query(metricsQuery, queryParams);
     const metrics = result.rows[0];
 
-    // Convert numeric strings to numbers and handle nulls
     const processedMetrics = {
       total_assessments: parseInt(metrics.total_assessments) || 0,
       avg_vision_score: parseFloat(metrics.avg_vision_score) || 0,
@@ -343,11 +319,16 @@ const getLeadershipMetrics = async (req, res) => {
       latest_assessment: metrics.latest_assessment
     };
 
-    console.log(`✅ Leadership metrics calculated: ${processedMetrics.total_assessments} assessments`);
+    console.log(`✅ Leadership metrics calculated with equal access: ${processedMetrics.total_assessments} assessments`);
 
     res.json({
       success: true,
-      metrics: processedMetrics
+      metrics: processedMetrics,
+      access_info: {
+        user_role: userRole,
+        access_level: 'full_team_visibility',
+        note: 'All users can view team-wide leadership metrics for collective insights'
+      }
     });
 
   } catch (error) {
@@ -360,7 +341,7 @@ const getLeadershipMetrics = async (req, res) => {
 };
 
 /**
- * Delete a leadership assessment
+ * Delete a leadership assessment - ONLY owner can delete
  * DELETE /api/leadership/assessments/:id
  */
 const deleteLeadershipAssessment = async (req, res) => {

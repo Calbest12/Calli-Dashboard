@@ -39,20 +39,13 @@ const TeamMemberManagement = ({ currentUser, onTeamUpdate }) => {
       setLoading(true);
       console.log('Loading initial team management data...');
       
-      // Load team data and all users in parallel
-      const [teamResponse, usersResponse] = await Promise.all([
-        apiService.getExecutiveTeam().catch(err => {
-          console.warn('Team data failed:', err);
-          return { success: false, data: { teamMembers: [], unassignedMembers: [] } };
-        }),
-        apiService.getAllUsers().catch(err => {
-          console.warn('Users data failed:', err);
-          return { success: false, data: [] };
-        })
-      ]);
+      // Load team data only
+      const teamResponse = await apiService.getExecutiveTeam().catch(err => {
+        console.warn('Team data failed:', err);
+        return { success: false, data: { teamMembers: [], unassignedMembers: [] } };
+      });
       
       console.log('Team response:', teamResponse);
-      console.log('Users response:', usersResponse);
       
       // Set team data
       if (teamResponse.success) {
@@ -61,11 +54,6 @@ const TeamMemberManagement = ({ currentUser, onTeamUpdate }) => {
         if (onTeamUpdate) {
           onTeamUpdate(teamResponse.data);
         }
-      }
-      
-      // Set all users data
-      if (usersResponse.success && Array.isArray(usersResponse.data)) {
-        setAllUsers(usersResponse.data);
       }
       
       setDataLoaded(true);
@@ -78,7 +66,9 @@ const TeamMemberManagement = ({ currentUser, onTeamUpdate }) => {
     }
   };
 
-  const searchUsers = (query) => {
+  
+
+  const searchUsers = async (query) => {
     if (!query.trim() || query.length < 2) {
       setSearchResults([]);
       setShowSearchResults(false);
@@ -87,20 +77,37 @@ const TeamMemberManagement = ({ currentUser, onTeamUpdate }) => {
   
     setSearchLoading(true);
     
-    // Filter from loaded users - allow all roles except current user and current team
-    const filtered = allUsers.filter(user => {
-      const excludeCurrentUser = user.id !== currentUser.id;
-      const excludeTeamMembers = !currentTeam.some(member => member.id === user.id);
-      const nameMatch = user.name.toLowerCase().includes(query.toLowerCase());
-      const emailMatch = user.email.toLowerCase().includes(query.toLowerCase());
-      const searchMatch = nameMatch || emailMatch;
+    try {
+      console.log('🔍 Searching for users:', query);
       
-      return excludeCurrentUser && excludeTeamMembers && searchMatch;
-    });
-    
-    setSearchResults(filtered);
-    setShowSearchResults(true);
-    setSearchLoading(false);
+      // Use the API to search directly in the database
+      const response = await apiService.searchUsers(query);
+      
+      if (response.success && Array.isArray(response.data)) {
+        // Filter out current user and current team members
+        const currentTeamIds = new Set(currentTeam.map(member => member.id));
+        
+        const filtered = response.data.filter(user => {
+          const excludeCurrentUser = user.id !== currentUser.id;
+          const excludeTeamMembers = !currentTeamIds.has(user.id);
+          return excludeCurrentUser && excludeTeamMembers;
+        });
+        
+        console.log('✅ Search found:', response.data.length, 'users, showing:', filtered.length);
+        setSearchResults(filtered);
+        setShowSearchResults(true);
+      } else {
+        console.warn('Search failed:', response);
+        setSearchResults([]);
+        setShowSearchResults(true);
+      }
+    } catch (error) {
+      console.error('❌ Search error:', error);
+      setSearchResults([]);
+      setShowSearchResults(true);
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
   const addTeamMembers = async (memberIds) => {
@@ -554,7 +561,7 @@ const TeamMemberManagement = ({ currentUser, onTeamUpdate }) => {
       </div>
 
       {/* Unassigned Members (if any) */}
-      {unassignedMembers.length > 0 && (
+      {showSearchResults && searchQuery.length >= 2 && (
         <div style={{
           backgroundColor: '#fefce8',
           border: '1px solid #fde047',

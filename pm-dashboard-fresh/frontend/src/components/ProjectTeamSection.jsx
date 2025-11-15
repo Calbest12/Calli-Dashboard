@@ -1,65 +1,91 @@
 // frontend/src/components/ProjectTeamSection.jsx
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Mail, UserX, Search, Filter } from 'lucide-react';
+import { 
+  Users, 
+  Plus, 
+  Mail, 
+  UserX, 
+  Search, 
+  Filter, 
+  X,
+  Loader,
+  CheckCircle,
+  AlertCircle 
+} from 'lucide-react';
 import TeamMemberModal from './TeamMemberModal';
 import apiService from '../services/apiService';
 
-const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnly }) => {
+const ProjectTeamSection = ({ 
+  teamMembersDetailed = [], 
+  project, 
+  currentUser, 
+  onTeamUpdate, 
+  refreshHistory 
+}) => {
   const [teamMembers, setTeamMembers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
+  // Add Team Member Modal State (similar to TeamMemberManagement)
+  const [showTeamSearch, setShowTeamSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [executiveTeam, setExecutiveTeam] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [selectedMembers, setSelectedMembers] = useState([]);
+
+  // SIMPLIFIED PERMISSIONS - Always allow access for debugging
+  const canManageTeam = true; // Always true for debugging
+  const isReadOnly = false;   // Always false for debugging
+
   useEffect(() => {
-    if (project?.id) {
+    console.log('🔍 ProjectTeamSection useEffect triggered', {
+      teamMembersDetailed: teamMembersDetailed?.length,
+      projectId: project?.id,
+      currentUser: currentUser?.name
+    });
+
+    if (teamMembersDetailed && teamMembersDetailed.length > 0) {
+      console.log('✅ Using teamMembersDetailed:', teamMembersDetailed.length);
+      setTeamMembers(teamMembersDetailed);
+    } else if (project?.id) {
+      console.log('⚠️ Loading team members from API');
       loadTeamMembers();
-      loadAllUsers();
     }
-  }, [project?.id]);
+    
+    // Always load users and executive team for debugging
+    loadAllUsers();
+    //loadExecutiveTeam();
+  }, [project?.id, teamMembersDetailed]);
 
   const loadTeamMembers = async () => {
-      try {
-        setLoading(true);
-        console.log('📡 Loading team members for project:', project.id);
-        
-        // SAFE CHECK: Verify user authentication
-        const currentUser = apiService.getCurrentUser();
-        console.log('🔍 Current user check:', {
-          exists: !!currentUser,
-          hasId: !!currentUser?.id,
-          hasRole: !!currentUser?.role,
-          role: currentUser?.role
-        });
-        
-        // If user has no role, still try the API but log the issue
-        if (!currentUser?.role) {
-          console.warn('⚠️ User has no role defined - this may cause display issues');
-        }
-        
-        const response = await apiService.getProjectTeam(project.id);
-        
-        if (response && response.success) {
-          console.log('✅ Team members loaded:', response.team);
-          
-          // SAFE FIX: Always use response.team or response.data
-          const teamData = response.team || response.data || [];
-          setTeamMembers(teamData);
-          
-          console.log('👥 Team members set:', teamData.length);
-        } else {
-          console.warn('⚠️ Team loading response:', response);
-          setTeamMembers([]);
-        }
-      } catch (error) {
-        console.error('❌ Failed to load team members:', error);
+    try {
+      setLoading(true);
+      console.log('📡 Loading team members for project:', project.id);
+      
+      const response = await apiService.getProjectTeam(project.id);
+      
+      if (response && response.success) {
+        console.log('✅ Team members loaded:', response.team);
+        const teamData = response.team || response.data || [];
+        setTeamMembers(teamData);
+      } else {
+        console.warn('⚠️ Team loading response:', response);
         setTeamMembers([]);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('❌ Failed to load team members:', error);
+      setTeamMembers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadAllUsers = async () => {
     try {
@@ -67,8 +93,9 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
       const response = await apiService.getAllUsers();
       
       if (response && response.success) {
-        console.log('✅ All users loaded:', response.users?.length || 0);
-        setAllUsers(response.users || []);
+        const userData = response.users || response.data || [];
+        console.log('✅ All users loaded:', userData.length);
+        setAllUsers(userData);
       } else {
         console.warn('⚠️ Users loading response:', response);
         setAllUsers([]);
@@ -76,6 +103,26 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
     } catch (error) {
       console.error('❌ Failed to load users:', error);
       setAllUsers([]);
+    }
+  };
+
+  // Load the executive's assigned team members
+  const loadExecutiveTeam = async () => {
+    try {
+      console.log('📡 Loading executive team...');
+      
+      const response = await apiService.getExecutiveTeam();
+      if (response && response.success) {
+        const teamData = response.data?.teamMembers || [];
+        console.log('✅ Executive team loaded:', teamData.length);
+        setExecutiveTeam(teamData);
+      } else {
+        console.warn('⚠️ Executive team loading failed:', response);
+        setExecutiveTeam([]);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load executive team:', error);
+      setExecutiveTeam([]);
     }
   };
 
@@ -95,6 +142,16 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
         console.log('✅ Team member added successfully');
         await loadTeamMembers();
         setShowAddMember(false);
+        
+        // Notify parent component
+        if (onTeamUpdate) {
+          onTeamUpdate(teamMembers);
+        }
+        
+        // Refresh project history
+        if (refreshHistory) {
+          refreshHistory();
+        }
       } else {
         throw new Error(response?.error || 'Failed to add team member');
       }
@@ -119,6 +176,16 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
         console.log('✅ Team member updated successfully');
         await loadTeamMembers();
         setEditingMember(null);
+        
+        // Notify parent component
+        if (onTeamUpdate) {
+          onTeamUpdate(teamMembers);
+        }
+        
+        // Refresh project history
+        if (refreshHistory) {
+          refreshHistory();
+        }
       } else {
         throw new Error(response?.error || 'Failed to update team member');
       }
@@ -137,6 +204,16 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
       if (response && response.success) {
         console.log('✅ Team member removed successfully');
         await loadTeamMembers();
+        
+        // Notify parent component
+        if (onTeamUpdate) {
+          onTeamUpdate(teamMembers);
+        }
+        
+        // Refresh project history
+        if (refreshHistory) {
+          refreshHistory();
+        }
       } else {
         throw new Error(response?.error || 'Failed to remove team member');
       }
@@ -144,6 +221,129 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
       console.error('❌ Failed to remove team member:', error);
       alert(`Failed to remove team member: ${error.message}`);
     }
+  };
+
+  // Team search functionality
+  const searchTeamMembers = async (query) => {
+    if (!query.trim() || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    
+    try {
+      console.log('🔍 Searching team members:', query);
+      console.log('🔍 Available data for search:', {
+        allUsersCount: allUsers.length,
+        executiveTeamCount: executiveTeam.length,
+        currentUserRole: currentUser?.role
+      });
+      
+      // Use executive team if available, otherwise use all users
+      let availableUsers = [];
+      if (executiveTeam.length > 0) {
+        console.log('✅ Using executive team for search');
+        availableUsers = executiveTeam.filter(user => 
+          user.name?.toLowerCase().includes(query.toLowerCase()) ||
+          user.email?.toLowerCase().includes(query.toLowerCase())
+        );
+      } else {
+        console.log('✅ Using all users for search');
+        availableUsers = allUsers.filter(user => 
+          user.name?.toLowerCase().includes(query.toLowerCase()) ||
+          user.email?.toLowerCase().includes(query.toLowerCase())
+        );
+      }
+
+      // Filter out current project team members and current user
+      const currentTeamIds = new Set(teamMembers.map(member => member.id || member.user_id));
+      
+      const filtered = availableUsers.filter(user => {
+        const excludeCurrentUser = user.id !== currentUser?.id;
+        const excludeTeamMembers = !currentTeamIds.has(user.id);
+        return excludeCurrentUser && excludeTeamMembers;
+      });
+
+      console.log('✅ Search results:', {
+        availableUsers: availableUsers.length,
+        filtered: filtered.length,
+        currentTeamIds: Array.from(currentTeamIds)
+      });
+      
+      setSearchResults(filtered);
+      
+    } catch (error) {
+      console.error('❌ Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const addTeamMemberFromSearch = async (memberIds) => {
+    try {
+      setAddMemberLoading(true);
+      setMessage({ type: '', text: '' });
+      
+      console.log('Adding project team members:', memberIds);
+      
+      for (const memberId of memberIds) {
+        const member = searchResults.find(u => u.id === memberId);
+        if (member) {
+          await handleAddMember({
+            id: member.id,
+            name: member.name,
+            email: member.email,
+            role: 'Team Member',
+            skills: []
+          });
+        }
+      }
+      
+      setMessage({ 
+        type: 'success', 
+        text: `Successfully added ${memberIds.length} team member(s) to project` 
+      });
+      
+      // Clear selections and close search
+      setSelectedMembers([]);
+      setSearchQuery('');
+      setSearchResults([]);
+      setShowTeamSearch(false);
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      
+    } catch (error) {
+      console.error('Error adding team members to project:', error);
+      setMessage({ type: 'error', text: error.message || 'Failed to add team members' });
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  const toggleMemberSelection = (memberId) => {
+    setSelectedMembers(prev => 
+      prev.includes(memberId) 
+        ? prev.filter(id => id !== memberId)
+        : [...prev, memberId]
+    );
+  };
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    // Clear previous timeout
+    if (window.projectSearchTimeout) {
+      clearTimeout(window.projectSearchTimeout);
+    }
+    
+    // Set new timeout
+    window.projectSearchTimeout = setTimeout(() => {
+      searchTeamMembers(query);
+    }, 300);
   };
 
   const filteredMembers = teamMembers.filter(member => {
@@ -157,6 +357,19 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
   });
 
   const uniqueRoles = [...new Set(teamMembers.map(member => member.role_in_project).filter(Boolean))];
+
+  console.log('🔍 ProjectTeamSection render state:', {
+    currentUser: currentUser?.name,
+    currentUserRole: currentUser?.role,
+    canManageTeam,
+    isReadOnly,
+    teamMembersCount: teamMembers.length,
+    projectId: project?.id,
+    allUsersCount: allUsers.length,
+    executiveTeamCount: executiveTeam.length,
+    showAddMember,
+    showTeamSearch
+  });
 
   if (loading) {
     return (
@@ -194,7 +407,33 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
           </h3>
         </div>
 
-        {canManageTeam && !isReadOnly && (
+        {/* ALWAYS SHOW BUTTONS FOR DEBUGGING */}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {/* Add from Executive Team Button */}
+          <button
+            onClick={() => setShowTeamSearch(true)}
+            style={{
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              padding: '0.5rem 1rem',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#059669'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#10b981'}
+          >
+            <Plus size={16} />
+            Add from Team
+          </button>
+
+          {/* Original Add Member Button */}
           <button
             onClick={() => setShowAddMember(true)}
             style={{
@@ -211,12 +450,53 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
               gap: '0.5rem',
               transition: 'background-color 0.2s'
             }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = '#2563eb'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = '#3b82f6'}
           >
             <Plus size={16} />
             Add Member
           </button>
-        )}
+        </div>
       </div>
+
+      {/* Debug Information */}
+      <div style={{
+        padding: '0 1.5rem',
+        marginBottom: '1rem',
+        fontSize: '0.875rem',
+        color: '#6b7280',
+        backgroundColor: '#f9fafb',
+        border: '1px solid #e5e7eb',
+        borderRadius: '0.375rem',
+        margin: '0 1.5rem 1rem'
+      }}>
+        <strong>Debug Info:</strong> Users: {allUsers.length}, Executive Team: {executiveTeam.length}, 
+        Current User: {currentUser?.name} ({currentUser?.role}), 
+        Can Manage: {canManageTeam ? 'Yes' : 'No'}, 
+        Read Only: {isReadOnly ? 'Yes' : 'No'}
+      </div>
+
+      {/* Success/Error Messages */}
+      {message.text && (
+        <div style={{
+          padding: '0 1.5rem',
+          marginBottom: '1rem'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: message.type === 'success' ? '#ecfdf5' : '#fef2f2',
+            border: `1px solid ${message.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+            borderRadius: '0.5rem',
+            color: message.type === 'success' ? '#065f46' : '#991b1b'
+          }}>
+            {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>{message.text}</span>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filter */}
       {teamMembers.length > 0 && (
@@ -254,28 +534,29 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
           </div>
 
           {/* Role Filter */}
-          {uniqueRoles.length > 1 && (
+          {uniqueRoles.length > 0 && (
             <div style={{ position: 'relative' }}>
               <Filter size={16} style={{
                 position: 'absolute',
                 left: '0.75rem',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: '#9ca3af',
-                zIndex: 1
+                color: '#9ca3af'
               }} />
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 style={{
-                  paddingLeft: '2.5rem',
                   padding: '0.5rem 0.75rem 0.5rem 2.5rem',
                   border: '1px solid #d1d5db',
                   borderRadius: '0.375rem',
                   fontSize: '0.875rem',
                   outline: 'none',
-                  backgroundColor: 'white'
+                  backgroundColor: 'white',
+                  minWidth: '140px'
                 }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
               >
                 <option value="all">All Roles</option>
                 {uniqueRoles.map(role => (
@@ -325,11 +606,11 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
           }}>
             {filteredMembers.map(member => (
               <TeamMemberCard
-                key={member.id || member.email}
+                key={member.id || member.user_id || member.email}
                 member={member}
-                onEdit={canManageTeam && !isReadOnly ? () => setEditingMember(member) : null}
-                onRemove={canManageTeam && !isReadOnly ? () => handleRemoveMember(member.id) : null}
-                isReadOnly={isReadOnly}
+                onEdit={() => setEditingMember(member)}
+                onRemove={() => handleRemoveMember(member.id || member.user_id)}
+                isReadOnly={false}
               />
             ))}
           </div>
@@ -337,22 +618,272 @@ const ProjectTeamSection = ({ project, onUpdateProject, canManageTeam, isReadOnl
       </div>
 
       {/* Add/Edit Member Modal */}
-      <TeamMemberModal
-        isOpen={showAddMember || !!editingMember}
-        onClose={() => {
-          setShowAddMember(false);
-          setEditingMember(null);
-        }}
-        onSubmit={editingMember ? handleEditMember : handleAddMember}
-        member={editingMember}
-        allUsers={allUsers}
-        currentTeamMembers={teamMembers}
-      />
+      {(showAddMember || editingMember) && (
+        <TeamMemberModal
+          isOpen={showAddMember || !!editingMember}
+          onClose={() => {
+            setShowAddMember(false);
+            setEditingMember(null);
+          }}
+          onSubmit={editingMember ? handleEditMember : handleAddMember}
+          member={editingMember}
+          allUsers={allUsers}
+          currentTeamMembers={teamMembers}
+        />
+      )}
+
+      {/* Team Search Modal */}
+      {showTeamSearch && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '0.75rem',
+            width: '90%',
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1.5rem',
+              borderBottom: '1px solid #e5e7eb'
+            }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', margin: 0 }}>
+                Add Team Members to Project
+              </h3>
+              <button
+                onClick={() => {
+                  setShowTeamSearch(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setSelectedMembers([]);
+                }}
+                style={{
+                  padding: '0.5rem',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  borderRadius: '0.375rem'
+                }}
+              >
+                <X size={20} style={{ color: '#6b7280' }} />
+              </button>
+            </div>
+
+            {/* Search Section */}
+            <div style={{ padding: '1.5rem', borderBottom: '1px solid #e5e7eb' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#9ca3af'
+                }} />
+                <input
+                  type="text"
+                  placeholder="Search available users..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.875rem',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                />
+              </div>
+
+              {/* Debug info in modal */}
+              <div style={{
+                marginTop: '0.5rem',
+                fontSize: '0.75rem',
+                color: '#6b7280'
+              }}>
+                Available for search: {executiveTeam.length > 0 ? `${executiveTeam.length} executive team members` : `${allUsers.length} all users`}
+              </div>
+
+              {selectedMembers.length > 0 && (
+                <div style={{ 
+                  marginTop: '1rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                    {selectedMembers.length} member(s) selected
+                  </span>
+                  <button
+                    onClick={() => addTeamMemberFromSearch(selectedMembers)}
+                    disabled={addMemberLoading}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.5rem 1rem',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '0.5rem',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      cursor: addMemberLoading ? 'not-allowed' : 'pointer',
+                      opacity: addMemberLoading ? 0.6 : 1
+                    }}
+                  >
+                    {addMemberLoading ? <Loader size={16} /> : <Plus size={16} />}
+                    Add Selected
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Results Section */}
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              {searchLoading ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '2rem',
+                  color: '#6b7280'
+                }}>
+                  <Loader size={20} style={{ marginRight: '0.5rem' }} />
+                  Searching...
+                </div>
+              ) : searchQuery.length >= 2 ? (
+                searchResults.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '2rem',
+                    color: '#6b7280'
+                  }}>
+                    <Users size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
+                    <p style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                      No available users found
+                    </p>
+                    <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                      Try a different search term or check if members are already on this project
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ padding: '0' }}>
+                    {searchResults.map((user) => (
+                      <div
+                        key={user.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '1rem 1.5rem',
+                          borderBottom: '1px solid #f3f4f6',
+                          backgroundColor: selectedMembers.includes(user.id) ? '#eff6ff' : 'white'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedMembers.includes(user.id)}
+                            onChange={() => toggleMemberSelection(user.id)}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '50%',
+                            backgroundColor: '#10b981',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontWeight: '600',
+                            fontSize: '0.875rem'
+                          }}>
+                            {user.name?.split(' ').map(n => n[0]).join('').toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: '500', color: '#111827' }}>
+                              {user.name}
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <Mail size={14} />
+                              {user.email}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                              {user.role}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={() => addTeamMemberFromSearch([user.id])}
+                          disabled={addMemberLoading}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.5rem 1rem',
+                            backgroundColor: '#f3f4f6',
+                            color: '#374151',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '0.5rem',
+                            fontSize: '0.875rem',
+                            fontWeight: '500',
+                            cursor: addMemberLoading ? 'not-allowed' : 'pointer',
+                            opacity: addMemberLoading ? 0.6 : 1
+                          }}
+                        >
+                          <Plus size={16} />
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '2rem',
+                  color: '#6b7280'
+                }}>
+                  <Search size={48} style={{ color: '#d1d5db', margin: '0 auto 1rem' }} />
+                  <p style={{ fontSize: '1rem', fontWeight: '500', marginBottom: '0.5rem' }}>
+                    Search Available Users
+                  </p>
+                  <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                    Type at least 2 characters to search for users to add
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Simplified TeamMemberCard component without contribution and task tracking
+// Team Member Card component
 const TeamMemberCard = ({ member, onEdit, onRemove, isReadOnly }) => {
   const handleRemoveClick = () => {
     if (window.confirm(`Are you sure you want to remove ${member.name} from this project?`)) {
@@ -414,46 +945,40 @@ const TeamMemberCard = ({ member, onEdit, onRemove, isReadOnly }) => {
           </p>
         </div>
 
-        {/* Actions */}
-        {!isReadOnly && (onEdit || onRemove) && (
-          <div style={{ display: 'flex', gap: '0.25rem' }}>
-            {onEdit && (
-              <button
-                onClick={onEdit}
-                style={{
-                  padding: '0.375rem',
-                  backgroundColor: 'white',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '0.25rem',
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  fontSize: '0.75rem'
-                }}
-                title="Edit member"
-              >
-                Edit
-              </button>
-            )}
-            {onRemove && (
-              <button
-                onClick={handleRemoveClick}
-                style={{
-                  padding: '0.375rem',
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fecaca',
-                  borderRadius: '0.25rem',
-                  cursor: 'pointer',
-                  color: '#dc2626',
-                  display: 'flex',
-                  alignItems: 'center'
-                }}
-                title="Remove member"
-              >
-                <UserX size={14} />
-              </button>
-            )}
-          </div>
-        )}
+        {/* Actions - Always show for debugging */}
+        <div style={{ display: 'flex', gap: '0.25rem' }}>
+          <button
+            onClick={onEdit}
+            style={{
+              padding: '0.375rem',
+              backgroundColor: 'white',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.25rem',
+              cursor: 'pointer',
+              color: '#6b7280',
+              fontSize: '0.75rem'
+            }}
+            title="Edit member"
+          >
+            Edit
+          </button>
+          <button
+            onClick={handleRemoveClick}
+            style={{
+              padding: '0.375rem',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '0.25rem',
+              cursor: 'pointer',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Remove member"
+          >
+            <UserX size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Role and Skills */}

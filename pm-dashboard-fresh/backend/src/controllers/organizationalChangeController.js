@@ -1,620 +1,484 @@
-// backend/controllers/organizationalChangeController.js
+// backend/src/controllers/organizationalChangeController.js
+// CORRECTED VERSION: Maintains existing function export structure but removes role-based viewing restrictions
 const { query: db } = require('../config/database');
 
-class OrganizationalChangeController {
-  // Get organizational change assessments with filtering
-  async getOrganizationalChangeAssessments(req, res) {
-    try {
-      const { project_id, user_id, type = 'organizational_change' } = req.query;
-      const currentUserId = req.user.id;
-      const userRole = req.user.role;
+/**
+ * Get organizational change assessments - UPDATED FOR EQUAL ACCESS
+ */
+const getOrganizationalChangeAssessments = async (req, res) => {
+  try {
+    const { project_id, user_id, type = 'organizational_change' } = req.query;
+    const currentUserId = req.user.id;
+    const userRole = req.user.role;
 
-      console.log('📊 Getting organizational change assessments:', {
-        project_id,
-        user_id,
-        type,
-        currentUserId,
-        userRole
-      });
+    console.log('📊 Getting organizational change assessments with equal access:', {
+      project_id,
+      user_id,
+      type,
+      currentUserId,
+      userRole
+    });
 
-      let query = `
-        SELECT 
-          oca.*,
-          u.name as user_name,
-          u.email as user_email,
-          u.role as user_role,
-          p.name as project_name,
-          (oca.vision_score + oca.alignment_score + oca.understanding_score + oca.enactment_score) / 4.0 as overall_score
-        FROM organizational_change_assessments oca
-        LEFT JOIN users u ON oca.user_id = u.id
-        LEFT JOIN projects p ON oca.project_id = p.id
-        WHERE oca.assessment_type = $1
-      `;
+    let query = `
+      SELECT 
+        oca.*,
+        u.name as user_name,
+        u.email as user_email,
+        u.role as user_role,
+        p.name as project_name,
+        (oca.vision_score + oca.alignment_score + oca.understanding_score + oca.enactment_score) / 4.0 as overall_score
+      FROM organizational_change_assessments oca
+      LEFT JOIN users u ON oca.user_id = u.id
+      LEFT JOIN projects p ON oca.project_id = p.id
+      WHERE oca.assessment_type = $1
+    `;
 
-      const params = [type];
-      let paramCount = 1;
+    const params = [type];
+    let paramCount = 1;
 
-      // Filter by project if specified
-      if (project_id && project_id !== 'all' && !isNaN(parseInt(project_id))) {
-        paramCount++;
-        query += ` AND oca.project_id = $${paramCount}`;
-        params.push(parseInt(project_id));
-      }
-
-      // Role-based access control
-      if (userRole === 'Team Member') {
-        // FIXED: Team members can see all assessments for projects they're part of
-        paramCount++;
-        query += ` AND oca.project_id IN (
-          SELECT DISTINCT project_id 
-          FROM project_team_members 
-          WHERE user_id = $${paramCount}
-          UNION
-          SELECT DISTINCT id 
-          FROM projects 
-          WHERE manager_id = $${paramCount}
-        )`;
-        params.push(currentUserId);
-      } else if (userRole === 'Manager' || userRole === 'Project Manager') {
-        // Managers can see all assessments for projects they manage + participate in
-        paramCount++;
-        query += ` AND (oca.user_id = $${paramCount} OR EXISTS (
-          SELECT 1 FROM projects WHERE id = oca.project_id AND manager_id = $${paramCount}
-        ) OR oca.project_id IN (
-          SELECT DISTINCT project_id FROM project_team_members WHERE user_id = $${paramCount}
-        ))`;
-        params.push(currentUserId);
-      }
-
-      // Filter by specific user if requested and user has permission
-      if (user_id && (userRole === 'Executive Leader' || userRole === 'Manager') && !isNaN(parseInt(user_id))) {
-        paramCount++;
-        query += ` AND oca.user_id = $${paramCount}`;
-        params.push(parseInt(user_id));
-      }
-
-      query += ` ORDER BY oca.created_at DESC`;
-
-      const result = await db(query, params);
-
-      console.log(`✅ Found ${result.rows.length} organizational change assessments`);
-
-      res.json({
-        success: true,
-        assessments: result.rows,
-        message: `Found ${result.rows.length} organizational change assessments`
-      });
-
-    } catch (error) {
-      console.error('❌ Error getting organizational change assessments:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get organizational change assessments',
-        error: error.message
-      });
+    // Filter by project if specified
+    if (project_id && project_id !== 'all' && !isNaN(parseInt(project_id))) {
+      paramCount++;
+      query += ` AND oca.project_id = $${paramCount}`;
+      params.push(parseInt(project_id));
     }
-  }
 
-  // Submit new organizational change assessment
-  async submitOrganizationalChangeAssessment(req, res) {
-    try {
-      const { project_id, type = 'organizational_change', responses } = req.body;
-      const userId = req.user.id;
-
-      console.log('📝 Submitting organizational change assessment:', {
-        userId,
-        project_id,
-        type,
-        responses: Object.keys(responses || {})
-      });
-
-      // Validate responses
-      if (!responses || typeof responses !== 'object') {
-        return res.status(400).json({
-          success: false,
-          message: 'Assessment responses are required'
-        });
-      }
-
-      // Calculate dimension scores from responses - use bound method
-      const scores = this.calculateDimensionScores(responses);
-
-      console.log('📊 Calculated scores:', scores);
-
-      // Insert assessment into database
-      const insertQuery = `
-        INSERT INTO organizational_change_assessments (
-          user_id, project_id, assessment_type, vision_score, alignment_score, 
-          understanding_score, enactment_score, responses
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING *
-      `;
-
-      const insertParams = [
-        userId,
-        project_id || null,
-        type,
-        scores.vision,
-        scores.alignment,
-        scores.understanding,
-        scores.enactment,
-        JSON.stringify(responses)
-      ];
-
-      const result = await db(insertQuery, insertParams);
-
-      console.log('✅ Organizational change assessment submitted successfully:', result.rows[0].id);
-
-      res.json({
-        success: true,
-        assessment: result.rows[0],
-        message: 'Organizational change assessment submitted successfully'
-      });
-
-    } catch (error) {
-      console.error('❌ Error submitting organizational change assessment:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to submit organizational change assessment',
-        error: error.message
-      });
-    }
-  }
-
-  // Calculate dimension scores from responses - BOUND METHOD
-  calculateDimensionScores(responses) {
-    console.log('🔢 Calculating dimension scores from:', responses);
+    // UPDATED: Equal access for all roles - everyone can see all team assessments for collective analytics
+    // This enables full team transparency and collective organizational change insights
+    // No role-based restrictions on viewing assessment data - everyone sees the same comprehensive view
     
-    const dimensions = ['vision', 'alignment', 'understanding', 'enactment'];
-    const scores = {};
+    // Note: Edit permissions are still controlled at the individual assessment level
+    // This change only affects VIEW access to enable team-wide organizational change analytics
 
-    dimensions.forEach(dimension => {
-      const dimensionResponses = responses[dimension];
-      console.log(`📊 Processing ${dimension}:`, dimensionResponses);
-      
-      if (dimensionResponses && typeof dimensionResponses === 'object') {
-        const values = Object.values(dimensionResponses).filter(val => 
-          typeof val === 'number' && val >= 1 && val <= 7
-        );
-        
-        if (values.length > 0) {
-          scores[dimension] = values.reduce((sum, val) => sum + val, 0) / values.length;
-        } else {
-          scores[dimension] = 0;
-        }
-      } else {
-        scores[dimension] = 0;
+    // Filter by specific user if requested (available for all roles now, not just executives)
+    if (user_id && user_id !== 'all' && !isNaN(parseInt(user_id))) {
+      paramCount++;
+      query += ` AND oca.user_id = $${paramCount}`;
+      params.push(parseInt(user_id));
+    }
+
+    query += ` ORDER BY oca.created_at DESC`;
+
+    const result = await db(query, params);
+
+    console.log(`✅ Retrieved ${result.rows.length} organizational change assessments with equal access (role: ${userRole})`);
+
+    res.json({
+      success: true,
+      assessments: result.rows,
+      summary: {
+        total: result.rows.length,
+        user_role: userRole,
+        access_level: 'full_team_visibility',
+        note: 'All users can view team-wide organizational change assessment data for collective insights'
       }
     });
 
-    // Round to 1 decimal place
-    Object.keys(scores).forEach(key => {
-      scores[key] = Math.round(scores[key] * 10) / 10;
+  } catch (error) {
+    console.error('❌ Error getting organizational change assessments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get organizational change assessments',
+      error: error.message
     });
-
-    console.log('✅ Final scores:', scores);
-    return scores;
   }
-
-  // Get organizational change analytics - TEAM AVERAGES (no user filtering)
-  async getOrganizationalChangeAnalytics(req, res) {
-    try {
-      const { project_id } = req.query;
-      const userRole = req.user.role;
-      const userId = req.user.id;
-
-      console.log('📈 Getting organizational change analytics:', { project_id, userRole, userId });
-
-      // For analytics/averages, we want ALL team data regardless of role
-      // Only filter by project if specified
-      let query = `
-        SELECT 
-          oca.user_id,
-          oca.project_id,
-          u.name as user_name,
-          u.email as user_email,
-          u.role as user_role,
-          p.name as project_name,
-          oca.vision_score,
-          oca.alignment_score,
-          oca.understanding_score,
-          oca.enactment_score,
-          (oca.vision_score + oca.alignment_score + oca.understanding_score + oca.enactment_score) / 4.0 as overall_score,
-          oca.created_at
-        FROM organizational_change_assessments oca
-        LEFT JOIN users u ON oca.user_id = u.id
-        LEFT JOIN projects p ON oca.project_id = p.id
-        WHERE 1=1
-      `;
-
-      const params = [];
-      let paramCount = 0;
-
-      // Only filter by project if specified (not by user for analytics)
-      if (project_id && project_id !== 'all' && !isNaN(parseInt(project_id))) {
-        paramCount++;
-        query += ` AND oca.project_id = $${paramCount}`;
-        params.push(parseInt(project_id));
-      }
-
-      query += ` ORDER BY oca.created_at DESC`;
-
-      const result = await db(query, params);
-
-      // Calculate summary statistics - use bound method
-      const analytics = this.calculateAnalytics(result.rows);
-
-      console.log('✅ Organizational change analytics calculated for all team members');
-
-      res.json({
-        success: true,
-        analytics: analytics,
-        assessments: result.rows
-      });
-
-    } catch (error) {
-      console.error('❌ Error getting organizational change analytics:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get organizational change analytics',
-        error: error.message
-      });
-    }
-  }
-
-  // Calculate analytics from assessment data - BOUND METHOD
-  calculateAnalytics(assessments) {
-    if (!assessments || assessments.length === 0) {
-      return {
-        totalAssessments: 0,
-        uniqueParticipants: 0,
-        averageScores: {
-          vision: 0,
-          alignment: 0,
-          understanding: 0,
-          enactment: 0,
-          overall: 0
-        },
-        scoreDistribution: {
-          excellent: 0,
-          good: 0,
-          developing: 0,
-          needsImprovement: 0
-        },
-        trendData: []
-      };
-    }
-
-    const totalAssessments = assessments.length;
-    const uniqueParticipants = new Set(assessments.map(a => a.user_id)).size;
-
-    // Calculate average scores - use bound method
-    const averageScores = {
-      vision: this.calculateAverage(assessments, 'vision_score'),
-      alignment: this.calculateAverage(assessments, 'alignment_score'),
-      understanding: this.calculateAverage(assessments, 'understanding_score'),
-      enactment: this.calculateAverage(assessments, 'enactment_score'),
-      overall: this.calculateAverage(assessments, 'overall_score')
-    };
-
-    // Calculate score distribution based on overall scores
-    const scoreDistribution = {
-      excellent: assessments.filter(a => a.overall_score >= 6).length,
-      good: assessments.filter(a => a.overall_score >= 4 && a.overall_score < 6).length,
-      developing: assessments.filter(a => a.overall_score >= 2 && a.overall_score < 4).length,
-      needsImprovement: assessments.filter(a => a.overall_score < 2).length
-    };
-
-    // Create trend data (assessments over time) - use bound method
-    const trendData = this.createTrendData(assessments);
-
-    return {
-      totalAssessments,
-      uniqueParticipants,
-      averageScores,
-      scoreDistribution,
-      trendData
-    };
-  }
-
-  // Helper method to calculate average - BOUND METHOD
-  calculateAverage(assessments, field) {
-    const values = assessments.map(a => parseFloat(a[field])).filter(v => !isNaN(v) && v > 0);
-    return values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
-  }
-
-  // Helper method to create trend data - BOUND METHOD
-  createTrendData(assessments) {
-    const monthlyData = {};
-    
-    assessments.forEach(assessment => {
-      const date = new Date(assessment.created_at);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthlyData[monthKey]) {
-        monthlyData[monthKey] = {
-          month: monthKey,
-          assessments: [],
-          count: 0
-        };
-      }
-      
-      monthlyData[monthKey].assessments.push(assessment);
-      monthlyData[monthKey].count++;
-    });
-
-    // Calculate averages for each month - use bound method
-    return Object.values(monthlyData).map(month => ({
-      month: month.month,
-      count: month.count,
-      averageOverallScore: this.calculateAverage(month.assessments, 'overall_score')
-    })).sort((a, b) => a.month.localeCompare(b.month));
-  }
-
-  // Get assessment details by ID
-  async getAssessmentDetails(req, res) {
-    try {
-      const { id } = req.params;
-      const userRole = req.user.role;
-      const userId = req.user.id;
-
-      console.log('🔍 Getting assessment details:', { id, userRole, userId });
-
-      let query = `
-        SELECT 
-          oca.*,
-          u.name as user_name,
-          u.email as user_email,
-          u.role as user_role,
-          p.name as project_name,
-          (oca.vision_score + oca.alignment_score + oca.understanding_score + oca.enactment_score) / 4.0 as overall_score
-        FROM organizational_change_assessments oca
-        LEFT JOIN users u ON oca.user_id = u.id
-        LEFT JOIN projects p ON oca.project_id = p.id
-        WHERE oca.id = $1
-      `;
-
-      const params = [parseInt(id)];
-
-      // Role-based access control
-      if (userRole === 'Team Member') {
-        query += ` AND oca.user_id = $2`;
-        params.push(userId);
-      } else if (userRole === 'Manager') {
-        query += ` AND (oca.user_id = $2 OR EXISTS (
-          SELECT 1 FROM projects WHERE id = oca.project_id AND manager_id = $2
-        ))`;
-        params.push(userId);
-      }
-
-      const result = await db(query, params);
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Assessment not found or access denied'
-        });
-      }
-
-      res.json({
-        success: true,
-        assessment: result.rows[0]
-      });
-
-    } catch (error) {
-      console.error('❌ Error getting assessment details:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get assessment details',
-        error: error.message
-      });
-    }
-  }
-
-  // Update assessment 
-  async updateAssessment(req, res) {
-    try {
-      const { id } = req.params;
-      const { responses } = req.body;
-      const userId = req.user.id;
-
-      console.log('📝 Updating organizational change assessment:', { id, userId });
-
-      // Check if user owns this assessment or has permission to edit
-      const checkQuery = `
-        SELECT * FROM organizational_change_assessments 
-        WHERE id = $1 AND user_id = $2
-      `;
-      
-      const checkResult = await db(checkQuery, [parseInt(id), userId]);
-      
-      if (checkResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Assessment not found or access denied'
-        });
-      }
-
-      // Calculate new scores - use bound method
-      const scores = this.calculateDimensionScores(responses);
-
-      // Update assessment
-      const updateQuery = `
-        UPDATE organizational_change_assessments 
-        SET vision_score = $2, alignment_score = $3, understanding_score = $4, 
-            enactment_score = $5, responses = $6, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING *
-      `;
-
-      const updateParams = [
-        parseInt(id),
-        scores.vision,
-        scores.alignment,
-        scores.understanding,
-        scores.enactment,
-        JSON.stringify(responses)
-      ];
-
-      const result = await db(updateQuery, updateParams);
-
-      console.log('✅ Assessment updated successfully');
-
-      res.json({
-        success: true,
-        assessment: result.rows[0],
-        message: 'Assessment updated successfully'
-      });
-
-    } catch (error) {
-      console.error('❌ Error updating assessment:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to update assessment',
-        error: error.message
-      });
-    }
-  }
-
-  // Get team metrics for visualizations (accessible to all users)
-  async getTeamMetrics(req, res) {
-    try {
-      const { project_id } = req.query;
-
-      console.log('📊 Getting team metrics for visualizations:', { project_id, requestedBy: req.user.name });
-
-      // Get ALL assessments for team metrics (no role-based filtering)
-      let query = `
-        SELECT 
-          oca.vision_score,
-          oca.alignment_score,
-          oca.understanding_score,
-          oca.enactment_score,
-          oca.created_at,
-          u.name as user_name
-        FROM organizational_change_assessments oca
-        LEFT JOIN users u ON oca.user_id = u.id
-        WHERE 1=1
-      `;
-
-      const params = [];
-      let paramCount = 0;
-
-      // Only filter by project if specified
-      if (project_id && project_id !== 'all' && !isNaN(parseInt(project_id))) {
-        paramCount++;
-        query += ` AND oca.project_id = $${paramCount}`;
-        params.push(parseInt(project_id));
-      }
-
-      query += ` ORDER BY oca.created_at DESC`;
-
-      const result = await db(query, params);
-      const assessments = result.rows;
-
-      // Calculate team averages
-      const teamMetrics = {
-        count: assessments.length,
-        uniqueUsers: new Set(assessments.map(a => a.user_name)).size
-      };
-
-      if (assessments.length > 0) {
-        // Calculate average scores across all team members
-        teamMetrics.vision = this.calculateAverage(assessments, 'vision_score');
-        teamMetrics.alignment = this.calculateAverage(assessments, 'alignment_score');
-        teamMetrics.understanding = this.calculateAverage(assessments, 'understanding_score');
-        teamMetrics.enactment = this.calculateAverage(assessments, 'enactment_score');
-        teamMetrics.overall = (teamMetrics.vision + teamMetrics.alignment + teamMetrics.understanding + teamMetrics.enactment) / 4;
-      } else {
-        teamMetrics.vision = 0;
-        teamMetrics.alignment = 0;
-        teamMetrics.understanding = 0;
-        teamMetrics.enactment = 0;
-        teamMetrics.overall = 0;
-      }
-
-      console.log(`✅ Team metrics calculated: ${assessments.length} assessments from ${teamMetrics.uniqueUsers} users`);
-
-      res.json({
-        success: true,
-        metrics: teamMetrics,
-        message: `Team metrics based on ${assessments.length} assessments from ${teamMetrics.uniqueUsers} team members`
-      });
-
-    } catch (error) {
-      console.error('❌ Error getting team metrics:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get team metrics',
-        error: error.message
-      });
-    }
-  }
-
-  // Delete assessment
-  async deleteAssessment(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = req.user.id;
-      const userRole = req.user.role;
-
-      console.log('🗑️ Deleting organizational change assessment:', { id, userId, userRole });
-
-      let deleteQuery = `
-        DELETE FROM organizational_change_assessments 
-        WHERE id = $1
-      `;
-      const params = [parseInt(id)];
-
-      // Role-based deletion control
-      if (userRole !== 'Executive Leader') {
-        deleteQuery += ` AND user_id = $2`;
-        params.push(userId);
-      }
-
-      const result = await db(deleteQuery, params);
-
-      if (result.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Assessment not found or access denied'
-        });
-      }
-
-      console.log('✅ Assessment deleted successfully');
-
-      res.json({
-        success: true,
-        message: 'Assessment deleted successfully'
-      });
-
-    } catch (error) {
-      console.error('❌ Error deleting assessment:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete assessment',
-        error: error.message
-      });
-    }
-  }
-}
-
-// Create and export instance with proper binding
-const controller = new OrganizationalChangeController();
-
-// Bind all methods to ensure 'this' context is preserved
-const boundController = {
-  getOrganizationalChangeAssessments: controller.getOrganizationalChangeAssessments.bind(controller),
-  submitOrganizationalChangeAssessment: controller.submitOrganizationalChangeAssessment.bind(controller),
-  getOrganizationalChangeAnalytics: controller.getOrganizationalChangeAnalytics.bind(controller),
-  getTeamMetrics: controller.getTeamMetrics.bind(controller),
-  getAssessmentDetails: controller.getAssessmentDetails.bind(controller),
-  updateAssessment: controller.updateAssessment.bind(controller),
-  deleteAssessment: controller.deleteAssessment.bind(controller),
-  calculateDimensionScores: controller.calculateDimensionScores.bind(controller),
-  calculateAnalytics: controller.calculateAnalytics.bind(controller),
-  calculateAverage: controller.calculateAverage.bind(controller),
-  createTrendData: controller.createTrendData.bind(controller)
 };
 
-module.exports = boundController;
+/**
+ * Submit organizational change assessment
+ */
+const submitOrganizationalChangeAssessment = async (req, res) => {
+  try {
+    const { project_id, responses, assessment_type = 'organizational_change' } = req.body;
+    const userId = req.user.id;
+
+    console.log('📝 Creating organizational change assessment:', { project_id, userId, assessment_type });
+
+    if (!project_id || !responses) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project ID and responses are required'
+      });
+    }
+
+    // Calculate scores from responses  
+    const scores = calculateOrganizationalChangeScores(responses);
+
+    const insertQuery = `
+      INSERT INTO organizational_change_assessments (
+        user_id, project_id, assessment_type, responses,
+        vision_score, alignment_score, understanding_score, enactment_score,
+        overall_score, created_at, updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING *
+    `;
+
+    const values = [
+      userId,
+      parseInt(project_id),
+      assessment_type,
+      JSON.stringify(responses),
+      scores.vision,
+      scores.alignment, 
+      scores.understanding,
+      scores.enactment,
+      scores.overall
+    ];
+
+    const result = await db(insertQuery, values);
+
+    console.log('✅ Organizational change assessment created:', result.rows[0].id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Organizational change assessment created successfully',
+      assessment: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating assessment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create assessment',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get organizational change analytics
+ */
+const getOrganizationalChangeAnalytics = async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const currentUserId = req.user.id;
+    const userRole = req.user.role;
+
+    console.log('📊 Getting organizational change analytics with equal access:', {
+      project_id,
+      currentUserId,
+      userRole
+    });
+
+    let analyticsQuery = `
+      SELECT 
+        COUNT(*) as total_assessments,
+        AVG(vision_score) as avg_vision_score,
+        AVG(alignment_score) as avg_alignment_score,
+        AVG(understanding_score) as avg_understanding_score,
+        AVG(enactment_score) as avg_enactment_score,
+        AVG(overall_score) as avg_overall_score,
+        MIN(created_at) as first_assessment,
+        MAX(created_at) as latest_assessment
+      FROM organizational_change_assessments
+      WHERE 1=1
+    `;
+
+    const params = [];
+    let paramCount = 0;
+
+    if (project_id && project_id !== 'all') {
+      paramCount++;
+      analyticsQuery += ` AND project_id = $${paramCount}`;
+      params.push(parseInt(project_id));
+    }
+
+    // UPDATED: Equal access for all roles - no role-based restrictions on analytics
+
+    const result = await db(analyticsQuery, params);
+    const analytics = result.rows[0];
+
+    const processedAnalytics = {
+      total_assessments: parseInt(analytics.total_assessments) || 0,
+      avg_vision_score: parseFloat(analytics.avg_vision_score) || 0,
+      avg_alignment_score: parseFloat(analytics.avg_alignment_score) || 0,
+      avg_understanding_score: parseFloat(analytics.avg_understanding_score) || 0,
+      avg_enactment_score: parseFloat(analytics.avg_enactment_score) || 0,
+      avg_overall_score: parseFloat(analytics.avg_overall_score) || 0,
+      first_assessment: analytics.first_assessment,
+      latest_assessment: analytics.latest_assessment
+    };
+
+    console.log(`✅ Organizational change analytics calculated with equal access: ${processedAnalytics.total_assessments} assessments`);
+
+    res.json({
+      success: true,
+      analytics: processedAnalytics,
+      access_info: {
+        user_role: userRole,
+        access_level: 'full_team_visibility',
+        note: 'All users can view team-wide organizational change analytics'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting organizational change analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get organizational change analytics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get team metrics
+ */
+const getTeamMetrics = async (req, res) => {
+  try {
+    const { project_id } = req.query;
+    const currentUserId = req.user.id;
+    const userRole = req.user.role;
+
+    console.log('📊 Getting team metrics with equal access:', {
+      project_id,
+      currentUserId,
+      userRole
+    });
+
+    let metricsQuery = `
+      SELECT 
+        u.name as user_name,
+        u.role as user_role,
+        oca.vision_score,
+        oca.alignment_score,
+        oca.understanding_score,
+        oca.enactment_score,
+        oca.overall_score,
+        oca.created_at
+      FROM organizational_change_assessments oca
+      LEFT JOIN users u ON oca.user_id = u.id
+      WHERE 1=1
+    `;
+
+    const params = [];
+    let paramCount = 0;
+
+    if (project_id && project_id !== 'all') {
+      paramCount++;
+      metricsQuery += ` AND oca.project_id = $${paramCount}`;
+      params.push(parseInt(project_id));
+    }
+
+    // UPDATED: Equal access for all roles - no role-based restrictions
+
+    metricsQuery += ` ORDER BY oca.created_at DESC`;
+
+    const result = await db(metricsQuery, params);
+
+    console.log(`✅ Team metrics retrieved with equal access: ${result.rows.length} assessments`);
+
+    res.json({
+      success: true,
+      metrics: result.rows,
+      access_info: {
+        user_role: userRole,
+        access_level: 'full_team_visibility',
+        note: 'All users can view team-wide organizational change metrics'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting team metrics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get team metrics',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get assessment details - UPDATED FOR EQUAL ACCESS
+ */
+const getAssessmentDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    console.log('📋 Getting organizational change assessment details with equal access:', { id, userId, userRole });
+
+    let query = `
+      SELECT 
+        oca.*,
+        u.name as user_name,
+        u.email as user_email,
+        u.role as user_role,
+        p.name as project_name,
+        (oca.vision_score + oca.alignment_score + oca.understanding_score + oca.enactment_score) / 4.0 as overall_score
+      FROM organizational_change_assessments oca
+      LEFT JOIN users u ON oca.user_id = u.id
+      LEFT JOIN projects p ON oca.project_id = p.id
+      WHERE oca.id = $1
+    `;
+
+    const params = [parseInt(id)];
+
+    // UPDATED: No role-based access control for viewing assessment details
+    // All users can view any assessment details for team transparency
+
+    const result = await db(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      assessment: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting assessment details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get assessment details',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update assessment - ONLY owner can edit
+ */
+const updateAssessment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { responses } = req.body;
+    const userId = req.user.id;
+
+    console.log('📝 Updating organizational change assessment:', { id, userId });
+
+    // Check if user owns this assessment (edit permissions are still restricted)
+    const checkQuery = `
+      SELECT * FROM organizational_change_assessments 
+      WHERE id = $1 AND user_id = $2
+    `;
+    
+    const checkResult = await db(checkQuery, [parseInt(id), userId]);
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or you do not have permission to edit it'
+      });
+    }
+
+    // Calculate updated scores
+    const scores = calculateOrganizationalChangeScores(responses);
+
+    const updateQuery = `
+      UPDATE organizational_change_assessments 
+      SET responses = $1, vision_score = $2, alignment_score = $3, 
+          understanding_score = $4, enactment_score = $5, overall_score = $6,
+          updated_at = NOW()
+      WHERE id = $7 AND user_id = $8
+      RETURNING *
+    `;
+
+    const updateResult = await db(updateQuery, [
+      JSON.stringify(responses),
+      scores.vision,
+      scores.alignment,
+      scores.understanding,
+      scores.enactment,
+      scores.overall,
+      parseInt(id),
+      userId
+    ]);
+
+    console.log('✅ Organizational change assessment updated:', id);
+
+    res.json({
+      success: true,
+      message: 'Assessment updated successfully',
+      assessment: updateResult.rows[0]
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating assessment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update assessment',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Delete assessment - ONLY owner can delete  
+ */
+const deleteAssessment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    console.log('🗑️ Deleting organizational change assessment:', { id, userId });
+
+    // Check if user owns this assessment
+    const deleteQuery = `
+      DELETE FROM organizational_change_assessments 
+      WHERE id = $1 AND user_id = $2
+      RETURNING id
+    `;
+    
+    const result = await db(deleteQuery, [parseInt(id), userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Assessment not found or you do not have permission to delete it'
+      });
+    }
+
+    console.log('✅ Organizational change assessment deleted:', id);
+
+    res.json({
+      success: true,
+      message: 'Assessment deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Error deleting assessment:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete assessment',
+      error: error.message
+    });
+  }
+};
+
+// Helper function to calculate organizational change scores
+function calculateOrganizationalChangeScores(responses) {
+  const dimensions = ['vision', 'alignment', 'understanding', 'enactment'];
+  const scores = {};
+  
+  dimensions.forEach(dimension => {
+    const dimensionResponses = responses[dimension] || {};
+    const values = Object.values(dimensionResponses).filter(val => !isNaN(parseFloat(val)));
+    const sum = values.reduce((acc, val) => acc + parseFloat(val), 0);
+    scores[dimension] = values.length > 0 ? Number((sum / values.length).toFixed(2)) : 0;
+  });
+  
+  // Calculate overall score as average of dimension scores
+  const validScores = Object.values(scores).filter(score => score > 0);
+  scores.overall = validScores.length > 0 ? 
+    Number((validScores.reduce((sum, score) => sum + score, 0) / validScores.length).toFixed(2)) : 0;
+  
+  return scores;
+}
+
+module.exports = {
+  getOrganizationalChangeAssessments,
+  submitOrganizationalChangeAssessment,
+  getOrganizationalChangeAnalytics,
+  getTeamMetrics,
+  getAssessmentDetails,
+  updateAssessment,
+  deleteAssessment
+};

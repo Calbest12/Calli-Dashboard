@@ -245,69 +245,116 @@ class ApiService {
 
   // PROJECT TEAM METHODS - FIXED: These were missing!
   async getProjectTeam(projectId) {
-    try {
-      console.log('📡 Fetching project team for project:', projectId);
-      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('❌ Error fetching project team:', error);
-      return {
-        success: false,
-        error: error.message,
-        team: []
-      };
+      try {
+       console.log('📡 Fetching project team for project:', projectId);
+        const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
+          headers: this.getHeaders(),
+        });
+    
+        return await this.handleResponse(response);
+      } catch (error) {
+        console.error('❌ Error fetching project team:', error);
+        return {
+          success: false,
+          error: error.message,
+          team: []
+        };
+      }
     }
-  }
 
-  async addProjectTeamMember(projectId, memberData) {
-    try {
-      console.log('➕ Adding team member to project:', projectId, memberData);
-      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(memberData),
-      });
+    async addTeamMember(projectId, memberData) {
+        try {
+          console.log('➕ Adding team member to project:', projectId, memberData);
+          
+          // Backend expects: { id, role, skills, joinedDate, status }
+          const payload = {
+            id: memberData.user_id || memberData.id,
+            role: memberData.role_in_project || memberData.role || 'Team Member',
+            skills: memberData.skills || [],
+            joinedDate: memberData.joinedDate || new Date().toISOString(),
+            status: memberData.status || 'active'
+          };
+      
+          const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(payload),
+          });
+      
+          return await this.handleResponse(response);
+        } catch (error) {
+          console.error('❌ Error adding project team member:', error);
+          throw error;
+        }
+      }
 
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('❌ Error adding project team member:', error);
-      throw error;
+      async removeTeamMember(projectId, memberId) {
+        try {
+          console.log('➖ Removing team member from project:', projectId, memberId);
+          const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+          });
+      
+          return await this.handleResponse(response);
+        } catch (error) {
+          console.error('❌ Error removing project team member:', error);
+          throw error;
+        }
+      }
+
+  async updateTeamMember(projectId, memberId, memberData) {
+      try {
+        console.log('✏️ Updating team member in project:', projectId, memberId, memberData);
+        
+        // Backend expects: { role, skills, status, joinedDate }
+        const payload = {
+          role: memberData.role_in_project || memberData.role || 'Team Member',
+          skills: memberData.skills || [],
+          status: memberData.status || 'active',
+          joinedDate: memberData.joinedDate
+        };
+    
+        const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
+          method: 'PUT',
+          headers: this.getHeaders(),
+          body: JSON.stringify(payload),
+        });
+    
+        return await this.handleResponse(response);
+      } catch (error) {
+        console.error('❌ Error updating project team member:', error);
+        throw error;
+      }
     }
+    // Add this method to your frontend/src/services/apiService.js class
+
+async getProjectAnalytics(projectId) {
+  try {
+    console.log('📊 Fetching analytics for project:', projectId);
+    const response = await fetch(`${this.baseURL}/api/projects/${projectId}/analytics`, {
+      headers: this.getHeaders(),
+    });
+
+    return await this.handleResponse(response);
+  } catch (error) {
+    console.error('❌ Error fetching project analytics:', error);
+    throw error;
   }
-
-  async removeProjectTeamMember(projectId, memberId) {
-    try {
-      console.log('➖ Removing team member from project:', projectId, memberId);
-      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('❌ Error removing project team member:', error);
-      throw error;
+}
+    async getProjectInsights(projectId) {
+      try {
+        console.log('📊 Getting project insights for project:', projectId);
+        const response = await fetch(`${this.baseURL}/api/ai/insights/${projectId}`, {
+          headers: this.getHeaders(),
+        });
+    
+        return await this.handleResponse(response);
+      } catch (error) {
+        console.error('❌ Error getting project insights:', error);
+        throw error;
+      }
     }
-  }
-
-  async updateProjectTeamMember(projectId, memberId, memberData) {
-    try {
-      console.log('✏️ Updating team member in project:', projectId, memberId, memberData);
-      const response = await fetch(`${this.baseURL}/api/projects/${projectId}/team/${memberId}`, {
-        method: 'PUT',
-        headers: this.getHeaders(),
-        body: JSON.stringify(memberData),
-      });
-
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('❌ Error updating project team member:', error);
-      throw error;
-    }
-  }
 
   // PROJECT COMMENT METHODS
   async getProjectComments(projectId) {
@@ -394,6 +441,53 @@ class ApiService {
     }
   }
 
+  async assignTeamMembers(memberIds) {
+    try {
+      console.log('➕ Assigning multiple team members:', memberIds);
+      const response = await fetch(`${this.baseURL}/api/team/assign`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ memberIds }),
+      });
+  
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error assigning team members:', error);
+      return { success: false, error: error.message };
+    }
+  }
+  async removeTeamMembers(memberIds) {
+    try {
+      console.log('➖ Removing multiple team members:', memberIds);
+      const response = await fetch(`${this.baseURL}/api/team/remove`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify({ memberIds }),
+      });
+  
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('❌ Error removing team members:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async searchUsers(query) {
+    try {
+      console.log('🔍 Searching users with query:', query);
+      const response = await fetch(`${this.baseURL}/api/users/search?q=${encodeURIComponent(query)}`, {
+        headers: this.getHeaders(),
+      });
+  
+      const result = await this.handleResponse(response);
+      console.log('🔍 Search result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error searching users:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  }
+
   // USER MANAGEMENT METHODS
   async getUsers() {
     try {
@@ -409,28 +503,29 @@ class ApiService {
   }
 
   async getAllUsers() {
-    try {
-      console.log('📡 Fetching all users...');
-      const response = await fetch(`${this.baseURL}/api/users`, {
-        headers: this.getHeaders(),
-      });
-
-      const result = await this.handleResponse(response);
-      
-      return {
-        success: true,
-        users: result.data || result.users || result || []
-      };
-      
-    } catch (error) {
-      console.error('❌ Error fetching all users:', error);
-      return {
-        success: false,
-        error: error.message,
-        users: []
-      };
+      try {
+        console.log('📡 Fetching all available users...');
+        const response = await fetch(`${this.baseURL}/api/projects/users/available`, {
+          headers: this.getHeaders(),
+        });
+    
+        const result = await this.handleResponse(response);
+        
+        return {
+          success: true,
+          users: result.data || [],
+          data: result.data || []
+        };
+      } catch (error) {
+        console.error('❌ Error fetching users:', error);
+        return {
+          success: false,
+          error: error.message,
+          users: [],
+          data: []
+        };
+      }
     }
-  }
 
   async getAvailableUsers(projectId = null) {
     try {
@@ -614,13 +709,35 @@ class ApiService {
 
   // EXECUTIVE METHODS
   async getExecutiveTeam() {
-    try {
-      return this.get('/api/team/executive');
-    } catch (error) {
-      console.error('Error getting executive team:', error);
-      return { success: false, error: error.message, data: { teamMembers: [], unassignedMembers: [], totalTeamSize: 0 } };
+      try {
+        console.log('📡 Fetching executive team...');
+        const response = await fetch(`${this.baseURL}/api/team/executive`, {
+          headers: this.getHeaders(),
+        });
+    
+        if (!response.ok) {
+          // Handle specific HTTP errors
+          if (response.status === 403) {
+            console.warn('⚠️ User not authorized to access executive team');
+            return { 
+              success: false, 
+              error: 'Not authorized', 
+              data: { teamMembers: [], unassignedMembers: [], totalTeamSize: 0 } 
+            };
+          }
+          throw new Error(`HTTP ${response.status}`);
+        }
+    
+        return await response.json();
+      } catch (error) {
+        console.error('❌ Error fetching executive team:', error);
+        return { 
+          success: false, 
+          error: error.message, 
+          data: { teamMembers: [], unassignedMembers: [], totalTeamSize: 0 } 
+        };
+      }
     }
-  }
 
   async getExecutiveDashboard() {
     try {

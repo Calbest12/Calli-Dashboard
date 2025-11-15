@@ -40,7 +40,7 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
     // Add Team Management tab ONLY for Executive Leaders - PRESERVED ORIGINAL LOGIC
     ...(currentUser?.role === 'Executive Leader' ? [{
       id: 'team',
-      label: 'Team Management', 
+      label: 'Team Members', 
       icon: Users,
       description: 'Manage your team members and track their projects'
     }] : []),
@@ -420,7 +420,7 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
                   <Users size={20} style={{ color: 'white' }} />
                 </div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0 }}>
-                  Team Management
+                  Team Member Management
                 </h3>
               </div>
               <p style={{ color: '#6b7280', fontSize: '0.875rem', margin: 0 }}>
@@ -581,7 +581,7 @@ const PMDashboard = ({ onUserChange, onProjectChange }) => {
           return (
             <div style={{ padding: '2rem', textAlign: 'center' }}>
               <h3>Access Denied</h3>
-              <p>Only Executive Leaders can access Team Management.</p>
+              <p>Only Executive Leaders can access Team Member Management.</p>
             </div>
           );
         }

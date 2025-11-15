@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './Chatbot.css';
+import aiService from '../services/aiService';
 import apiService from '../services/apiService';
 
 const Chatbot = ({ currentUser = null, currentProject = null }) => {
@@ -151,7 +152,7 @@ const Chatbot = ({ currentUser = null, currentProject = null }) => {
       let response;
       
       if (isAllProjectsRequest) {
-        const projectsResponse = await apiService.getAllProjects();
+        const projectsResponse = await aiService.getAllProjects();
         if (projectsResponse.success && projectsResponse.data) {
           const projects = projectsResponse.data;
           let projectSummary = `You currently have ${projects.length} project(s):\n\n`;

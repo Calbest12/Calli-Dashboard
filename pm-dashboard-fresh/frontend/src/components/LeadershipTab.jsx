@@ -23,6 +23,19 @@ import {
   ChevronRight
 } from 'lucide-react';
 import apiService from '../services/apiService';
+import {
+  RadarChart,
+  BarChart,
+  AssessmentCard,
+  HistoryModal,
+  AssessmentDetailsModal
+} from './LeadershipHistoryComponents';
+import {
+  ProgressCircle,
+  HorizontalProgressBars,
+  TrendLineChart,
+  ComparisonMatrix
+} from './EnhancedVisualizationComponents';
 
 // Helper function to safely handle null/undefined values
 const safeNumber = (value, defaultValue = 0) => {
@@ -1349,183 +1362,25 @@ const LeadershipTab = ({ currentUser, onDataChange }) => {
 
       {/* History Modal */}
       {showHistoryModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '1rem',
-            padding: '2rem',
-            maxWidth: '1000px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflow: 'auto'
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '2rem'
-            }}>
-              <h3 style={{
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                color: '#111827',
-                margin: 0
-              }}>
-                Assessment History
-              </h3>
-              <button
-                onClick={() => setShowHistoryModal(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#6b7280',
-                  cursor: 'pointer'
-                }}
-              >
-                <X size={24} />
-              </button>
-            </div>
+        <HistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          assessments={assessments}
+          projects={projects}
+          framework={leadershipDiamondFramework}
+          onAssessmentSelect={setSelectedAssessmentDetails}
+        />
+      )}
 
-            {assessments.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                padding: '3rem',
-                color: '#6b7280'
-              }}>
-                <p>No assessments found.</p>
-              </div>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gap: '1rem'
-              }}>
-                {assessments.map(assessment => (
-                  <div key={assessment.id} style={{
-                    padding: '1.5rem',
-                    borderRadius: '0.5rem',
-                    border: '1px solid #e5e7eb',
-                    backgroundColor: '#f9fafb'
-                  }}>
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                      marginBottom: '1rem'
-                    }}>
-                      <div>
-                        <div style={{
-                          fontSize: '1.125rem',
-                          fontWeight: '600',
-                          color: '#111827',
-                          marginBottom: '0.25rem'
-                        }}>
-                          {assessment.project_name || 'General Assessment'}
-                        </div>
-                        <div style={{
-                          fontSize: '0.875rem',
-                          color: '#6b7280'
-                        }}>
-                          {new Date(assessment.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: 'numeric'
-                          })}
-                        </div>
-                      </div>
-                      <div style={{
-                        fontSize: '1.5rem',
-                        fontWeight: '700',
-                        color: getScoreColor(safeNumber(assessment.overall_score, 0))
-                      }}>
-                        {safeNumber(assessment.overall_score, 0).toFixed(1)}
-                      </div>
-                    </div>
-                    
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(4, 1fr)',
-                      gap: '1rem'
-                    }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: '#3b82f6'
-                        }}>
-                          {safeNumber(assessment.vision_score, 0).toFixed(1)}
-                        </div>
-                        <div style={{
-                          fontSize: '0.75rem',
-                          color: '#6b7280'
-                        }}>
-                          Vision
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: '#10b981'
-                        }}>
-                          {safeNumber(assessment.reality_score, 0).toFixed(1)}
-                        </div>
-                        <div style={{
-                          fontSize: '0.75rem',
-                          color: '#6b7280'
-                        }}>
-                          Reality
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: '#8b5cf6'
-                        }}>
-                          {safeNumber(assessment.ethics_score, 0).toFixed(1)}
-                        </div>
-                        <div style={{
-                          fontSize: '0.75rem',
-                          color: '#6b7280'
-                        }}>
-                          Ethics
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: '#f59e0b'
-                        }}>
-                          {safeNumber(assessment.courage_score, 0).toFixed(1)}
-                        </div>
-                        <div style={{
-                          fontSize: '0.75rem',
-                          color: '#6b7280'
-                        }}>
-                          Courage
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Assessment Details Modal */}
+      {selectedAssessmentDetails && (
+        <AssessmentDetailsModal
+          isOpen={!!selectedAssessmentDetails}
+          onClose={() => setSelectedAssessmentDetails(null)}
+          assessment={selectedAssessmentDetails}
+          project={projects.find(p => p.id === selectedAssessmentDetails.project_id)}
+          framework={leadershipDiamondFramework}
+        />
       )}
     </div>
   );

@@ -9,6 +9,8 @@ import apiService from '../services/apiService';
 const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUser }) => {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [commentsCount, setCommentsCount] = useState(0);
+  const [activitiesCount, setActivitiesCount] = useState(0);
 
   useEffect(() => {
     console.log('ProjectAnalyticsSection - project received:', project);
@@ -25,19 +27,70 @@ const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUse
     
     try {
       console.log('Loading analytics for project ID:', project.id);
+      
+      // Load analytics from the API (this includes proper comment/activity counts)
       const response = await apiService.getProjectAnalytics(project.id);
       console.log('Analytics API response:', response);
       
       if (response?.success && response?.analytics) {
+        console.log('✅ Using API analytics with proper counts:', response.analytics);
         setAnalytics(response.analytics);
+        setCommentsCount(response.analytics.comment_count || 0);
+        setActivitiesCount(response.analytics.activity_count || 0);
       } else {
         throw new Error('Invalid analytics response');
       }
     } catch (error) {
-      console.warn('Analytics API failed, using project data:', error.message);
-      generateAnalyticsFromProject();
+      console.warn('Analytics API failed, loading individual counts:', error.message);
+      await loadIndividualCounts();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadIndividualCounts = async () => {
+    try {
+      // Load comments count
+      try {
+        const commentsResponse = await apiService.getProjectComments(project.id);
+        const actualCommentsCount = commentsResponse?.success ? (commentsResponse.data?.length || 0) : 0;
+        console.log('✅ Loaded comments count:', actualCommentsCount);
+        setCommentsCount(actualCommentsCount);
+      } catch (commentError) {
+        console.warn('Failed to load comments:', commentError.message);
+        setCommentsCount(0);
+      }
+
+      // Load activities count  
+      try {
+        const historyResponse = await apiService.getProjectHistory(project.id);
+        const actualActivitiesCount = historyResponse?.success ? (historyResponse.data?.length || 0) : 0;
+        console.log('✅ Loaded activities count:', actualActivitiesCount);
+        setActivitiesCount(actualActivitiesCount);
+      } catch (historyError) {
+        console.warn('Failed to load history:', historyError.message);
+        setActivitiesCount(0);
+      }
+
+      // Generate analytics with actual counts
+      const analyticsFromProject = {
+        pm_progress: project.progress?.PM || 0,
+        leadership_progress: project.progress?.Leadership || 0,
+        change_mgmt_progress: project.progress?.ChangeMgmt || 0,
+        career_dev_progress: project.progress?.CareerDev || 0,
+        status: project.status || 'unknown',
+        priority: project.priority || 'medium',
+        team_size: teamMembersDetailed.length,
+        comment_count: commentsCount,
+        activity_count: activitiesCount
+      };
+      
+      console.log('Generated analytics with actual counts:', analyticsFromProject);
+      setAnalytics(analyticsFromProject);
+      
+    } catch (error) {
+      console.error('Failed to load individual counts:', error);
+      generateAnalyticsFromProject();
     }
   };
 
@@ -55,11 +108,11 @@ const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUse
       status: project.status || 'unknown',
       priority: project.priority || 'medium',
       team_size: teamMembersDetailed.length,
-      comment_count: project.recentComments?.length || 0,
-      activity_count: project.recentHistory?.length || 0
+      comment_count: commentsCount || project.recentComments?.length || 0,
+      activity_count: activitiesCount || project.recentHistory?.length || 0
     };
     
-    console.log('Generated analytics from project data:', analyticsFromProject);
+    console.log('Generated analytics from project data with fallback counts:', analyticsFromProject);
     setAnalytics(analyticsFromProject);
   };
 
@@ -172,21 +225,21 @@ const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUse
         <MetricCard
           icon={Users}
           title="Team Members"
-          value={analytics.team_size}
+          value={analytics.team_size || 0}
           subtitle={`${teamMembersDetailed.length} active members`}
           color="#16a34a"
         />
         <MetricCard
           icon={Activity}
           title="Activities"
-          value={analytics.activity_count}
-          subtitle="Recent project activities"
+          value={analytics.activity_count || 0}
+          subtitle="Project history entries"
           color="#d97706"
         />
         <MetricCard
           icon={CheckCircle}
           title="Comments"
-          value={analytics.comment_count}
+          value={analytics.comment_count || 0}
           subtitle="Team discussions"
           color="#be185d"
         />
@@ -256,124 +309,47 @@ const ProjectAnalyticsSection = ({ teamMembersDetailed = [], project, currentUse
         </div>
       </div>
 
-      {/* Team Performance and Status */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-        
-        {/* Team Performance */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb',
-          padding: '1.5rem'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <Users size={20} style={{ color: '#374151' }} />
-            <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0 }}>
-              Team Performance
-            </h3>
-          </div>
-          
-          {teamMembersDetailed && teamMembersDetailed.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {teamMembersDetailed.slice(0, 6).map((member, index) => (
-                <div key={member.id || index} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.75rem',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '0.5rem'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div style={{
-                      width: '2rem',
-                      height: '2rem',
-                      borderRadius: '50%',
-                      backgroundColor: '#2563eb',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: '0.75rem',
-                      fontWeight: '600'
-                    }}>
-                      {member.avatar || member.name?.charAt(0) || 'U'}
-                    </div>
-                    <div>
-                      <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#111827', margin: 0 }}>
-                        {member.name || 'Unknown Member'}
-                      </p>
-                      <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                        {member.role || 'Team Member'}
-                      </p>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '0.875rem', fontWeight: '600', color: '#111827', margin: 0 }}>
-                      {member.contribution || 0}%
-                    </p>
-                    <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>
-                      {member.tasksCompleted || 0} tasks
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {teamMembersDetailed.length > 6 && (
-                <p style={{ fontSize: '0.75rem', color: '#6b7280', textAlign: 'center', margin: '0.5rem 0 0 0' }}>
-                  +{teamMembersDetailed.length - 6} more members
-                </p>
-              )}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '2rem 0' }}>
-              <Users size={48} style={{ color: '#d1d5db', marginBottom: '1rem' }} />
-              <p style={{ color: '#6b7280', margin: 0 }}>No team members assigned</p>
-            </div>
-          )}
+      {/* Project Status */}
+      <div style={{
+        backgroundColor: 'white',
+        borderRadius: '0.75rem',
+        border: '1px solid #e5e7eb',
+        padding: '1.5rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          <CheckCircle size={20} style={{ color: '#374151' }} />
+          <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0 }}>
+            Project Status
+          </h3>
         </div>
-
-        {/* Project Status */}
-        <div style={{
-          backgroundColor: 'white',
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb',
-          padding: '1.5rem'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-            <CheckCircle size={20} style={{ color: '#374151' }} />
-            <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827', margin: 0 }}>
-              Project Status
-            </h3>
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <StatusIndicator 
+            label="Current Status" 
+            value={analytics.status?.replace('_', ' ') || 'Unknown'}
+            color={getStatusColor(analytics.status)}
+          />
+          <StatusIndicator 
+            label="Priority Level" 
+            value={analytics.priority?.charAt(0).toUpperCase() + analytics.priority?.slice(1) || 'Medium'}
+            color={getPriorityColor(analytics.priority)}
+          />
+          <StatusIndicator 
+            label="Overall Health" 
+            value={overallProgress >= 5 ? 'Good' : overallProgress >= 3 ? 'Fair' : 'Needs Attention'}
+            color={overallProgress >= 5 ? '#10b981' : overallProgress >= 3 ? '#f59e0b' : '#ef4444'}
+          />
+          {project?.deadline && (
             <StatusIndicator 
-              label="Current Status" 
-              value={analytics.status?.replace('_', ' ') || 'Unknown'}
-              color={getStatusColor(analytics.status)}
+              label="Deadline" 
+              value={new Date(project.deadline).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+              })}
+              color="#6b7280"
             />
-            <StatusIndicator 
-              label="Priority Level" 
-              value={analytics.priority?.charAt(0).toUpperCase() + analytics.priority?.slice(1) || 'Medium'}
-              color={getPriorityColor(analytics.priority)}
-            />
-            <StatusIndicator 
-              label="Overall Health" 
-              value={overallProgress >= 5 ? 'Good' : overallProgress >= 3 ? 'Fair' : 'Needs Attention'}
-              color={overallProgress >= 5 ? '#10b981' : overallProgress >= 3 ? '#f59e0b' : '#ef4444'}
-            />
-            {project?.deadline && (
-              <StatusIndicator 
-                label="Deadline" 
-                value={new Date(project.deadline).toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
-                color="#6b7280"
-              />
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
